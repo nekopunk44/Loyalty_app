@@ -9,45 +9,82 @@ import {
   FlatList,
   Modal,
   TextInput,
+  Image,
+  Platform,
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { colors, spacing, borderRadius } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import { ScaleInCard, FadeInCard, SlideInBottomCard } from '../components/AnimatedCard';
+import HorizontalScrollView from '../components/HorizontalScrollView';
 
 const mockProperties = [
+  {
+    id: '2',
+    name: 'Стандрат',
+    description: 'Студия с терассой и бассейном',
+    price: '150$/ночь',
+    priceNumber: 150,
+    rooms: 2,
+    guests: 10,
+    amenities: ['WiFi', 'Кондиционер', 'TV', 'Бассейн', 'Сауна (с доплатой)', 'Мангал', 'Парковочное место'],
+    image: 'https://picsum.photos/300/200?random=2',
+    photos: [
+      require('../assets/standart/st1.png'),
+      require('../assets/standart/st2.png'),
+      require('../assets/standart/st3.png'),
+      require('../assets/standart/st4.png'),
+      require('../assets/standart/st5.png'),
+      require('../assets/standart/st6.png'),
+      require('../assets/standart/st7.png'),
+      require('../assets/standart/st8.png'),
+      require('../assets/standart/st1.png'),
+    ],
+  },
   {
     id: '1',
     name: 'Люкс апартамент',
     description: 'Полный комфорт, с видом на природу',
-    price: '5,500₽/ночь',
-    priceNumber: 5500,
-    rooms: 2,
-    guests: 4,
-    amenities: ['WiFi', 'Кондиционер', 'TV', 'Кухня'],
+    price: '200$/ночь',
+    priceNumber: 200,
+    rooms: 10,
+    guests: 20,
+    amenities: ['WiFi', 'Кондиционер', 'TV', 'Кухня', 'Бассейн', 'Сауна (с доплатой)', 'Мангал', 'Парковочное место', 'Караоке', 'Большой зал'],
     image: 'https://picsum.photos/300/200?random=1',
-  },
-  {
-    id: '2',
-    name: 'Стандартная комната',
-    description: 'Уютная и удобная для отдыха',
-    price: '3,000₽/ночь',
-    priceNumber: 3000,
-    rooms: 1,
-    guests: 2,
-    amenities: ['WiFi', 'TV', 'Ванная'],
-    image: 'https://picsum.photos/300/200?random=2',
+    photos: [
+      require('../assets/luks/st1.png'),
+      require('../assets/luks/st2.png'),
+      require('../assets/luks/st3.png'),
+      require('../assets/luks/st4.png'),
+      require('../assets/luks/st5.png'),
+      require('../assets/luks/st6.png'),
+      require('../assets/luks/st7.png'),
+      require('../assets/luks/st8.png'),
+      require('../assets/luks/st9.png'),
+      require('../assets/luks/st10.png'),
+      require('../assets/luks/st1.png'),
+    ],
   },
   {
     id: '3',
-    name: 'Семейный номер',
-    description: 'Просторный номер для семей',
-    price: '7,500₽/ночь',
-    priceNumber: 7500,
-    rooms: 3,
-    guests: 6,
-    amenities: ['WiFi', 'Кухня', 'TV', 'Кондиционер', 'Сейф'],
+    name: 'Задний двор',
+    description: 'Открытая местность с большим бассейном и беседкой',
+    price: '100$/день',
+    priceNumber: 100,
+    rooms: null,
+    guests: 15,
+    amenities: ['WiFi', 'Бассейн', 'Мангал', 'Парковочное место', 'Караоке', 'Холодильник', 'Беседка', 'Шезлонги', 'Зонты'],
     image: 'https://picsum.photos/300/200?random=3',
+    photos: [
+      require('../assets/zad/zd1.png'),
+      require('../assets/zad/zd2.png'),
+      require('../assets/zad/zd3.png'),
+      require('../assets/zad/zd4.png'),
+      require('../assets/zad/zd5.png'),
+      require('../assets/zad/zd1.png'),
+      require('../assets/zad/zd2.png'),
+      require('../assets/zad/zd3.png'),
+    ],
   },
 ];
 
@@ -142,7 +179,7 @@ export default function BookingScreen({ navigation }) {
     <FadeInCard delay={200 + index * 50}>
       <TouchableOpacity
         style={[styles.propertyCard, { backgroundColor: theme.colors.cardBg }]}
-        onPress={() => handleSelectProperty(item)}
+        activeOpacity={0.9}
       >
         <View style={styles.propertyHeader}>
           <View>
@@ -153,31 +190,62 @@ export default function BookingScreen({ navigation }) {
         </View>
 
         <View style={styles.propertyFeatures}>
+          {item.rooms && (
+            <View style={styles.featureItem}>
+              <MaterialIcons name="meeting-room" size={16} color={colors.primary} />
+              <Text style={styles.featureText}>{item.rooms} комн.</Text>
+            </View>
+          )}
           <View style={styles.featureItem}>
-            <MaterialIcons name="door-front" size={16} color={colors.primary} />
-            <Text style={styles.featureText}>{item.rooms} комн.</Text>
-          </View>
-          <View style={styles.featureItem}>
-            <MaterialIcons name="group" size={16} color={colors.primary} />
+            <MaterialIcons name="people" size={16} color={colors.primary} />
             <Text style={styles.featureText}>до {item.guests} гостей</Text>
           </View>
         </View>
 
         <View style={styles.amenitiesContainer}>
-          {item.amenities.slice(0, 3).map((amenity, index) => (
-            <View key={index} style={styles.amenityBadge}>
-              <Text style={styles.amenityText}>{amenity}</Text>
-            </View>
-          ))}
-          {item.amenities.length > 3 && (
-            <View style={styles.amenityBadge}>
-              <Text style={styles.amenityText}>+{item.amenities.length - 3}</Text>
-            </View>
-          )}
+          <HorizontalScrollView
+            contentContainerStyle={styles.amenitiesContent}
+            showNavButtons={Platform.OS === 'web'}
+            navButtonColor={theme.colors.primary}
+            navButtonSize={16}
+          >
+            {item.amenities.map((amenity, index) => (
+              <View key={index} style={styles.amenityBadge}>
+                <Text style={styles.amenityText}>{amenity}</Text>
+              </View>
+            ))}
+          </HorizontalScrollView>
         </View>
 
+        {/* Галерея фотографий перед кнопкой */}
+        {item.photos && item.photos.length > 0 && (
+          <View style={styles.photoGalleryContainer}>
+            <HorizontalScrollView
+              contentContainerStyle={styles.photoGalleryContent}
+              showNavButtons={Platform.OS === 'web'}
+              navButtonColor={theme.colors.primary}
+              navButtonSize={20}
+              forceShowButtons={true}
+            >
+              {item.photos.map((photo, photoIndex) => {
+                const source = typeof photo === 'string' ? { uri: photo } : photo;
+                return (
+                  <Image
+                    key={photoIndex}
+                    source={source}
+                    style={styles.galleryPhoto}
+                  />
+                );
+              })}
+            </HorizontalScrollView>
+            <View style={styles.photoCountBadge}>
+              <MaterialIcons name="image" size={14} color="#fff" />
+            </View>
+          </View>
+        )}
+
         <TouchableOpacity style={styles.selectButton} onPress={() => handleSelectProperty(item)}>
-          <MaterialIcons name="calendar-check" size={18} color="#fff" />
+          <MaterialIcons name="date-range" size={18} color="#fff" />
           <Text style={styles.selectButtonText}>Выбрать даты</Text>
         </TouchableOpacity>
       </TouchableOpacity>
@@ -223,7 +291,7 @@ export default function BookingScreen({ navigation }) {
             </Text>
           </View>
           <View style={styles.detailRow}>
-            <MaterialIcons name="group" size={16} color={colors.textSecondary} />
+            <MaterialIcons name="people" size={16} color={colors.textSecondary} />
             <Text style={styles.detailText}>{item.guests} гостей • {item.nights} ночей</Text>
           </View>
           <View style={styles.detailRow}>
@@ -318,9 +386,11 @@ export default function BookingScreen({ navigation }) {
                   <Text style={styles.infoTitle}>{selectedProperty.name}</Text>
                   <Text style={styles.infoDesc}>{selectedProperty.description}</Text>
                   <View style={styles.infoRow}>
-                    <MaterialIcons name="door-front" size={16} color={colors.primary} />
+                    {selectedProperty.rooms && (
+                      <MaterialIcons name="meeting-room" size={16} color={colors.primary} />
+                    )}
                     <Text style={styles.infoText}>
-                      {selectedProperty.rooms} комнаты • до {selectedProperty.guests} гостей
+                      {selectedProperty.rooms ? `${selectedProperty.rooms} комнаты • ` : ''}до {selectedProperty.guests} гостей
                     </Text>
                   </View>
                 </View>
@@ -458,6 +528,42 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 3,
   },
+  photoGalleryContainer: {
+    position: 'relative',
+    height: 200,
+    marginBottom: spacing.md,
+    borderRadius: borderRadius.lg,
+    overflow: Platform.OS === 'web' ? 'visible' : 'hidden',
+  },
+  photoGalleryContent: {
+    paddingHorizontal: spacing.sm,
+    gap: spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  galleryPhoto: {
+    width: 180,
+    height: 180,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.border,
+  },
+  photoCountBadge: {
+    position: 'absolute',
+    top: spacing.sm,
+    right: spacing.sm,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  photoCountText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
   propertyHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -493,10 +599,15 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   amenitiesContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
+    height: 40,
     marginBottom: spacing.md,
+    overflow: Platform.OS === 'web' ? 'visible' : 'hidden',
+  },
+  amenitiesContent: {
+    paddingHorizontal: spacing.sm,
+    gap: spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
   },
   amenityBadge: {
     backgroundColor: colors.primary + '15',

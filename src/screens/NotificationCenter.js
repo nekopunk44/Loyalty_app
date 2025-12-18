@@ -6,11 +6,13 @@ import {
   FlatList,
   TouchableOpacity,
   ScrollView,
+  Platform,
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { spacing, borderRadius } from '../constants/theme';
 import { useNotification } from '../context/NotificationContext';
 import { useTheme } from '../context/ThemeContext';
+import HorizontalScrollView from '../components/HorizontalScrollView';
 
 export default function NotificationCenter() {
   const { notifications, markAsRead, deleteNotification, notificationsEnabled } = useNotification();
@@ -316,10 +318,10 @@ export default function NotificationCenter() {
       </View>
 
       {/* Filter Tabs */}
-      <ScrollView 
-        horizontal 
-        showsHorizontalScrollIndicator={false}
+      <HorizontalScrollView
         contentContainerStyle={styles.filterScroll}
+        showNavButtons={true}
+        navButtonColor={colors.primary}
       >
         {notificationTypes.map((type) => (
           <TouchableOpacity
@@ -345,7 +347,7 @@ export default function NotificationCenter() {
             </Text>
           </TouchableOpacity>
         ))}
-      </ScrollView>
+      </HorizontalScrollView>
 
       {/* Notifications List */}
       {filteredNotifications.length > 0 ? (

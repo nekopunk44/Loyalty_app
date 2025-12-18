@@ -15,6 +15,7 @@ import { NotificationProvider } from './src/context/NotificationContext';
 import { AnalyticsProvider } from './src/context/AnalyticsContext';
 import { ReviewProvider } from './src/context/ReviewContext';
 import { EventProvider } from './src/context/EventContext';
+import { UserDataProvider } from './src/context/UserDataContext';
 
 // Обработчик необработанных Promise ошибок (для web)
 if (typeof window !== 'undefined') {
@@ -76,14 +77,11 @@ function UserTabs() {
           paddingBottom: 5,
           height: 60,
         },
-        tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: '500',
-        },
+        tabBarShowLabel: false,
         tabBarIcon: ({ color, size }) => {
           let iconName = 'home';
           if (route.name === 'Home') iconName = 'home';
-          else if (route.name === 'Shop') iconName = 'shopping-cart';
+          else if (route.name === 'Shop') iconName = 'event-note';
           else if (route.name === 'Profile') iconName = 'account-circle';
           else if (route.name === 'Events') iconName = 'event';
           else if (route.name === 'Notifications') iconName = 'notifications';
@@ -195,10 +193,7 @@ function AdminTabs() {
           paddingBottom: 5,
           height: 60,
         },
-        tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: '500',
-        },
+        tabBarShowLabel: false,
         tabBarIcon: ({ color, size }) => {
           let iconName = 'dashboard';
           if (route.name === 'Dashboard') iconName = 'dashboard';
@@ -335,21 +330,23 @@ export default function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <EventProvider>
-          <NotificationProvider>
-            <AnalyticsProvider>
-              <BookingProvider>
-                <ReferralProvider>
-                  <PaymentProvider>
-                    <ReviewProvider>
-                      <NavigationContainerWrapper />
-                    </ReviewProvider>
-                  </PaymentProvider>
-                </ReferralProvider>
-              </BookingProvider>
-            </AnalyticsProvider>
-          </NotificationProvider>
-        </EventProvider>
+        <UserDataProvider>
+          <EventProvider>
+            <NotificationProvider>
+              <AnalyticsProvider>
+                <BookingProvider>
+                  <ReferralProvider>
+                    <PaymentProvider>
+                      <ReviewProvider>
+                        <NavigationContainerWrapper />
+                      </ReviewProvider>
+                    </PaymentProvider>
+                  </ReferralProvider>
+                </BookingProvider>
+              </AnalyticsProvider>
+            </NotificationProvider>
+          </EventProvider>
+        </UserDataProvider>
       </AuthProvider>
     </ThemeProvider>
   );

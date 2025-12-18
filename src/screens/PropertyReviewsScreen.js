@@ -11,6 +11,7 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { spacing, borderRadius } from '../constants/theme';
@@ -19,6 +20,7 @@ import { useReview } from '../context/ReviewContext';
 import { useAuth } from '../context/AuthContext';
 import ReviewCard from '../components/ReviewCard';
 import { StarRating } from '../components/StarRating';
+import HorizontalScrollView from '../components/HorizontalScrollView';
 
 export default function PropertyReviewsScreen({ route, navigation }) {
   const { propertyId, propertyName } = route.params;
@@ -244,7 +246,11 @@ export default function PropertyReviewsScreen({ route, navigation }) {
 
       {/* Filter & Write Button */}
       <View style={[styles.controlsContainer, { borderBottomColor: colors.border }]}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <HorizontalScrollView
+          contentContainerStyle={styles.filterScrollContent}
+          showNavButtons={true}
+          navButtonColor={colors.primary}
+        >
           {['approved', 'pending', 'all'].map(f => (
             <TouchableOpacity
               key={f}
@@ -265,7 +271,7 @@ export default function PropertyReviewsScreen({ route, navigation }) {
               </Text>
             </TouchableOpacity>
           ))}
-        </ScrollView>
+        </HorizontalScrollView>
       </View>
 
       {/* Reviews List */}
@@ -478,6 +484,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     borderBottomWidth: 1,
+  },
+  filterScrollContent: {
+    paddingRight: spacing.lg,
+    gap: spacing.sm,
   },
   filterButton: {
     paddingHorizontal: spacing.md,
