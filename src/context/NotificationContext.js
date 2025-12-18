@@ -2,6 +2,8 @@ import React, { createContext, useContext, useState, useEffect, useRef } from 'r
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from './AuthContext';
+import { apiCall } from '../utils/api';
+import { getApiUrl } from '../utils/apiUrl';
 
 const NotificationContext = createContext();
 
@@ -27,7 +29,6 @@ export const NotificationProvider = ({ children }) => {
     setupNotifications();
 
     return () => {
-      // На web этих subscriptions нет, поэтому проверяем
       if (notificationListener.current) {
         Notifications.removeNotificationSubscription(notificationListener.current);
       }
@@ -37,57 +38,41 @@ export const NotificationProvider = ({ children }) => {
     };
   }, [user?.id]);
 
-  const getApiUrl = () => {
-    // На web используем localhost
-    if (typeof window !== 'undefined') {
-      return 'http://localhost:5002/api';
-    }
-    // На мобильных платформах
-    return 'http://localhost:5002/api';
-  };
-
   const setupNotifications = async () => {
     try {
-      // Если пользователь не авторизован, ничего не загружаем
-      if (!user?.id) {
-        console.log('ℹ️ Пользователь не авторизован, уведомления не загружаются');
-        return;
-      }
+      if (!user?.id) return;
+      if (user?.role === 'admin') return;
 
-      // ✅ Загружаем уведомления с сервера
-      console.log('📡 Загружаем уведомления с сервера для userId:', user.id);
-      const apiUrl = getApiUrl();
-      const response = await fetch(`${apiUrl}/notifications/${user.id}`);
-      
-      if (response.ok) {
-        const data = await response.json();
+      try {
+        const data = await apiCall(`${getApiUrl()}/notifications/${user.id}`);
         if (data.success && data.notifications) {
-          console.log('✅ Уведомления загружены с сервера:', data.notifications.length, 'Типы:', data.notifications.map(n => ({ id: n.id, type: n.type, title: n.title })));
           setNotifications(data.notifications);
+        } else {
+          const saved = await AsyncStorage.getItem('@notifications');
+          if (saved) setNotifications(JSON.parse(saved));
         }
-      } else {
-        console.warn('⚠️ Ошибка при загрузке уведомлений с сервера:', response.status);
-        // Fallback на AsyncStorage если сервер недоступен
-        const saved = await AsyncStorage.getItem('@notifications');
-        if (saved) {
-          console.log('💾 Используем уведомления из AsyncStorage');
-          setNotifications(JSON.parse(saved));
+      } catch (networkError) {
+        try {
+          const saved = await AsyncStorage.getItem('@notifications');
+          if (saved) setNotifications(JSON.parse(saved));
+        } catch (storageError) {
+          console.error('NotificationContext: ошибка AsyncStorage:', storageError);
         }
       }
 
       // На web push notifications требует VAPID key, поэтому пропускаем
-      if (typeof window !== 'undefined') {
-        console.log('ℹ️ Push notifications отключены на web');
-        return;
-      }
+      if (typeof window !== 'undefined') return;
 
       // Запрос разрешения на уведомления
-      const { status } = await Notifications.requestPermissionsAsync();
-      if (status === 'granted') {
-        // Получить токен для push-уведомлений (в production используется реальный сервис)
-        const token = await Notifications.getExpoPushTokenAsync();
-        setExpoPushToken(token.data);
-        await AsyncStorage.setItem('@expo_push_token', token.data);
+      try {
+        const { status } = await Notifications.requestPermissionsAsync();
+        if (status === 'granted') {
+          const token = await Notifications.getExpoPushTokenAsync();
+          setExpoPushToken(token.data);
+          await AsyncStorage.setItem('@expo_push_token', token.data);
+        }
+      } catch (permissionError) {
+        // Push permission is optional
       }
 
       // Слушать входящие уведомления
@@ -107,8 +92,7 @@ export const NotificationProvider = ({ children }) => {
 
       // Слушать нажатия на уведомления
       responseListener.current = Notifications.addNotificationResponseReceivedListener(
-        response => {
-          console.log('Уведомление нажато:', response);
+        _response => {
           // Здесь можно добавить навигацию
         }
       );
@@ -128,7 +112,7 @@ export const NotificationProvider = ({ children }) => {
           sound: true,
           badge: 1,
         },
-        trigger: { seconds: 1 }, // Отправить через 1 секунду
+        trigger: { seconds: 1 },
       });
     } catch (error) {
       console.error('Ошибка отправки уведомления:', error);
@@ -157,50 +141,27 @@ export const NotificationProvider = ({ children }) => {
   // Вспомогательная функция для добавления уведомления
   const addNotification = async (notificationData) => {
     try {
-      if (!user?.id) {
-        console.warn('⚠️ Невозможно добавить уведомление: пользователь не авторизован');
-        return;
-      }
+      if (!user?.id) return;
 
-      const apiUrl = getApiUrl();
-      
-      console.log('🔔 addNotification: Отправляем уведомление с типом:', notificationData.type, 'Данные:', notificationData);
-      
-      // Сохраняем на сервер
-      const response = await fetch(`${apiUrl}/notifications/${user.id}`, {
+      const data = await apiCall(`${getApiUrl()}/notifications/${user.id}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...notificationData,
-          read: false,
-        }),
+        body: JSON.stringify({ ...notificationData, read: false }),
       });
 
-      if (response.ok) {
-        const data = await response.json();
+      if (data.notification) {
         const newNotification = data.notification;
-        console.log('📌 addNotification: Новое уведомление добавлено на сервер с типом:', newNotification.type, 'Данные:', newNotification);
-        
-        // Обновляем локальное состояние
         const updated = [newNotification, ...notifications];
         setNotifications(updated);
-        
-        // Сохраняем локально для fallback
         await AsyncStorage.setItem('@notifications', JSON.stringify(updated));
-        console.log('✅ Уведомление добавлено:', notificationData.message);
       } else {
-        console.error('❌ Ошибка при сохранении уведомления на сервер:', response.status);
+        console.error('Ошибка при сохранении уведомления:', data.error);
       }
     } catch (error) {
-      console.error('❌ Ошибка при добавлении уведомления:', error);
+      console.error('Ошибка при добавлении уведомления:', error);
     }
   };
 
-  // Отправить уведомление о новом бронировании
   const notifyNewBooking = async (propertyName, guestName, checkIn, checkOut) => {
-    console.log('🔔 notifyNewBooking called:', { propertyName, guestName, checkIn, checkOut });
     await addNotification({
       type: 'newBooking',
       title: 'Новое бронирование',
@@ -209,7 +170,6 @@ export const NotificationProvider = ({ children }) => {
     });
   };
 
-  // Уведомление о подтверждении бронирования
   const notifyBookingConfirmed = async (propertyName, checkIn) => {
     await addNotification({
       type: 'bookingConfirmed',
@@ -219,7 +179,6 @@ export const NotificationProvider = ({ children }) => {
     });
   };
 
-  // Уведомление о завершении бронирования
   const notifyBookingCompleted = async (propertyName, rating) => {
     await addNotification({
       type: 'bookingCompleted',
@@ -229,7 +188,6 @@ export const NotificationProvider = ({ children }) => {
     });
   };
 
-  // Уведомление об отмене бронирования
   const notifyBookingCancelled = async (propertyName, refund) => {
     await addNotification({
       type: 'bookingCancelled',
@@ -239,7 +197,6 @@ export const NotificationProvider = ({ children }) => {
     });
   };
 
-  // Отправить уведомление о платеже
   const notifyPaymentSuccess = async (amount, method) => {
     await addNotification({
       type: 'paymentSuccess',
@@ -249,7 +206,6 @@ export const NotificationProvider = ({ children }) => {
     });
   };
 
-  // Уведомление о полученном кэшбеке
   const notifyCashbackReceived = async (amount, bookingId) => {
     await addNotification({
       type: 'cashbackReceived',
@@ -259,7 +215,6 @@ export const NotificationProvider = ({ children }) => {
     });
   };
 
-  // Уведомление о пополнении баланса
   const notifyTopup = async (amount, method) => {
     await addNotification({
       type: 'topup',
@@ -269,7 +224,6 @@ export const NotificationProvider = ({ children }) => {
     });
   };
 
-  // Отправить уведомление о событии
   const notifyEvent = async (eventName, date) => {
     await sendNotification(
       '🎉 Новое событие',
@@ -278,7 +232,6 @@ export const NotificationProvider = ({ children }) => {
     );
   };
 
-  // Отправить уведомление админу о реферале
   const notifyReferral = async (friendName, bonus) => {
     const newNotification = {
       id: Date.now().toString(),
@@ -293,7 +246,6 @@ export const NotificationProvider = ({ children }) => {
     await AsyncStorage.setItem('@notifications', JSON.stringify([newNotification, ...notifications]));
   };
 
-  // Уведомление о том, что друг присоединился
   const notifyFriendJoined = async (friendName, bonusAmount) => {
     await addNotification({
       type: 'friendJoined',
@@ -303,7 +255,6 @@ export const NotificationProvider = ({ children }) => {
     });
   };
 
-  // Отправить уведомление об отзыве
   const notifyReview = async (propertyName, rating) => {
     await addNotification({
       type: 'newReview',
@@ -313,7 +264,6 @@ export const NotificationProvider = ({ children }) => {
     });
   };
 
-  // Уведомление о новом отзыве от пользователя
   const notifyNewReviewPosted = async (propertyName, userName, rating) => {
     await addNotification({
       type: 'reviewNotification',
@@ -323,7 +273,6 @@ export const NotificationProvider = ({ children }) => {
     });
   };
 
-  // Уведомление об ответе на отзыв
   const notifyReviewReply = async (propertyName, ownerReply) => {
     await addNotification({
       type: 'reviewReply',
@@ -333,7 +282,6 @@ export const NotificationProvider = ({ children }) => {
     });
   };
 
-  // Уведомление админу о создании события
   const notifyEventCreated = async (eventName, eventType) => {
     await addNotification({
       type: 'eventCreated',
@@ -343,7 +291,6 @@ export const NotificationProvider = ({ children }) => {
     });
   };
 
-  // Уведомление админу об обновлении события
   const notifyEventUpdated = async (eventName, changes) => {
     await addNotification({
       type: 'eventUpdated',
@@ -353,7 +300,6 @@ export const NotificationProvider = ({ children }) => {
     });
   };
 
-  // Уведомление админу об удалении события
   const notifyEventDeleted = async (eventName) => {
     await addNotification({
       type: 'eventDeleted',
@@ -363,7 +309,6 @@ export const NotificationProvider = ({ children }) => {
     });
   };
 
-  // Уведомление админу о добавлении пользователя
   const notifyUserAdded = async (userName, userEmail) => {
     await addNotification({
       type: 'userAdded',
@@ -373,7 +318,6 @@ export const NotificationProvider = ({ children }) => {
     });
   };
 
-  // Уведомление админу об удалении пользователя
   const notifyUserDeleted = async (userName, userEmail) => {
     await addNotification({
       type: 'userDeleted',
@@ -383,7 +327,6 @@ export const NotificationProvider = ({ children }) => {
     });
   };
 
-  // Уведомление админу об обновлении пользователя
   const notifyUserUpdated = async (userName, changes) => {
     await addNotification({
       type: 'userUpdated',
@@ -393,7 +336,6 @@ export const NotificationProvider = ({ children }) => {
     });
   };
 
-  // Отправить уведомление админу о событии
   const notifyAdminEvent = async (eventType, details) => {
     const messages = {
       new_user: `Новый пользователь: ${details.name}`,
@@ -415,18 +357,12 @@ export const NotificationProvider = ({ children }) => {
     try {
       if (!user?.id) return;
 
-      const apiUrl = getApiUrl();
-      
-      // Обновляем на сервере
-      const response = await fetch(`${apiUrl}/notifications/${user.id}/${notificationId}`, {
+      const data = await apiCall(`${getApiUrl()}/notifications/${user.id}/${notificationId}`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        body: JSON.stringify({}),
       });
 
-      if (response.ok) {
-        // Обновляем локальное состояние
+      if (!data.error) {
         const updated = notifications.map(n =>
           n.id === notificationId ? { ...n, read: true } : n
         );
@@ -434,7 +370,7 @@ export const NotificationProvider = ({ children }) => {
         await AsyncStorage.setItem('@notifications', JSON.stringify(updated));
       }
     } catch (error) {
-      console.error('❌ Ошибка при отметке уведомления как прочитанного:', error);
+      console.error('Ошибка при отметке уведомления как прочитанного:', error);
     }
   };
 
@@ -442,40 +378,26 @@ export const NotificationProvider = ({ children }) => {
   const deleteNotification = async (notificationId) => {
     try {
       if (!user?.id) {
-        // Если пользователь не авторизован, удаляем локально
         const updated = notifications.filter(n => n.id !== notificationId);
         setNotifications(updated);
         await AsyncStorage.setItem('@notifications', JSON.stringify(updated));
         return;
       }
 
-      const apiUrl = getApiUrl();
-      
       try {
-        // Пытаемся удалить на сервере
-        const response = await fetch(`${apiUrl}/notifications/${user.id}/${notificationId}`, {
+        await apiCall(`${getApiUrl()}/notifications/${user.id}/${notificationId}`, {
           method: 'DELETE',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          body: JSON.stringify({}),
         });
-
-        if (response.ok) {
-          console.log('✅ Уведомление удалено с сервера:', notificationId);
-        } else {
-          console.warn('⚠️ Ошибка при удалении на сервере:', response.status);
-        }
       } catch (serverError) {
-        console.warn('⚠️ Не удалось подключиться к серверу для удаления уведомления:', serverError.message);
+        // Удаляем локально даже при ошибке сервера
       }
 
-      // В любом случае удаляем локально
       const updated = notifications.filter(n => n.id !== notificationId);
       setNotifications(updated);
       await AsyncStorage.setItem('@notifications', JSON.stringify(updated));
-      console.log('✅ Уведомление удалено локально:', notificationId);
     } catch (error) {
-      console.error('❌ Ошибка при удалении уведомления:', error);
+      console.error('Ошибка при удалении уведомления:', error);
     }
   };
 
@@ -484,32 +406,24 @@ export const NotificationProvider = ({ children }) => {
     try {
       if (!user?.id) return;
 
-      const apiUrl = getApiUrl();
-      
-      // Удаляем все на сервере
-      const response = await fetch(`${apiUrl}/notifications/${user.id}`, {
+      const data = await apiCall(`${getApiUrl()}/notifications/${user.id}`, {
         method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        body: JSON.stringify({}),
       });
 
-      if (response.ok) {
-        // Очищаем локальное состояние
+      if (!data.error) {
         setNotifications([]);
         await AsyncStorage.setItem('@notifications', JSON.stringify([]));
       }
     } catch (error) {
-      console.error('❌ Ошибка при удалении всех уведомлений:', error);
+      console.error('Ошибка при удалении всех уведомлений:', error);
     }
   };
 
-  // Получить непрочитанные уведомления
   const getUnreadCount = () => {
     return notifications.filter(n => !n.read).length;
   };
 
-  // Переключить уведомления включено/отключено
   const toggleNotifications = async (enabled) => {
     setIsEnabled(enabled);
     await AsyncStorage.setItem('@notifications_enabled', String(enabled));

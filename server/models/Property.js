@@ -1,0 +1,40 @@
+const { sequelize, DataTypes } = require('../db');
+
+const Property = sequelize.define('Property', {
+  id: {
+    type: DataTypes.INTEGER,
+    primaryKey: true,
+    autoIncrement: true,
+  },
+  name: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
+  description: DataTypes.TEXT,
+  price: DataTypes.STRING,
+  priceNumber: DataTypes.INTEGER,
+  rooms: DataTypes.INTEGER,
+  guests: DataTypes.INTEGER,
+  amenities: {
+    type: DataTypes.JSON,
+    defaultValue: [],
+  },
+  image: DataTypes.STRING,
+  status: {
+    type: DataTypes.ENUM('available', 'unavailable'),
+    defaultValue: 'available',
+  },
+  createdAt: {
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW,
+  },
+  updatedAt: {
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW,
+  },
+}, {
+  timestamps: false,
+  tableName: 'properties',
+});
+
+module.exports = Property;

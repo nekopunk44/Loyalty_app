@@ -1,9 +1,9 @@
 /**
  * Database Service - PostgreSQL API Version
- * Замена Firestore на PostgreSQL API
  * Все операции идут через REST API на Node.js сервер
  */
 
+import { apiCall } from '../utils/api';
 import { getApiUrl } from '../utils/apiUrl';
 
 // ==================== USERS ====================
@@ -32,8 +32,7 @@ export const createUser = async (userId, userData) => {
 
 export const getUser = async (userId) => {
   try {
-    const response = await fetch(`${getApiUrl()}/users/${userId}`);
-    const data = await response.json();
+    const data = await apiCall(`${getApiUrl()}/users/${userId}`);
     return data.user || null;
   } catch (error) {
     console.warn('Failed to fetch user:', error);
@@ -43,12 +42,10 @@ export const getUser = async (userId) => {
 
 export const updateUser = async (userId, userData) => {
   try {
-    const response = await fetch(`${getApiUrl()}/users/${userId}`, {
+    const data = await apiCall(`${getApiUrl()}/users/${userId}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(userData),
     });
-    const data = await response.json();
     return data.user || userData;
   } catch (error) {
     console.error('Failed to update user:', error);
@@ -58,9 +55,7 @@ export const updateUser = async (userId, userData) => {
 
 export const deleteUser = async (userId) => {
   try {
-    await fetch(`${getApiUrl()}/users/${userId}`, {
-      method: 'DELETE',
-    });
+    await apiCall(`${getApiUrl()}/users/${userId}`, { method: 'DELETE' });
     return true;
   } catch (error) {
     console.error('Failed to delete user:', error);
@@ -70,8 +65,7 @@ export const deleteUser = async (userId) => {
 
 export const getUserByEmail = async (email) => {
   try {
-    const response = await fetch(`${getApiUrl()}/users/email/${email}`);
-    const data = await response.json();
+    const data = await apiCall(`${getApiUrl()}/users/email/${email}`);
     return data.user || null;
   } catch (error) {
     console.warn('User not found:', error);
@@ -81,8 +75,7 @@ export const getUserByEmail = async (email) => {
 
 export const getAllUsers = async () => {
   try {
-    const response = await fetch(`${getApiUrl()}/users`);
-    const data = await response.json();
+    const data = await apiCall(`${getApiUrl()}/users`);
     return data.users || [];
   } catch (error) {
     console.error('Failed to fetch users:', error);
@@ -92,8 +85,7 @@ export const getAllUsers = async () => {
 
 export const getUsersByRole = async (role) => {
   try {
-    const response = await fetch(`${getApiUrl()}/users?role=${role}`);
-    const data = await response.json();
+    const data = await apiCall(`${getApiUrl()}/users?role=${role}`);
     return data.users || [];
   } catch (error) {
     console.error('Failed to fetch users by role:', error);
@@ -195,12 +187,10 @@ export const updateBookingStats = async (userId, bookingStatus) => {
 
 export const createProperty = async (propertyData) => {
   try {
-    const response = await fetch(`${getApiUrl()}/properties`, {
+    const data = await apiCall(`${getApiUrl()}/properties`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(propertyData),
     });
-    const data = await response.json();
     return data.property || propertyData;
   } catch (error) {
     console.error('Failed to create property:', error);
@@ -210,8 +200,7 @@ export const createProperty = async (propertyData) => {
 
 export const getProperty = async (propertyId) => {
   try {
-    const response = await fetch(`${getApiUrl()}/properties/${propertyId}`);
-    const data = await response.json();
+    const data = await apiCall(`${getApiUrl()}/properties/${propertyId}`);
     return data.property || null;
   } catch (error) {
     console.error('Failed to fetch property:', error);
@@ -221,12 +210,10 @@ export const getProperty = async (propertyId) => {
 
 export const updateProperty = async (propertyId, propertyData) => {
   try {
-    const response = await fetch(`${getApiUrl()}/properties/${propertyId}`, {
+    const data = await apiCall(`${getApiUrl()}/properties/${propertyId}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(propertyData),
     });
-    const data = await response.json();
     return data.property || propertyData;
   } catch (error) {
     console.error('Failed to update property:', error);
@@ -236,9 +223,7 @@ export const updateProperty = async (propertyId, propertyData) => {
 
 export const deleteProperty = async (propertyId) => {
   try {
-    await fetch(`${getApiUrl()}/properties/${propertyId}`, {
-      method: 'DELETE',
-    });
+    await apiCall(`${getApiUrl()}/properties/${propertyId}`, { method: 'DELETE' });
     return true;
   } catch (error) {
     console.error('Failed to delete property:', error);
@@ -248,8 +233,7 @@ export const deleteProperty = async (propertyId) => {
 
 export const getAllProperties = async () => {
   try {
-    const response = await fetch(`${getApiUrl()}/properties`);
-    const data = await response.json();
+    const data = await apiCall(`${getApiUrl()}/properties`);
     return data.properties || [];
   } catch (error) {
     console.error('Failed to fetch properties:', error);
@@ -259,8 +243,7 @@ export const getAllProperties = async () => {
 
 export const getPropertiesByStatus = async (status) => {
   try {
-    const response = await fetch(`${getApiUrl()}/properties?status=${status}`);
-    const data = await response.json();
+    const data = await apiCall(`${getApiUrl()}/properties?status=${status}`);
     return data.properties || [];
   } catch (error) {
     console.error('Failed to fetch properties by status:', error);
@@ -270,10 +253,9 @@ export const getPropertiesByStatus = async (status) => {
 
 export const getPropertiesByPriceRange = async (minPrice, maxPrice) => {
   try {
-    const response = await fetch(
+    const data = await apiCall(
       `${getApiUrl()}/properties?minPrice=${minPrice}&maxPrice=${maxPrice}`
     );
-    const data = await response.json();
     return data.properties || [];
   } catch (error) {
     console.error('Failed to fetch properties by price:', error);
@@ -286,12 +268,10 @@ export const getPropertiesByPriceRange = async (minPrice, maxPrice) => {
 export const createBooking = async (bookingData, userId) => {
   try {
     const payload = { userId, ...bookingData };
-    const response = await fetch(`${getApiUrl()}/bookings`, {
+    const data = await apiCall(`${getApiUrl()}/bookings`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-    const data = await response.json();
     return data.booking || payload;
   } catch (error) {
     console.error('Failed to create booking:', error);
@@ -301,8 +281,7 @@ export const createBooking = async (bookingData, userId) => {
 
 export const getBooking = async (bookingId) => {
   try {
-    const response = await fetch(`${getApiUrl()}/bookings/${bookingId}`);
-    const data = await response.json();
+    const data = await apiCall(`${getApiUrl()}/bookings/${bookingId}`);
     return data.booking || null;
   } catch (error) {
     console.error('Failed to fetch booking:', error);
@@ -312,12 +291,10 @@ export const getBooking = async (bookingId) => {
 
 export const updateBooking = async (bookingId, bookingData) => {
   try {
-    const response = await fetch(`${getApiUrl()}/bookings/${bookingId}`, {
+    const data = await apiCall(`${getApiUrl()}/bookings/${bookingId}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(bookingData),
     });
-    const data = await response.json();
     return data.booking || bookingData;
   } catch (error) {
     console.error('Failed to update booking:', error);
@@ -327,9 +304,7 @@ export const updateBooking = async (bookingId, bookingData) => {
 
 export const deleteBooking = async (bookingId) => {
   try {
-    await fetch(`${getApiUrl()}/bookings/${bookingId}`, {
-      method: 'DELETE',
-    });
+    await apiCall(`${getApiUrl()}/bookings/${bookingId}`, { method: 'DELETE' });
     return true;
   } catch (error) {
     console.error('Failed to delete booking:', error);
@@ -339,8 +314,7 @@ export const deleteBooking = async (bookingId) => {
 
 export const getUserBookings = async (userId) => {
   try {
-    const response = await fetch(`${getApiUrl()}/bookings/user/${userId}`);
-    const data = await response.json();
+    const data = await apiCall(`${getApiUrl()}/bookings/user/${userId}`);
     return data.bookings || [];
   } catch (error) {
     console.error('Failed to fetch user bookings:', error);
@@ -350,8 +324,7 @@ export const getUserBookings = async (userId) => {
 
 export const getPropertyBookings = async (propertyId) => {
   try {
-    const response = await fetch(`${getApiUrl()}/bookings/property/${propertyId}`);
-    const data = await response.json();
+    const data = await apiCall(`${getApiUrl()}/bookings/property/${propertyId}`);
     return data.bookings || [];
   } catch (error) {
     console.error('Failed to fetch property bookings:', error);
@@ -361,8 +334,7 @@ export const getPropertyBookings = async (propertyId) => {
 
 export const getBookingsByStatus = async (status) => {
   try {
-    const response = await fetch(`${getApiUrl()}/bookings?status=${status}`);
-    const data = await response.json();
+    const data = await apiCall(`${getApiUrl()}/bookings?status=${status}`);
     return data.bookings || [];
   } catch (error) {
     console.error('Failed to fetch bookings by status:', error);
@@ -372,10 +344,9 @@ export const getBookingsByStatus = async (status) => {
 
 export const getPropertyBookedDates = async (propertyId) => {
   try {
-    const response = await fetch(
+    const data = await apiCall(
       `${getApiUrl()}/bookings/property/${propertyId}/booked-dates`
     );
-    const data = await response.json();
     return data.bookedDates || [];
   } catch (error) {
     console.error('Failed to fetch booked dates:', error);
@@ -385,11 +356,10 @@ export const getPropertyBookedDates = async (propertyId) => {
 
 export const confirmBookingPayment = async (bookingId) => {
   try {
-    const response = await fetch(`${getApiUrl()}/bookings/${bookingId}/confirm-payment`, {
+    const data = await apiCall(`${getApiUrl()}/bookings/${bookingId}/confirm-payment`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
     });
-    const data = await response.json();
     return data.booking || null;
   } catch (error) {
     console.error('Failed to confirm payment:', error);
@@ -399,12 +369,10 @@ export const confirmBookingPayment = async (bookingId) => {
 
 export const cancelBooking = async (bookingId, reason = '') => {
   try {
-    const response = await fetch(`${getApiUrl()}/bookings/${bookingId}/cancel`, {
+    const data = await apiCall(`${getApiUrl()}/bookings/${bookingId}/cancel`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ reason }),
     });
-    const data = await response.json();
     return data.booking || null;
   } catch (error) {
     console.error('Failed to cancel booking:', error);
@@ -416,12 +384,10 @@ export const cancelBooking = async (bookingId, reason = '') => {
 
 export const createReview = async (reviewData) => {
   try {
-    const response = await fetch(`${getApiUrl()}/reviews`, {
+    const data = await apiCall(`${getApiUrl()}/reviews`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(reviewData),
     });
-    const data = await response.json();
     return data.review || reviewData;
   } catch (error) {
     console.error('Failed to create review:', error);
@@ -431,8 +397,7 @@ export const createReview = async (reviewData) => {
 
 export const getReview = async (reviewId) => {
   try {
-    const response = await fetch(`${getApiUrl()}/reviews/${reviewId}`);
-    const data = await response.json();
+    const data = await apiCall(`${getApiUrl()}/reviews/${reviewId}`);
     return data.review || null;
   } catch (error) {
     console.error('Failed to fetch review:', error);
@@ -442,12 +407,10 @@ export const getReview = async (reviewId) => {
 
 export const updateReview = async (reviewId, reviewData) => {
   try {
-    const response = await fetch(`${getApiUrl()}/reviews/${reviewId}`, {
+    const data = await apiCall(`${getApiUrl()}/reviews/${reviewId}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(reviewData),
     });
-    const data = await response.json();
     return data.review || reviewData;
   } catch (error) {
     console.error('Failed to update review:', error);
@@ -457,9 +420,7 @@ export const updateReview = async (reviewId, reviewData) => {
 
 export const deleteReview = async (reviewId) => {
   try {
-    await fetch(`${getApiUrl()}/reviews/${reviewId}`, {
-      method: 'DELETE',
-    });
+    await apiCall(`${getApiUrl()}/reviews/${reviewId}`, { method: 'DELETE' });
     return true;
   } catch (error) {
     console.error('Failed to delete review:', error);
@@ -469,8 +430,7 @@ export const deleteReview = async (reviewId) => {
 
 export const getPropertyReviews = async (propertyId) => {
   try {
-    const response = await fetch(`${getApiUrl()}/reviews/property/${propertyId}`);
-    const data = await response.json();
+    const data = await apiCall(`${getApiUrl()}/reviews/property/${propertyId}`);
     return data.reviews || [];
   } catch (error) {
     console.error('Failed to fetch reviews:', error);
@@ -480,8 +440,7 @@ export const getPropertyReviews = async (propertyId) => {
 
 export const getUserReviews = async (userId) => {
   try {
-    const response = await fetch(`${getApiUrl()}/reviews/user/${userId}`);
-    const data = await response.json();
+    const data = await apiCall(`${getApiUrl()}/reviews/user/${userId}`);
     return data.reviews || [];
   } catch (error) {
     console.error('Failed to fetch user reviews:', error);
@@ -491,10 +450,9 @@ export const getUserReviews = async (userId) => {
 
 export const getApprovedReviews = async (propertyId) => {
   try {
-    const response = await fetch(
+    const data = await apiCall(
       `${getApiUrl()}/reviews/property/${propertyId}?status=approved`
     );
-    const data = await response.json();
     return data.reviews || [];
   } catch (error) {
     console.error('Failed to fetch approved reviews:', error);
@@ -507,12 +465,10 @@ export const getApprovedReviews = async (propertyId) => {
 export const createPayment = async (paymentData, userId) => {
   try {
     const payload = { userId, ...paymentData };
-    const response = await fetch(`${getApiUrl()}/payments`, {
+    const data = await apiCall(`${getApiUrl()}/payments`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-    const data = await response.json();
     return data.payment || payload;
   } catch (error) {
     console.error('Failed to create payment:', error);
@@ -522,8 +478,7 @@ export const createPayment = async (paymentData, userId) => {
 
 export const getPayment = async (paymentId) => {
   try {
-    const response = await fetch(`${getApiUrl()}/payments/${paymentId}`);
-    const data = await response.json();
+    const data = await apiCall(`${getApiUrl()}/payments/${paymentId}`);
     return data.payment || null;
   } catch (error) {
     console.error('Failed to fetch payment:', error);
@@ -533,12 +488,10 @@ export const getPayment = async (paymentId) => {
 
 export const updatePayment = async (paymentId, paymentData) => {
   try {
-    const response = await fetch(`${getApiUrl()}/payments/${paymentId}`, {
+    const data = await apiCall(`${getApiUrl()}/payments/${paymentId}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(paymentData),
     });
-    const data = await response.json();
     return data.payment || paymentData;
   } catch (error) {
     console.error('Failed to update payment:', error);
@@ -548,9 +501,7 @@ export const updatePayment = async (paymentId, paymentData) => {
 
 export const deletePayment = async (paymentId) => {
   try {
-    await fetch(`${getApiUrl()}/payments/${paymentId}`, {
-      method: 'DELETE',
-    });
+    await apiCall(`${getApiUrl()}/payments/${paymentId}`, { method: 'DELETE' });
     return true;
   } catch (error) {
     console.error('Failed to delete payment:', error);
@@ -560,8 +511,7 @@ export const deletePayment = async (paymentId) => {
 
 export const getUserPayments = async (userId) => {
   try {
-    const response = await fetch(`${getApiUrl()}/payments/user/${userId}`);
-    const data = await response.json();
+    const data = await apiCall(`${getApiUrl()}/payments/user/${userId}`);
     return data.payments || [];
   } catch (error) {
     console.error('Failed to fetch payments:', error);
@@ -571,8 +521,7 @@ export const getUserPayments = async (userId) => {
 
 export const getPaymentsByStatus = async (status) => {
   try {
-    const response = await fetch(`${getApiUrl()}/payments?status=${status}`);
-    const data = await response.json();
+    const data = await apiCall(`${getApiUrl()}/payments?status=${status}`);
     return data.payments || [];
   } catch (error) {
     console.error('Failed to fetch payments by status:', error);
@@ -582,8 +531,7 @@ export const getPaymentsByStatus = async (status) => {
 
 export const getPaymentsByMethod = async (method) => {
   try {
-    const response = await fetch(`${getApiUrl()}/payments?method=${method}`);
-    const data = await response.json();
+    const data = await apiCall(`${getApiUrl()}/payments?method=${method}`);
     return data.payments || [];
   } catch (error) {
     console.error('Failed to fetch payments by method:', error);
@@ -595,12 +543,10 @@ export const getPaymentsByMethod = async (method) => {
 
 export const createNotification = async (notificationData) => {
   try {
-    const response = await fetch(`${getApiUrl()}/notifications`, {
+    const data = await apiCall(`${getApiUrl()}/notifications`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(notificationData),
     });
-    const data = await response.json();
     return data.notification || notificationData;
   } catch (error) {
     console.error('Failed to create notification:', error);
@@ -610,8 +556,7 @@ export const createNotification = async (notificationData) => {
 
 export const getUserNotifications = async (userId) => {
   try {
-    const response = await fetch(`${getApiUrl()}/notifications/user/${userId}`);
-    const data = await response.json();
+    const data = await apiCall(`${getApiUrl()}/notifications/user/${userId}`);
     return data.notifications || [];
   } catch (error) {
     console.error('Failed to fetch notifications:', error);
@@ -621,8 +566,7 @@ export const getUserNotifications = async (userId) => {
 
 export const getUserUnreadNotifications = async (userId) => {
   try {
-    const response = await fetch(`${getApiUrl()}/notifications/user/${userId}?read=false`);
-    const data = await response.json();
+    const data = await apiCall(`${getApiUrl()}/notifications/user/${userId}?read=false`);
     return data.notifications || [];
   } catch (error) {
     console.error('Failed to fetch unread notifications:', error);
@@ -632,8 +576,9 @@ export const getUserUnreadNotifications = async (userId) => {
 
 export const markNotificationAsRead = async (notificationId) => {
   try {
-    await fetch(`${getApiUrl()}/notifications/${notificationId}/read`, {
+    await apiCall(`${getApiUrl()}/notifications/${notificationId}/read`, {
       method: 'PATCH',
+      body: JSON.stringify({}),
     });
     return true;
   } catch (error) {
@@ -646,8 +591,7 @@ export const markNotificationAsRead = async (notificationId) => {
 
 export const getLoyaltyCard = async (userId) => {
   try {
-    const response = await fetch(`${getApiUrl()}/loyalty-card/${userId}`);
-    const data = await response.json();
+    const data = await apiCall(`${getApiUrl()}/loyalty-card/${userId}`);
     return data.card || null;
   } catch (error) {
     console.error('Failed to fetch loyalty card:', error);
@@ -657,12 +601,10 @@ export const getLoyaltyCard = async (userId) => {
 
 export const topUpLoyaltyCard = async (userId, amount) => {
   try {
-    const response = await fetch(`${getApiUrl()}/loyalty-card/${userId}/top-up`, {
+    const data = await apiCall(`${getApiUrl()}/loyalty-card/${userId}/top-up`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ amount }),
     });
-    const data = await response.json();
     return data.card || null;
   } catch (error) {
     console.error('Failed to top up loyalty card:', error);
@@ -672,8 +614,7 @@ export const topUpLoyaltyCard = async (userId, amount) => {
 
 export const getLoyaltyTransactions = async (userId) => {
   try {
-    const response = await fetch(`${getApiUrl()}/loyalty-card/${userId}/transactions`);
-    const data = await response.json();
+    const data = await apiCall(`${getApiUrl()}/loyalty-card/${userId}/transactions`);
     return data.transactions || [];
   } catch (error) {
     console.error('Failed to fetch transactions:', error);
@@ -683,12 +624,10 @@ export const getLoyaltyTransactions = async (userId) => {
 
 export const createLoyaltyTier = async (tierData) => {
   try {
-    const response = await fetch(`${getApiUrl()}/loyalty-tiers`, {
+    const data = await apiCall(`${getApiUrl()}/loyalty-tiers`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(tierData),
     });
-    const data = await response.json();
     return data.tier || tierData;
   } catch (error) {
     console.error('Failed to create loyalty tier:', error);
@@ -698,8 +637,7 @@ export const createLoyaltyTier = async (tierData) => {
 
 export const getLoyaltyTiers = async () => {
   try {
-    const response = await fetch(`${getApiUrl()}/loyalty-tiers`);
-    const data = await response.json();
+    const data = await apiCall(`${getApiUrl()}/loyalty-tiers`);
     return data.tiers || [];
   } catch (error) {
     console.error('Failed to fetch loyalty tiers:', error);
@@ -711,12 +649,10 @@ export const getLoyaltyTiers = async () => {
 
 export const createPromotion = async (promotionData) => {
   try {
-    const response = await fetch(`${getApiUrl()}/promotions`, {
+    const data = await apiCall(`${getApiUrl()}/promotions`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(promotionData),
     });
-    const data = await response.json();
     return data.promotion || promotionData;
   } catch (error) {
     console.error('Failed to create promotion:', error);
@@ -726,8 +662,7 @@ export const createPromotion = async (promotionData) => {
 
 export const getPromoByCode = async (code) => {
   try {
-    const response = await fetch(`${getApiUrl()}/promotions/code/${code}`);
-    const data = await response.json();
+    const data = await apiCall(`${getApiUrl()}/promotions/code/${code}`);
     return data.promotion || null;
   } catch (error) {
     console.warn('Promotion not found:', error);
@@ -737,8 +672,7 @@ export const getPromoByCode = async (code) => {
 
 export const getAllPromotions = async () => {
   try {
-    const response = await fetch(`${getApiUrl()}/promotions`);
-    const data = await response.json();
+    const data = await apiCall(`${getApiUrl()}/promotions`);
     return data.promotions || [];
   } catch (error) {
     console.error('Failed to fetch promotions:', error);
@@ -750,12 +684,10 @@ export const getAllPromotions = async () => {
 
 export const createSupportTicket = async (ticketData) => {
   try {
-    const response = await fetch(`${getApiUrl()}/support-tickets`, {
+    const data = await apiCall(`${getApiUrl()}/support-tickets`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(ticketData),
     });
-    const data = await response.json();
     return data.ticket || ticketData;
   } catch (error) {
     console.error('Failed to create support ticket:', error);
@@ -765,8 +697,7 @@ export const createSupportTicket = async (ticketData) => {
 
 export const getUserSupportTickets = async (userId) => {
   try {
-    const response = await fetch(`${getApiUrl()}/support-tickets/user/${userId}`);
-    const data = await response.json();
+    const data = await apiCall(`${getApiUrl()}/support-tickets/user/${userId}`);
     return data.tickets || [];
   } catch (error) {
     console.error('Failed to fetch user tickets:', error);
@@ -776,8 +707,7 @@ export const getUserSupportTickets = async (userId) => {
 
 export const getAllSupportTickets = async () => {
   try {
-    const response = await fetch(`${getApiUrl()}/support-tickets`);
-    const data = await response.json();
+    const data = await apiCall(`${getApiUrl()}/support-tickets`);
     return data.tickets || [];
   } catch (error) {
     console.error('Failed to fetch support tickets:', error);
@@ -789,9 +719,8 @@ export const getAllSupportTickets = async () => {
 
 export const recordAnalyticsEvent = async (eventData) => {
   try {
-    await fetch(`${getApiUrl()}/analytics`, {
+    await apiCall(`${getApiUrl()}/analytics`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(eventData),
     });
   } catch (error) {
@@ -803,13 +732,11 @@ export const recordAnalyticsEvent = async (eventData) => {
 
 export const createEvent = async (eventData) => {
   try {
-    const response = await fetch(`${getApiUrl()}/events`, {
+    const data = await apiCall(`${getApiUrl()}/events`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(eventData),
     });
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-    const data = await response.json();
+    if (data.error) throw new Error(data.error);
     return data.event || eventData;
   } catch (error) {
     console.error('Failed to create event:', error);
@@ -819,9 +746,8 @@ export const createEvent = async (eventData) => {
 
 export const getEvent = async (eventId) => {
   try {
-    const response = await fetch(`${getApiUrl()}/events/${eventId}`);
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-    const data = await response.json();
+    const data = await apiCall(`${getApiUrl()}/events/${eventId}`);
+    if (data.error) throw new Error(data.error);
     return data.event || null;
   } catch (error) {
     console.error('Failed to fetch event:', error);
@@ -831,13 +757,11 @@ export const getEvent = async (eventId) => {
 
 export const updateEvent = async (eventId, eventData) => {
   try {
-    const response = await fetch(`${getApiUrl()}/events/${eventId}`, {
+    const data = await apiCall(`${getApiUrl()}/events/${eventId}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(eventData),
     });
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-    const data = await response.json();
+    if (data.error) throw new Error(data.error);
     return data.event || eventData;
   } catch (error) {
     console.error('Failed to update event:', error);
@@ -847,10 +771,8 @@ export const updateEvent = async (eventId, eventData) => {
 
 export const deleteEvent = async (eventId) => {
   try {
-    const response = await fetch(`${getApiUrl()}/events/${eventId}`, {
-      method: 'DELETE',
-    });
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    const data = await apiCall(`${getApiUrl()}/events/${eventId}`, { method: 'DELETE' });
+    if (data.error) throw new Error(data.error);
     return true;
   } catch (error) {
     console.error('Failed to delete event:', error);
@@ -858,16 +780,13 @@ export const deleteEvent = async (eventId) => {
   }
 };
 
-// Функция для добавления пользователя участником события
 export const joinEvent = async (eventId, userId) => {
   try {
-    const response = await fetch(`${getApiUrl()}/events/${eventId}/join`, {
+    const data = await apiCall(`${getApiUrl()}/events/${eventId}/join`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId }),
     });
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-    const data = await response.json();
+    if (data.error) throw new Error(data.error);
     return data.event || null;
   } catch (error) {
     console.error('Failed to join event:', error);
@@ -875,10 +794,8 @@ export const joinEvent = async (eventId, userId) => {
   }
 };
 
-
 // ==================== HELPER FUNCTIONS ====================
 
-// Функция для перевода статуса на русский
 const translateEventStatus = (status) => {
   const statusMap = {
     'active': 'Активный',
@@ -891,36 +808,22 @@ const translateEventStatus = (status) => {
   return statusMap[status] || status;
 };
 
-// ==================== EVENTS ====================
-
 export const getAllEvents = async () => {
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 сек timeout
-    
-    const response = await fetch(`${getApiUrl()}/events`, {
-      signal: controller.signal
-    });
-    clearTimeout(timeoutId);
-    
-    const data = await response.json();
-    // Переводим статус на русский
+    const data = await apiCall(`${getApiUrl()}/events`);
     const events = (data.events || []).map(event => ({
       ...event,
       status: translateEventStatus(event.status),
     }));
     return events;
   } catch (error) {
-    // Подавляем логи при сетевых ошибках - возвращаем пустой массив
     return [];
   }
 };
 
 export const getEventsByStatus = async (status) => {
   try {
-    const response = await fetch(`${getApiUrl()}/events?status=${status}`);
-    const data = await response.json();
-    // Переводим статус на русский
+    const data = await apiCall(`${getApiUrl()}/events?status=${status}`);
     const events = (data.events || []).map(event => ({
       ...event,
       status: translateEventStatus(event.status),
@@ -935,48 +838,39 @@ export const getEventsByStatus = async (status) => {
 export const listenToEvents = (callback) => {
   let isServerAvailable = true;
   let failureCount = 0;
-  const MAX_FAILURES = 3; // После 3 ошибок прекращаем попытки
-  
-  // Первый вызов сразу
+  const MAX_FAILURES = 3;
+
   getAllEvents().then(events => {
     callback(events);
     if (events.length > 0) {
       isServerAvailable = true;
       failureCount = 0;
     }
-  }).catch(err => {
+  }).catch(() => {
     failureCount++;
   });
-  
-  // Периодически проверяем обновления каждые 20 секунд (баланс между скоростью и стабильностью)
-  // с exponential backoff если сервер недоступен
+
   let interval = setInterval(() => {
     if (failureCount >= MAX_FAILURES) {
       console.warn('⚠️ DatabaseService: прекращаю попытки подключения к серверу после', MAX_FAILURES, 'ошибок');
       clearInterval(interval);
       return;
     }
-    
+
     getAllEvents()
       .then(events => {
-        if (isServerAvailable === false) {
-          console.log('✅ DatabaseService: сервер восстановлен');
-        }
         isServerAvailable = true;
         failureCount = 0;
         callback(events);
       })
-      .catch(err => {
+      .catch(() => {
         failureCount++;
-        if (!isServerAvailable) {
-          return;
-        }
+        if (!isServerAvailable) return;
         isServerAvailable = false;
         console.warn('⚠️ DatabaseService: сервер недоступен (' + failureCount + '/' + MAX_FAILURES + ')');
       });
-  }, 20000); // 20 секунд для стабильности при долгих сессиях
-  
-  // Возвращаем функцию для отписки
+  }, 20000);
+
   return () => {
     clearInterval(interval);
   };
@@ -989,32 +883,32 @@ export default {
   updateUserLoyalty, updateUserBalance, updateWalletBalance, addToBalance, deductFromBalance,
   updateUserStats, incrementTotalBookings, incrementTotalSpent, incrementTotalEarned,
   incrementReviewsCount, updateBookingStats,
-  
+
   createProperty, getProperty, updateProperty, deleteProperty, getAllProperties,
   getPropertiesByStatus, getPropertiesByPriceRange,
-  
+
   createBooking, getBooking, updateBooking, deleteBooking, getUserBookings,
   getPropertyBookings, getBookingsByStatus, getPropertyBookedDates,
   confirmBookingPayment, cancelBooking,
-  
+
   createReview, getReview, updateReview, deleteReview, getPropertyReviews,
   getUserReviews, getApprovedReviews,
-  
+
   createPayment, getPayment, updatePayment, deletePayment, getUserPayments,
   getPaymentsByStatus, getPaymentsByMethod,
-  
+
   createNotification, getUserNotifications, getUserUnreadNotifications,
   markNotificationAsRead,
-  
+
   getLoyaltyCard, topUpLoyaltyCard, getLoyaltyTransactions, createLoyaltyTier,
   getLoyaltyTiers,
-  
+
   createPromotion, getPromoByCode, getAllPromotions,
-  
+
   createSupportTicket, getUserSupportTickets, getAllSupportTickets,
-  
+
   recordAnalyticsEvent,
-  
+
   createEvent, getEvent, updateEvent, deleteEvent, getAllEvents,
   getEventsByStatus, listenToEvents, joinEvent,
 };

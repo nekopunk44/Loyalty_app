@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { apiCall, API_ENDPOINTS } from '../utils/api';
 
 const AnalyticsContext = createContext();
 
@@ -144,6 +145,12 @@ export const AnalyticsProvider = ({ children }) => {
       }
 
       await saveAnalytics(updated);
+
+      // Отправляем событие на сервер в фоне (не блокируем UI при ошибке)
+      apiCall(API_ENDPOINTS.ANALYTICS.TRACK, {
+        method: 'POST',
+        body: JSON.stringify({ eventType, data }),
+      }).catch(() => {});
     } catch (error) {
       console.error('Ошибка записи события:', error);
     }
