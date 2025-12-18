@@ -17,19 +17,6 @@ import { ReviewProvider } from './src/context/ReviewContext';
 import { EventProvider } from './src/context/EventContext';
 import { UserDataProvider } from './src/context/UserDataContext';
 
-// Обработчик необработанных Promise ошибок (для web)
-if (typeof window !== 'undefined') {
-  window.addEventListener('unhandledrejection', (event) => {
-    // Игнорируем ошибки сообщений от extensions и background tasks
-    if (event.reason && event.reason.message && 
-        (event.reason.message.includes('listener') || 
-         event.reason.message.includes('message channel'))) {
-      console.warn('⚠️ Игнорируем ошибку background:', event.reason.message);
-      event.preventDefault();
-    }
-  });
-}
-
 // Screens
 import LoginScreen from './src/screens/LoginScreen';
 import RegisterScreen from './src/screens/RegisterScreen';
@@ -37,10 +24,12 @@ import HomeScreen from './src/screens/HomeScreen';
 import BookingScreen from './src/screens/BookingScreen';
 import CheckoutScreen from './src/screens/CheckoutScreen';
 import MyCardScreen from './src/screens/MyCardScreen';
+import CardTopUpScreen from './src/screens/CardTopUpScreen';
 import EventsScreen from './src/screens/EventsScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import SplashScreen from './src/screens/SplashScreen';
 import AdminDashboard from './src/screens/AdminDashboard';
+import AdminFinanceDashboard from './src/screens/AdminFinanceDashboard';
 import AdminEvents from './src/screens/AdminEvents';
 import AdminStats from './src/screens/AdminStats';
 import AdminUsers from './src/screens/AdminUsers';
@@ -52,13 +41,16 @@ const Tab = createBottomTabNavigator();
 
 // User Navigation
 function UserTabs() {
+  const { theme } = useTheme();
+  const themeColors = theme.colors;
+  
   return (
     <Tab.Navigator
       initialRouteName="Home"
       screenOptions={({ route }) => ({
         headerShown: true,
         headerStyle: {
-          backgroundColor: colors.primary,
+          backgroundColor: themeColors.primary,
           elevation: 3,
           shadowOpacity: 0.2,
         },
@@ -68,23 +60,27 @@ function UserTabs() {
           fontWeight: '700',
           fontSize: 18,
         },
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textSecondary,
+        tabBarActiveTintColor: themeColors.primary,
+        tabBarInactiveTintColor: themeColors.textSecondary,
         tabBarStyle: {
-          backgroundColor: colors.cardBg,
-          borderTopColor: colors.border,
+          backgroundColor: themeColors.cardBg,
+          borderTopColor: themeColors.border,
           borderTopWidth: 1,
           paddingBottom: 5,
           height: 60,
+          elevation: 8,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.15,
+          shadowRadius: 4,
         },
         tabBarShowLabel: false,
         tabBarIcon: ({ color, size }) => {
           let iconName = 'home';
           if (route.name === 'Home') iconName = 'home';
-          else if (route.name === 'Shop') iconName = 'event-note';
+          else if (route.name === 'Booking') iconName = 'event-note';
           else if (route.name === 'Profile') iconName = 'account-circle';
           else if (route.name === 'Events') iconName = 'event';
-          else if (route.name === 'Notifications') iconName = 'notifications';
           else if (route.name === 'Settings') iconName = 'settings';
           return <MaterialIcons name={iconName} size={size} color={color} />;
         },
@@ -97,7 +93,7 @@ function UserTabs() {
         options={{ title: 'Главная' }}
       />
       <Tab.Screen
-        name="Shop"
+        name="Booking"
         component={BookingScreen}
         options={{ title: 'Забронировать' }}
       />
@@ -112,11 +108,6 @@ function UserTabs() {
         options={{ title: 'События' }}
       />
       <Tab.Screen
-        name="Notifications"
-        component={NotificationCenter}
-        options={{ title: 'Уведомления' }}
-      />
-      <Tab.Screen
         name="Settings"
         component={SettingsScreen}
         options={{ title: 'Настройки' }}
@@ -127,6 +118,9 @@ function UserTabs() {
 
 // User Stack with Checkout
 function UserStack() {
+  const { theme } = useTheme();
+  const themeColors = theme.colors;
+  
   return (
     <Stack.Navigator
       screenOptions={{
@@ -146,7 +140,24 @@ function UserStack() {
           headerTitle: 'Оформление покупки',
           headerTitleAlign: 'center',
           headerStyle: {
-            backgroundColor: colors.primary,
+            backgroundColor: themeColors.primary,
+          },
+          headerTintColor: '#fff',
+          headerTitleStyle: {
+            fontWeight: '700',
+            fontSize: 16,
+          },
+        }}
+      />
+      <Stack.Screen
+        name="CardTopUp"
+        component={CardTopUpScreen}
+        options={{
+          headerShown: true,
+          headerTitle: 'Пополнить баланс',
+          headerTitleAlign: 'center',
+          headerStyle: {
+            backgroundColor: themeColors.primary,
           },
           headerTintColor: '#fff',
           headerTitleStyle: {
@@ -168,13 +179,16 @@ function UserStack() {
 
 // Admin Navigation
 function AdminTabs() {
+  const { theme } = useTheme();
+  const themeColors = theme.colors;
+  
   return (
     <Tab.Navigator
       initialRouteName="Dashboard"
       screenOptions={({ route }) => ({
         headerShown: true,
         headerStyle: {
-          backgroundColor: colors.secondary,
+          backgroundColor: themeColors.secondary,
           elevation: 3,
           shadowOpacity: 0.2,
         },
@@ -184,14 +198,19 @@ function AdminTabs() {
           fontWeight: '700',
           fontSize: 18,
         },
-        tabBarActiveTintColor: colors.secondary,
-        tabBarInactiveTintColor: colors.textSecondary,
+        tabBarActiveTintColor: themeColors.secondary,
+        tabBarInactiveTintColor: themeColors.textSecondary,
         tabBarStyle: {
-          backgroundColor: colors.cardBg,
-          borderTopColor: colors.border,
+          backgroundColor: themeColors.cardBg,
+          borderTopColor: themeColors.border,
           borderTopWidth: 1,
           paddingBottom: 5,
           height: 60,
+          elevation: 8,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.15,
+          shadowRadius: 4,
         },
         tabBarShowLabel: false,
         tabBarIcon: ({ color, size }) => {
@@ -199,6 +218,7 @@ function AdminTabs() {
           if (route.name === 'Dashboard') iconName = 'dashboard';
           else if (route.name === 'AdminEvents') iconName = 'event-note';
           else if (route.name === 'AdminUsers') iconName = 'people';
+          else if (route.name === 'AdminFinance') iconName = 'attach-money';
           else if (route.name === 'AdminStats') iconName = 'bar-chart';
           else if (route.name === 'AdminSettings') iconName = 'settings';
           return <MaterialIcons name={iconName} size={size} color={color} />;
@@ -222,6 +242,11 @@ function AdminTabs() {
         options={{ title: 'Пользователи' }}
       />
       <Tab.Screen
+        name="AdminFinance"
+        component={AdminFinanceDashboard}
+        options={{ title: 'Финансы' }}
+      />
+      <Tab.Screen
         name="AdminStats"
         component={AdminStats}
         options={{ title: 'Статистика' }}
@@ -236,11 +261,14 @@ function AdminTabs() {
 }
 
 function AdminStack() {
+  const { theme } = useTheme();
+  const themeColors = theme.colors;
+  
   return (
     <Stack.Navigator
       screenOptions={{
         animationEnabled: true,
-        cardStyle: { backgroundColor: colors.background },
+        cardStyle: { backgroundColor: themeColors.background },
       }}
     >
       <Stack.Screen
@@ -253,14 +281,16 @@ function AdminStack() {
 }
 
 // Root Navigator
+const DEBUG_MODE = true; // Установите в true для отладки
+
 function RootNavigator() {
   const { isLoggedIn, isAdmin, isLoading } = useAuth();
   const { theme } = useTheme();
 
-  console.log('🔄 RootNavigator render:', { isLoggedIn, isAdmin, isLoading });
+  if (DEBUG_MODE) console.log('🔄 RootNavigator render:', { isLoggedIn, isAdmin, isLoading });
 
   if (isLoading) {
-    console.log('⏳ Показываю LoadingScreen');
+    if (DEBUG_MODE) console.log('⏳ Показываю LoadingScreen');
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.colors.background }}>
         <ActivityIndicator size="large" color={theme.colors.primary} />
@@ -268,7 +298,7 @@ function RootNavigator() {
     );
   }
 
-  console.log('✅ isLoading = false, показываю навигацию');
+  if (DEBUG_MODE) console.log('✅ isLoading = false, показываю навигацию');
 
   return (
     <Stack.Navigator
@@ -324,7 +354,7 @@ function RootNavigator() {
 
 export default function App() {
   useEffect(() => {
-    console.log('📱 App монтирован');
+    if (DEBUG_MODE) console.log('📱 App монтирован');
   }, []);
 
   return (
@@ -354,7 +384,17 @@ export default function App() {
 
 // Компонент для применения темы к NavigationContainer
 function NavigationContainerWrapper() {
-  const { isDark, theme } = useTheme();
+  const { isDark, theme, isThemeLoaded } = useTheme();
+  const { isLoading } = useAuth();
+
+  // Не показываем ничего, пока тема не загружена и приложение инициализируется
+  if (!isThemeLoaded || isLoading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8F9FA' }}>
+        <ActivityIndicator size="large" color="#FF6B35" />
+      </View>
+    );
+  }
 
   // Создаём тему для навигации на основе текущей темы
   const navigationTheme = {

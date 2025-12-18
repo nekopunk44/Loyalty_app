@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, FlatList, Modal, Image, Alert } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { spacing, borderRadius } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
@@ -12,6 +13,9 @@ import {
   SlideInRightCard,
 } from '../components/AnimatedCard';
 import PropertyCarousel from '../components/PropertyCarousel';
+import { getApiUrl } from '../utils/apiUrl';
+
+const API_BASE_URL = getApiUrl();
 
 export default function HomeScreen({ navigation }) {
   const { theme, isDark } = useTheme();
@@ -20,7 +24,52 @@ export default function HomeScreen({ navigation }) {
   
   const [selectedPhoto, setSelectedPhoto] = useState(null);
   const [addPhotoModalVisible, setAddPhotoModalVisible] = useState(false);
+  const [bookingCount, setBookingCount] = useState(0);
   const { isAdmin } = useAuth();
+
+  // Загружаем количество бронирований при загрузке компонента
+  useEffect(() => {
+    loadBookingCount();
+  }, [user?.id]);
+
+  // Обновляем бронирования при фокусе на экран
+  useFocusEffect(
+    React.useCallback(() => {
+      loadBookingCount();
+    }, [user?.id])
+  );
+
+  const loadBookingCount = async () => {
+    try {
+      if (!user?.id) return;
+      const response = await fetch(`${API_BASE_URL}/bookings/user/${user.id}`);
+      const data = await response.json();
+      if (data.success && Array.isArray(data.bookings)) {
+        // Считаем только завершенные бронирования
+        const completedBookings = data.bookings.filter(booking => booking.status === 'completed');
+        setBookingCount(completedBookings.length);
+      }
+    } catch (error) {
+      console.error('❌ Ошибка загрузки бронирований:', error);
+      setBookingCount(0);
+    }
+  };
+
+  // Функция для получения цвета в зависимости от уровня лояльности
+  const getLevelColor = (level) => {
+    const userLevel = (level || 'Bronze').toLowerCase();
+    switch (userLevel) {
+      case 'platinum':
+        return '#B366FF';
+      case 'gold':
+        return '#FFA500';
+      case 'silver':
+        return '#A9A9A9';
+      case 'bronze':
+      default:
+        return '#CD7F32';
+    }
+  };
 
   const amenities = [
     {
@@ -29,7 +78,7 @@ export default function HomeScreen({ navigation }) {
       icon: 'hotel',
       image: 'https://picsum.photos/300/200?random=4',
       description: 'Уютная комната с видом на природу',
-      price: '3,500₽/ночь',
+      price: '3,500PRB/ночь',
     },
     {
       id: '2',
@@ -45,7 +94,7 @@ export default function HomeScreen({ navigation }) {
       icon: 'restaurant',
       image: 'https://picsum.photos/300/200?random=6',
       description: 'Традиционная кухня и местные деликатесы',
-      price: 'Средний чек 1,200₽',
+      price: 'Средний чек 1,200PRB',
     },
     {
       id: '4',
@@ -53,7 +102,7 @@ export default function HomeScreen({ navigation }) {
       icon: 'spa',
       image: 'https://picsum.photos/300/200?random=7',
       description: 'Релаксация и оздоровительные процедуры',
-      price: 'От 2,000₽',
+      price: 'От 2,000PRB',
     },
     {
       id: '5',
@@ -68,38 +117,38 @@ export default function HomeScreen({ navigation }) {
   const properties = [
     {
       id: '1',
-      name: 'Студия + бассейн + терраса',
-      price: '150$ за 12 часов',
+      name: 'Стадарт',
+      price: '150PRB за ночь',
       image: require('../assets/property1.png'),
     },
     {
       id: '2',
-      name: 'Студия + бассейн + зал',
-      price: '250$ за 12 часов',
+      name: 'Люкс апартаменты',
+      price: '250PRB за ночь',
       image: require('../assets/property2.png'),
     },
     {
       id: '3',
       name: 'Задний двор',
-      price: '200$ за 12 часов',
+      price: '200PRB за ночь',
       image: require('../assets/property3.png'),
     },
     {
       id: '4',
       name: 'Сауна',
-      price: '250₽ за час',
+      price: '250PRB за час',
       image: require('../assets/property4.png'),
     },
   ];
 
   const loyaltyStats = [
     { label: 'Баллы', value: user?.loyaltyPoints || 0, icon: 'stars', color: '#FFD700' },
-    { label: 'Уровень', value: user?.membershipLevel || 'Bronze', icon: 'emoji-events', color: '#CD7F32' },
-    { label: 'Бронирования', value: 12, icon: 'event-note', color: colors.primary },
+    { label: 'Уровень', value: user?.membershipLevel || 'Bronze', icon: 'emoji-events', color: getLevelColor(user?.membershipLevel) },
+    { label: 'Бронирования', value: bookingCount, icon: 'event-note', color: colors.primary },
   ];
 
   // Стили с доступом к переменным компонента
-  const styles = StyleSheet.create({
+  const styles = useMemo(() => StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: colors.background,
@@ -174,10 +223,10 @@ export default function HomeScreen({ navigation }) {
       borderRadius: borderRadius.lg,
       overflow: 'hidden',
       shadowColor: colors.shadow,
-      shadowOffset: { width: 0, height: 3 },
-      shadowOpacity: 0.15,
-      shadowRadius: 5,
-      elevation: 4,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.18,
+      shadowRadius: 6,
+      elevation: 5,
     },
     loyaltyCard: {
       backgroundColor: colors.cardBg,
@@ -238,10 +287,10 @@ export default function HomeScreen({ navigation }) {
       justifyContent: 'center',
       minHeight: 100,
       shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.15,
-      shadowRadius: 4,
-      elevation: 3,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.2,
+      shadowRadius: 6,
+      elevation: 5,
     },
     actionIcon: {
       marginBottom: spacing.sm,
@@ -251,6 +300,69 @@ export default function HomeScreen({ navigation }) {
       fontWeight: '700',
       color: '#fff',
       textAlign: 'center',
+    },
+
+    // ========== RECENT BOOKINGS SECTION ==========
+    recentBookingsSection: {
+      marginHorizontal: spacing.md,
+      marginVertical: spacing.lg,
+    },
+    recentBookingsTitle: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: colors.text,
+      marginBottom: spacing.md,
+    },
+    bookingCard: {
+      backgroundColor: colors.cardBg,
+      borderRadius: borderRadius.lg,
+      padding: spacing.md,
+      marginBottom: spacing.sm,
+      borderLeftWidth: 4,
+      borderLeftColor: colors.primary,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.12,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    bookingCardHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: spacing.xs,
+    },
+    bookingCardTitle: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: colors.text,
+      flex: 1,
+    },
+    bookingStatus: {
+      fontSize: 12,
+      fontWeight: '600',
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 4,
+      borderRadius: borderRadius.md,
+      overflow: 'hidden',
+    },
+    bookingStatusPending: {
+      backgroundColor: '#FEF3C7',
+      color: '#B45309',
+    },
+    bookingStatusConfirmed: {
+      backgroundColor: '#D1FAE5',
+      color: '#065F46',
+    },
+    bookingCardDates: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      marginBottom: spacing.xs,
+    },
+    bookingCardPrice: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: colors.primary,
     },
 
     // ========== CATALOG SECTION ==========
@@ -307,10 +419,10 @@ export default function HomeScreen({ navigation }) {
       overflow: 'hidden',
       backgroundColor: colors.cardBg,
       shadowColor: colors.shadow,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.12,
-      shadowRadius: 4,
-      elevation: 3,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.15,
+      shadowRadius: 6,
+      elevation: 4,
     },
     photoImage: {
       width: '100%',
@@ -327,9 +439,10 @@ export default function HomeScreen({ navigation }) {
       marginBottom: spacing.xs,
     },
     photoPrice: {
-      fontSize: 12,
+      fontSize: 13,
       color: colors.primary,
       fontWeight: '600',
+      maxWidth: '100%',
     },
 
     // ========== MODAL STYLES ==========
@@ -406,7 +519,7 @@ export default function HomeScreen({ navigation }) {
       fontSize: 16,
       fontWeight: '700',
     },
-  });
+  }), [colors]);
 
   const handlePhotoSelect = (photo) => {
     setSelectedPhoto(photo);
@@ -435,8 +548,8 @@ export default function HomeScreen({ navigation }) {
         style={styles.photoImage}
       />
       <View style={styles.photoInfo}>
-        <Text style={styles.photoTitle}>{item.title}</Text>
-        <Text style={styles.photoPrice}>{item.price}</Text>
+        <Text style={styles.photoTitle} numberOfLines={2}>{item.title}</Text>
+        <Text style={styles.photoPrice} numberOfLines={1}>{item.price}</Text>
       </View>
     </TouchableOpacity>
   );
@@ -484,7 +597,7 @@ export default function HomeScreen({ navigation }) {
                   <Text style={[styles.statValue, { color: stat.color }]}>
                     {stat.value}
                   </Text>
-                  <Text style={styles.statLabel}>{stat.label}</Text>
+                  <Text style={styles.statLabel} numberOfLines={1}>{stat.label}</Text>
                 </View>
               ))}
             </View>
@@ -492,8 +605,8 @@ export default function HomeScreen({ navigation }) {
         </View>
       </FadeInCard>
 
-      {/* ========== QUICK ACTIONS ========== */}
-      <SlideInBottomCard delay={200}>
+      {/* ========== QUICK ACTIONS 1 ========== */}
+      <FadeInCard delay={200}>
         <View style={styles.actionsContainer}>
           <TouchableOpacity
             style={[styles.actionCard, { backgroundColor: colors.primary }]}
@@ -513,9 +626,10 @@ export default function HomeScreen({ navigation }) {
             <Text style={styles.actionText}>Настройки</Text>
           </TouchableOpacity>
         </View>
-      </SlideInBottomCard>
+      </FadeInCard>
 
-      <SlideInBottomCard delay={250}>
+      {/* ========== QUICK ACTIONS 2 ========== */}
+      <FadeInCard delay={250}>
         <View style={styles.actionsContainer}>
           <TouchableOpacity
             style={[styles.actionCard, { backgroundColor: colors.accent }]}
@@ -535,7 +649,7 @@ export default function HomeScreen({ navigation }) {
             <Text style={styles.actionText}>Бронь</Text>
           </TouchableOpacity>
         </View>
-      </SlideInBottomCard>
+      </FadeInCard>
 
       {/* ========== PROPERTIES CATALOG ========== */}
       <FadeInCard delay={300}>

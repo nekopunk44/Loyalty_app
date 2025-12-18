@@ -77,7 +77,7 @@ export default function ShopScreen() {
     const cashback = (sum * 0.01).toFixed(2);
     Alert.alert(
       '✅ Покупка успешна!',
-      `Сумма: ${sum.toFixed(2)} ₽\nКешбек: +${cashback} ₽\n\nСпасибо за покупку! 🎉`
+      `Сумма: ${sum.toFixed(2)} PRB\nКешбек: +${cashback} PRB\n\nСпасибо за покупку! 🎉`
     );
     setAmount('');
   };
@@ -110,7 +110,7 @@ export default function ShopScreen() {
             keyboardType="decimal-pad"
             value={amount}
             onChangeText={setAmount}
-            placeholder="Введите сумму, ₽"
+            placeholder="Введите сумму, PRB"
             placeholderTextColor={colors.textSecondary}
           />
         </View>
@@ -122,7 +122,7 @@ export default function ShopScreen() {
           <View style={styles.infoText}>
             <Text style={styles.infoTitle}>Вы получите</Text>
             <Text style={styles.infoValue}>
-              {amount ? `${(parseFloat(amount) * 0.01).toFixed(2)} ₽` : '—'} кешбека
+              {amount ? `${(parseFloat(amount) * 0.01).toFixed(2)} PRB` : '—'} кешбека
             </Text>
           </View>
         </View>

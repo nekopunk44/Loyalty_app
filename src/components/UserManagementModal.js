@@ -12,9 +12,11 @@ import {
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { spacing, borderRadius } from '../constants/theme';
-import * as FirebaseService from '../services/FirebaseService';
+import { getApiUrl } from '../utils/apiUrl';
 
-export default function UserManagementModal({ visible, onClose, theme, onUserCreated }) {
+const API_BASE_URL = getApiUrl();
+
+export default function UserManagementModal({ visible, onClose, theme, onUserCreated, onNotify }) {
   const colors = theme.colors;
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -28,15 +30,15 @@ export default function UserManagementModal({ visible, onClose, theme, onUserCre
   });
 
   const roles = [
-    { label: 'Пользователь', value: 'user' },
-    { label: 'Администратор', value: 'admin' },
+    { label: 'Пользователь', value: 'user', icon: 'person', color: colors.primary },
+    { label: 'Администратор', value: 'admin', icon: 'admin-panel-settings', color: '#2196F3' },
   ];
 
   const levels = [
-    { label: 'Bronze', value: 'Bronze' },
-    { label: 'Silver', value: 'Silver' },
-    { label: 'Gold', value: 'Gold' },
-    { label: 'Platinum', value: 'Platinum' },
+    { label: 'Bronze', value: 'Bronze', icon: 'shield', color: '#CD7F32' },
+    { label: 'Silver', value: 'Silver', icon: 'grade', color: '#C0C0C0' },
+    { label: 'Gold', value: 'Gold', icon: 'star', color: '#FFD700' },
+    { label: 'Platinum', value: 'Platinum', icon: 'flare', color: '#9999FF' },
   ];
 
   const validateEmail = (email) => {
@@ -52,48 +54,48 @@ export default function UserManagementModal({ visible, onClose, theme, onUserCre
     });
 
     if (!formData.displayName.trim()) {
-      console.log('❌ Имя не заполнено');
+      console.log('Имя не заполнено');
       Alert.alert('⚠️ Ошибка валидации', 'Пожалуйста, введите имя пользователя');
       return false;
     }
 
     if (formData.displayName.length < 2) {
-      console.log('❌ Имя слишком короткое');
+      console.log('Имя слишком короткое');
       Alert.alert('⚠️ Ошибка валидации', 'Имя должно быть минимум 2 символа');
       return false;
     }
 
     if (!formData.email.trim()) {
-      console.log('❌ Email не заполнен');
+      console.log('Email не заполнен');
       Alert.alert('⚠️ Ошибка валидации', 'Пожалуйста, введите email');
       return false;
     }
 
     if (!validateEmail(formData.email)) {
-      console.log('❌ Email некорректный');
+      console.log('Email некорректный');
       Alert.alert('⚠️ Ошибка валидации', 'Введите корректный email (например: user@example.com)');
       return false;
     }
 
     if (!formData.password.trim()) {
-      console.log('❌ Пароль не заполнен');
+      console.log('Пароль не заполнен');
       Alert.alert('⚠️ Ошибка валидации', 'Пожалуйста, введите пароль');
       return false;
     }
 
     if (formData.password.length < 6) {
-      console.log('❌ Пароль короче 6 символов');
+      console.log('Пароль короче 6 символов');
       Alert.alert('⚠️ Ошибка валидации', 'Пароль должен быть минимум 6 символов');
       return false;
     }
 
     if (!/[a-zA-Zа-яА-Я]/.test(formData.password) || !/[0-9]/.test(formData.password)) {
-      console.log('❌ Пароль слишком слабый');
+      console.log('Пароль слишком слабый');
       Alert.alert('⚠️ Слабый пароль', 'Пароль должен содержать буквы и цифры (например: Pass123)');
       return false;
     }
 
-    console.log('✅ Валидация пройдена');
+      console.log('Валидация пройдена');
     return true;
   };
 
@@ -105,46 +107,62 @@ export default function UserManagementModal({ visible, onClose, theme, onUserCre
     console.log('⏳ Loading started, formData:', formData);
     
     try {
-      console.log('📤 Calling FirebaseService.createUserAsAdmin...');
-      const newUser = await FirebaseService.createUserAsAdmin(formData);
-      console.log('✅ Пользователь создан в Firebase:', newUser);
+      console.log('📤 Calling API to create user...');
+      const response = await fetch(`${API_BASE_URL}/auth/register-admin`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: formData.email,
+          password: formData.password,
+          displayName: formData.displayName,
+          phone: formData.phone,
+          role: formData.role,
+          membershipLevel: formData.membershipLevel,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || data.error || 'Ошибка при создании пользователя');
+      }
+
+      console.log('✅ Пользователь создан через API:', data);
       
-      Alert.alert(
-        '✅ Успешно',
-        `Пользователь ${formData.email} создан!`,
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              console.log('🔄 Alert dismissed, closing modal');
-              setFormData({
-                email: '',
-                password: '',
-                displayName: '',
-                phone: '',
-                role: 'user',
-                membershipLevel: 'Bronze',
-              });
-              if (onUserCreated) onUserCreated(newUser);
-              onClose();
-            },
-          },
-        ]
-      );
+      // Отправляем уведомление
+      if (onNotify) {
+        onNotify(formData.displayName || formData.email, formData.email);
+      }
+      
+      // Вызываем callback для обновления списка и закрываем окно
+      if (onUserCreated) onUserCreated(data.user);
+      
+      // Очищаем форму и закрываем модаль
+      setFormData({
+        email: '',
+        password: '',
+        displayName: '',
+        phone: '',
+        role: 'user',
+        membershipLevel: 'Bronze',
+      });
+      onClose();
     } catch (error) {
       console.error('❌ Ошибка создания пользователя:', error);
       
       let errorMessage = 'Не удалось создать пользователя';
       if (error.message && error.message.includes('email-already-in-use')) {
         errorMessage = 'Этот email уже зарегистрирован. Используйте другой email';
-      } else if (error.message && error.message.includes('weak-password')) {
-        errorMessage = 'Пароль не соответствует требованиям безопасности';
-      } else if (error.message && error.message.includes('invalid-email')) {
-        errorMessage = 'Email некорректный';
+      } else if (error.message && error.message.includes('already registered')) {
+        errorMessage = 'Этот email уже зарегистрирован. Используйте другой email';
       } else if (error.message && error.message.includes('Network')) {
-        errorMessage = 'Ошибка сети. Проверьте подключение к интернету';
+        errorMessage = 'Ошибка сети. Проверьте подключение к интернету и что сервер запущен на localhost:5002';
       } else if (error.message && error.message.includes('Timeout')) {
         errorMessage = 'Время ожидания истекло. Попробуйте ещё раз';
+      } else if (error.message) {
+        errorMessage = error.message;
       }
       
       Alert.alert('❌ Ошибка создания пользователя', errorMessage);
@@ -155,21 +173,34 @@ export default function UserManagementModal({ visible, onClose, theme, onUserCre
   };
 
   const handleInputChange = (field, value) => {
+    const updates = { [field]: value };
+    
+    // Если меняем роль на администратора, очищаем membershipLevel
+    if (field === 'role' && value === 'admin') {
+      updates.membershipLevel = null;
+    }
+    
     setFormData(prev => ({
       ...prev,
-      [field]: value,
+      ...updates,
     }));
   };
 
-  const RoleButton = ({ label, value }) => (
+  const RoleButton = ({ label, value, icon, color }) => (
     <TouchableOpacity
       style={[
         styles.optionButton,
         { backgroundColor: colors.cardBg, borderColor: colors.border },
-        formData.role === value && { backgroundColor: colors.primary, borderColor: colors.primary },
+        formData.role === value && { backgroundColor: color, borderColor: color },
       ]}
       onPress={() => handleInputChange('role', value)}
     >
+      <MaterialIcons 
+        name={icon} 
+        size={18} 
+        color={formData.role === value ? '#fff' : color}
+        style={styles.buttonIcon}
+      />
       <Text
         style={[
           styles.optionText,
@@ -182,15 +213,21 @@ export default function UserManagementModal({ visible, onClose, theme, onUserCre
     </TouchableOpacity>
   );
 
-  const LevelButton = ({ label, value }) => (
+  const LevelButton = ({ label, value, icon, color }) => (
     <TouchableOpacity
       style={[
         styles.optionButton,
         { backgroundColor: colors.cardBg, borderColor: colors.border },
-        formData.membershipLevel === value && { backgroundColor: colors.success, borderColor: colors.success },
+        formData.membershipLevel === value && { backgroundColor: color, borderColor: color },
       ]}
       onPress={() => handleInputChange('membershipLevel', value)}
     >
+      <MaterialIcons 
+        name={icon} 
+        size={18} 
+        color={formData.membershipLevel === value ? '#fff' : color}
+        style={styles.buttonIcon}
+      />
       <Text
         style={[
           styles.optionText,
@@ -204,16 +241,17 @@ export default function UserManagementModal({ visible, onClose, theme, onUserCre
   );
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent={false}
-      onRequestClose={onClose}
-    >
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <>
+      <Modal
+        visible={visible}
+        animationType="slide"
+        transparent={false}
+        onRequestClose={onClose}
+      >
+        <View style={[styles.container, { backgroundColor: colors.background }]}>
         {/* Заголовок */}
         <View style={[styles.header, { backgroundColor: colors.cardBg, borderBottomColor: colors.border }]}>
-          <Text style={[styles.title, { color: colors.text }]}>➕ Добавить пользователя</Text>
+          <Text style={[styles.title, { color: colors.text }]}>Добавить пользователя</Text>
           <TouchableOpacity onPress={onClose} disabled={loading}>
             <MaterialIcons name="close" size={24} color={colors.text} />
           </TouchableOpacity>
@@ -222,7 +260,7 @@ export default function UserManagementModal({ visible, onClose, theme, onUserCre
         <ScrollView style={styles.form} contentContainerStyle={styles.formContent}>
           {/* Email */}
           <View style={styles.formGroup}>
-            <Text style={[styles.label, { color: colors.text }]}>Email *</Text>
+            <Text style={[styles.label, { color: colors.text }]}>Email</Text>
             <TextInput
               style={[styles.input, { backgroundColor: colors.cardBg, color: colors.text, borderColor: colors.border }]}
               placeholder="user@example.com"
@@ -237,7 +275,7 @@ export default function UserManagementModal({ visible, onClose, theme, onUserCre
 
           {/* Пароль */}
           <View style={styles.formGroup}>
-            <Text style={[styles.label, { color: colors.text }]}>Пароль * (мин. 6 символов)</Text>
+            <Text style={[styles.label, { color: colors.text }]}>Пароль (мин. 6 символов)</Text>
             <View style={[styles.passwordInputWrapper, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
               <TextInput
                 style={[styles.inputPassword, { color: colors.text }]}
@@ -264,7 +302,7 @@ export default function UserManagementModal({ visible, onClose, theme, onUserCre
 
           {/* Имя */}
           <View style={styles.formGroup}>
-            <Text style={[styles.label, { color: colors.text }]}>Имя *</Text>
+            <Text style={[styles.label, { color: colors.text }]}>Имя</Text>
             <TextInput
               style={[styles.input, { backgroundColor: colors.cardBg, color: colors.text, borderColor: colors.border }]}
               placeholder="Иван Петров"
@@ -291,23 +329,37 @@ export default function UserManagementModal({ visible, onClose, theme, onUserCre
 
           {/* Роль */}
           <View style={styles.formGroup}>
-            <Text style={[styles.label, { color: colors.text }]}>Роль в системе *</Text>
+            <Text style={[styles.label, { color: colors.text }]}>Роль в системе</Text>
             <View style={styles.optionsContainer}>
               {roles.map((role) => (
-                <RoleButton key={role.value} label={role.label} value={role.value} />
+                <RoleButton 
+                  key={role.value} 
+                  label={role.label} 
+                  value={role.value}
+                  icon={role.icon}
+                  color={role.color}
+                />
               ))}
             </View>
           </View>
 
-          {/* Уровень членства */}
-          <View style={styles.formGroup}>
-            <Text style={[styles.label, { color: colors.text }]}>Уровень членства</Text>
-            <View style={styles.optionsContainer}>
-              {levels.map((level) => (
-                <LevelButton key={level.value} label={level.label} value={level.value} />
-              ))}
+          {/* Статус лояльности - только для обычных пользователей */}
+          {formData.role === 'user' && (
+            <View style={styles.formGroup}>
+              <Text style={[styles.label, { color: colors.text }]}>Статус лояльности</Text>
+              <View style={styles.optionsContainer}>
+                {levels.map((level) => (
+                  <LevelButton 
+                    key={level.value} 
+                    label={level.label} 
+                    value={level.value}
+                    icon={level.icon}
+                    color={level.color}
+                  />
+                ))}
+              </View>
             </View>
-          </View>
+          )}
 
           {/* Информационное сообщение */}
           <View style={[styles.infoBox, { backgroundColor: colors.primary + '15', borderColor: colors.primary }]}>
@@ -345,6 +397,7 @@ export default function UserManagementModal({ visible, onClose, theme, onUserCre
         </View>
       </View>
     </Modal>
+    </>
   );
 }
 
@@ -408,14 +461,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.sm,
     flexWrap: 'wrap',
+    justifyContent: 'space-between',
   },
   optionButton: {
-    flex: 1,
-    minWidth: '45%',
+    width: '48%',
     paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
     alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  buttonIcon: {
+    marginRight: spacing.xs,
   },
   optionText: {
     fontSize: 12,

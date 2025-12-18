@@ -78,19 +78,29 @@ export default function LoginScreen({ navigation }) {
     }
   };
 
-  const handleDemoLogin = async (demoUsername) => {
-    setUsername(demoUsername);
-    setPassword(MOCK_PASSWORDS[demoUsername]);
-    // Slightly delayed so the state updates
-    setTimeout(() => {
-      handleLogin();
-    }, 100);
+  const MOCK_PASSWORDS = {
+    'admin@example.com': 'password123',
+    'user1@example.com': 'password123',
+    'user2@example.com': 'password123',
   };
 
-  const MOCK_PASSWORDS = {
-    admin: 'admin123',
-    user: 'user123',
-    demo: 'demo123',
+  const handleDemoLogin = async (demoEmail) => {
+    const demoPassword = MOCK_PASSWORDS[demoEmail];
+    
+    setLoading(true);
+    const success = await login(demoEmail, demoPassword);
+    setLoading(false);
+
+    if (success) {
+      // Очищаем поля после успешного входа
+      setUsername('');
+      setPassword('');
+    } else {
+      // Показываем ошибку
+      if (error) {
+        Alert.alert('❌ Ошибка входа', error || 'Неверные учётные данные. Попробуйте ещё раз');
+      }
+    }
   };
 
   const translateY = slideAnim.interpolate({
@@ -146,7 +156,7 @@ export default function LoginScreen({ navigation }) {
             />
             <TextInput
               style={styles.input}
-              placeholder="Логин (admin, user, demo)"
+              placeholder="Email (admin@example.com)"
               placeholderTextColor={colors.textSecondary}
               value={username}
               onChangeText={setUsername}
@@ -219,24 +229,24 @@ export default function LoginScreen({ navigation }) {
             <Text style={styles.demoTitle}>Тестовые учётные данные:</Text>
             <TouchableOpacity
               style={[styles.demoButton, { backgroundColor: colors.secondary }]}
-              onPress={() => handleDemoLogin('admin')}
+              onPress={() => handleDemoLogin('admin@example.com')}
               disabled={loading}
             >
-              <Text style={styles.demoButtonText}>👤 admin / admin123</Text>
+              <Text style={styles.demoButtonText}>👤 admin@example.com</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.demoButton, { backgroundColor: colors.primary }]}
-              onPress={() => handleDemoLogin('user')}
+              onPress={() => handleDemoLogin('user1@example.com')}
               disabled={loading}
             >
-              <Text style={styles.demoButtonText}>👥 user / user123</Text>
+              <Text style={styles.demoButtonText}>👥 user1@example.com</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.demoButton, { backgroundColor: colors.accent }]}
-              onPress={() => handleDemoLogin('demo')}
+              onPress={() => handleDemoLogin('user2@example.com')}
               disabled={loading}
             >
-              <Text style={styles.demoButtonText}>🎯 demo / demo123</Text>
+              <Text style={styles.demoButtonText}>👤 user2@example.com</Text>
             </TouchableOpacity>
           </View>
 
@@ -244,7 +254,7 @@ export default function LoginScreen({ navigation }) {
           <View style={styles.infoCard}>
             <MaterialIcons name="info" size={18} color={colors.primary} />
             <Text style={styles.infoText}>
-              Используйте тестовые учётные данные для демонстрации функций приложения.
+              Все тестовые учётные данные используют пароль: <Text style={{fontWeight: '600'}}>password123</Text>
             </Text>
           </View>
 

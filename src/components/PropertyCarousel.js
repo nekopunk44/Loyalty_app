@@ -14,6 +14,7 @@ import { spacing, borderRadius } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import { SlideInLeftCard } from './AnimatedCard';
 
+const DEBUG_MODE = false; // Установите в true для отладки
 const screenWidth = Dimensions.get('window').width;
 const CARD_WIDTH = screenWidth * 0.75;
 const CARD_HEIGHT = 220;
@@ -42,12 +43,12 @@ export default function PropertyCarousel({ properties, onPropertyPress }) {
   };
 
   const handleContentSizeChange = (width) => {
-    console.log('📸 PropertyCarousel contentSize:', width, 'layoutWidth:', layoutWidth);
+    if (DEBUG_MODE) console.log('📸PropertyCarousel contentSize:', width, 'layoutWidth:', layoutWidth);
     setContentSize(width);
     // Контент шире чем layout - можно прокручивать вправо
     if (layoutWidth > 0) {
       const canScroll = width > layoutWidth;
-      console.log('📸 Can scroll right:', canScroll);
+      if (DEBUG_MODE) console.log('Can scroll right:', canScroll);
       setCanScrollRight(canScroll);
     } else {
       // Если layoutWidth еще не установлена, показываем кнопку если несколько элементов
@@ -57,12 +58,12 @@ export default function PropertyCarousel({ properties, onPropertyPress }) {
 
   const handleLayout = (event) => {
     const width = event.nativeEvent.layout.width;
-    console.log('📸 PropertyCarousel layout width:', width, 'contentSize:', contentSize);
+    if (DEBUG_MODE) console.log('📸 PropertyCarousel layout width:', width, 'contentSize:', contentSize);
     setLayoutWidth(width);
     // Контент шире чем layout - можно прокручивать вправо
     if (contentSize > 0) {
       const canScroll = contentSize > width;
-      console.log('📸 Can scroll right (from handleLayout):', canScroll);
+      if (DEBUG_MODE) console.log('📸 Can scroll right (from handleLayout):', canScroll);
       setCanScrollRight(canScroll);
     } else {
       // Если контент еще не загружен, предполагаем что можно прокручивать
@@ -108,7 +109,7 @@ export default function PropertyCarousel({ properties, onPropertyPress }) {
           <Text style={[styles.propertyName, { color: '#fff' }]} numberOfLines={2}>
             {item.name}
           </Text>
-          <Text style={[styles.propertyPrice, { color: colors.primary }]}>
+          <Text style={[styles.propertyPrice, { color: colors.primary }]} numberOfLines={2}>
             {item.price}
           </Text>
         </View>
@@ -216,11 +217,12 @@ const styles = StyleSheet.create({
     textShadowRadius: 3,
   },
   propertyPrice: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
     textShadowColor: 'rgba(0, 0, 0, 0.75)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
+    flexWrap: 'wrap',
   },
   navButton: {
     position: 'absolute',

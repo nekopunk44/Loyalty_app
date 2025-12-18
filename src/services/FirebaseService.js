@@ -40,6 +40,10 @@ import {
   listAll,
 } from 'firebase/storage';
 import firebaseConfig from '../utils/firebaseConfig';
+import { getApiUrl } from '../utils/apiUrl';
+
+// API Base URL для PostgreSQL бэкенда
+const API_BASE_URL = getApiUrl();
 
 /**
  * Firebase App Initialization
@@ -547,15 +551,21 @@ export const createUserAsAdmin = async (userData) => {
  */
 export const getAllUsers = async () => {
   try {
-    const usersSnapshot = await getDocs(collection(db, 'users'));
-    const users = [];
-    usersSnapshot.forEach((doc) => {
-      users.push({
-        id: doc.id,
-        ...doc.data(),
-      });
+    // Используем API бэкенда для получения пользователей из PostgreSQL
+    const response = await fetch(`${API_BASE_URL}/users`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
     });
-    return users;
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Ошибка при получении пользователей');
+    }
+
+    return data.users || [];
   } catch (error) {
     console.error('❌ Ошибка при получении пользователей:', error);
     throw error;
@@ -567,12 +577,21 @@ export const getAllUsers = async () => {
  */
 export const deleteUserAsAdmin = async (userId) => {
   try {
-    // Удаляем профиль из Firestore
-    await deleteDoc(doc(db, 'users', userId));
+    // Используем API бэкенда для удаления пользователя из PostgreSQL
+    const response = await fetch(`${API_BASE_URL}/users/${userId}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Ошибка при удалении пользователя');
+    }
+
     console.log('✅ Профиль пользователя удален:', userId);
-    
-    // Примечание: для удаления учетной записи из Auth нужны admin SDK на backend
-    // На frontend это невозможно сделать напрямую по соображениям безопасности
     return true;
   } catch (error) {
     console.error('❌ Ошибка при удалении пользователя:', error);
@@ -585,12 +604,23 @@ export const deleteUserAsAdmin = async (userId) => {
  */
 export const updateUserAsAdmin = async (userId, updates) => {
   try {
-    await updateDoc(doc(db, 'users', userId), {
-      ...updates,
-      updatedAt: serverTimestamp(),
+    // Используем API бэкенда для обновления пользователя в PostgreSQL
+    const response = await fetch(`${API_BASE_URL}/users/${userId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(updates),
     });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Ошибка при обновлении пользователя');
+    }
+
     console.log('✅ Профиль пользователя обновлен:', userId);
-    return true;
+    return data.user || true;
   } catch (error) {
     console.error('❌ Ошибка при обновлении профиля:', error);
     throw error;

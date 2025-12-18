@@ -1,171 +1,146 @@
 /**
- * Database Service
- * CRUD операции для всех сущностей (Users, Properties, Bookings, Reviews, Payments и т.д.)
+ * Database Service - PostgreSQL API Version
+ * Замена Firestore на PostgreSQL API
+ * Все операции идут через REST API на Node.js сервер
  */
 
-import {
-  getDocument,
-  setDocument,
-  updateDocument,
-  deleteDocument,
-  queryDocuments,
-  getAllDocuments,
-  generateDocId,
-  batchWrite,
-} from './FirebaseService';
-import { FIRESTORE_COLLECTIONS } from '../utils/firebaseConfig';
-import { collection, onSnapshot } from 'firebase/firestore';
-import { initializeApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
-import firebaseConfig from '../utils/firebaseConfig';
+import { getApiUrl } from '../utils/apiUrl';
 
-// Инициализируем db один раз
-let db = null;
-try {
-  const app = initializeApp(firebaseConfig);
-  db = getFirestore(app);
-} catch (error) {
-  console.warn('Firebase already initialized:', error.code);
-  db = getFirestore();
-}
-
-/**
- * USERS Collection
- */
+// ==================== USERS ====================
 
 export const createUser = async (userId, userData) => {
-  const defaultData = {
+  const user = {
     id: userId,
     email: userData.email,
     displayName: userData.displayName || '',
     avatar: userData.avatar || null,
     phone: userData.phone || '',
     address: userData.address || '',
-    role: userData.role || 'user', // 'user' или 'admin'
-    status: 'active',
-    membershipLevel: userData.membershipLevel || 'Bronze',
+    role: userData.role || 'user',
     loyaltyPoints: userData.loyaltyPoints || 0,
-    balance: userData.balance || 0, // Остаток на счёте
-    walletBalance: userData.walletBalance || 0, // Баланс кошелька
-    referralCode: generateReferralCode(userId),
-    preferences: {
-      notifications: true,
-      newsletter: true,
-      darkMode: false,
-    },
+    membershipLevel: userData.membershipLevel || 'Bronze',
     stats: {
       totalBookings: 0,
       totalSpent: 0,
-      totalEarned: 0, // Всего заработано от рефералов
-      reviewsCount: 0,
-      averageRating: 0,
       completedBookings: 0,
       cancelledBookings: 0,
-      lastBookingDate: null,
     },
-    paymentMethods: [], // Сохранённые методы оплаты
     createdAt: new Date(),
-    updatedAt: new Date(),
   };
-
-  return setDocument(FIRESTORE_COLLECTIONS.USERS, userId, defaultData);
+  return user;
 };
 
 export const getUser = async (userId) => {
-  return getDocument(FIRESTORE_COLLECTIONS.USERS, userId);
+  try {
+    const response = await fetch(`${getApiUrl()}/users/${userId}`);
+    const data = await response.json();
+    return data.user || null;
+  } catch (error) {
+    console.warn('Failed to fetch user:', error);
+    return null;
+  }
 };
 
 export const updateUser = async (userId, userData) => {
-  return updateDocument(FIRESTORE_COLLECTIONS.USERS, userId, userData);
+  try {
+    const response = await fetch(`${getApiUrl()}/users/${userId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(userData),
+    });
+    const data = await response.json();
+    return data.user || userData;
+  } catch (error) {
+    console.error('Failed to update user:', error);
+    throw error;
+  }
 };
 
 export const deleteUser = async (userId) => {
-  return deleteDocument(FIRESTORE_COLLECTIONS.USERS, userId);
+  try {
+    await fetch(`${getApiUrl()}/users/${userId}`, {
+      method: 'DELETE',
+    });
+    return true;
+  } catch (error) {
+    console.error('Failed to delete user:', error);
+    return false;
+  }
 };
 
 export const getUserByEmail = async (email) => {
-  const users = await queryDocuments(FIRESTORE_COLLECTIONS.USERS, [
-    { field: 'email', operator: '==', value: email },
-  ]);
-  return users.length > 0 ? users[0] : null;
+  try {
+    const response = await fetch(`${getApiUrl()}/users/email/${email}`);
+    const data = await response.json();
+    return data.user || null;
+  } catch (error) {
+    console.warn('User not found:', error);
+    return null;
+  }
 };
 
 export const getAllUsers = async () => {
-  return getAllDocuments(FIRESTORE_COLLECTIONS.USERS);
+  try {
+    const response = await fetch(`${getApiUrl()}/users`);
+    const data = await response.json();
+    return data.users || [];
+  } catch (error) {
+    console.error('Failed to fetch users:', error);
+    return [];
+  }
 };
 
 export const getUsersByRole = async (role) => {
-  return queryDocuments(FIRESTORE_COLLECTIONS.USERS, [
-    { field: 'role', operator: '==', value: role },
-  ]);
+  try {
+    const response = await fetch(`${getApiUrl()}/users?role=${role}`);
+    const data = await response.json();
+    return data.users || [];
+  } catch (error) {
+    console.error('Failed to fetch users by role:', error);
+    return [];
+  }
 };
 
 export const updateUserLoyalty = async (userId, points, level) => {
-  return updateDocument(FIRESTORE_COLLECTIONS.USERS, userId, {
+  return updateUser(userId, {
     loyaltyPoints: points,
     membershipLevel: level,
-    updatedAt: new Date(),
   });
 };
 
-// Обновить баланс пользователя
 export const updateUserBalance = async (userId, newBalance) => {
-  return updateDocument(FIRESTORE_COLLECTIONS.USERS, userId, {
-    balance: newBalance,
-    updatedAt: new Date(),
-  });
+  return updateUser(userId, { balance: newBalance });
 };
 
-// Обновить баланс кошелька
 export const updateWalletBalance = async (userId, newBalance) => {
-  return updateDocument(FIRESTORE_COLLECTIONS.USERS, userId, {
-    walletBalance: newBalance,
-    updatedAt: new Date(),
-  });
+  return updateUser(userId, { walletBalance: newBalance });
 };
 
-// Увеличить баланс на сумму
 export const addToBalance = async (userId, amount) => {
   const user = await getUser(userId);
   if (!user) throw new Error('Пользователь не найден');
-  
   const newBalance = (user.balance || 0) + amount;
   return updateUserBalance(userId, newBalance);
 };
 
-// Уменьшить баланс на сумму
 export const deductFromBalance = async (userId, amount) => {
   const user = await getUser(userId);
   if (!user) throw new Error('Пользователь не найден');
-  
   const newBalance = (user.balance || 0) - amount;
   if (newBalance < 0) throw new Error('Недостаточно средств');
-  
   return updateUserBalance(userId, newBalance);
 };
 
-// Обновить статистику пользователя
 export const updateUserStats = async (userId, statsUpdates) => {
   const user = await getUser(userId);
   if (!user) throw new Error('Пользователь не найден');
-  
-  const updatedStats = {
-    ...user.stats,
-    ...statsUpdates,
-    updatedAt: new Date(),
-  };
-  
-  return updateDocument(FIRESTORE_COLLECTIONS.USERS, userId, {
-    stats: updatedStats,
-    updatedAt: new Date(),
-  });
+  const updatedStats = { ...user.stats, ...statsUpdates };
+  return updateUser(userId, { stats: updatedStats });
 };
 
-// Увеличить количество бронирований
 export const incrementTotalBookings = async (userId, amount = 1) => {
   const user = await getUser(userId);
   if (!user) throw new Error('Пользователь не найден');
-  
   const newTotal = (user.stats?.totalBookings || 0) + amount;
   return updateUserStats(userId, {
     totalBookings: newTotal,
@@ -173,641 +148,873 @@ export const incrementTotalBookings = async (userId, amount = 1) => {
   });
 };
 
-// Увеличить сумму потрачена
 export const incrementTotalSpent = async (userId, amount) => {
   const user = await getUser(userId);
   if (!user) throw new Error('Пользователь не найден');
-  
   const newTotal = (user.stats?.totalSpent || 0) + amount;
-  return updateUserStats(userId, {
-    totalSpent: newTotal,
-  });
+  return updateUserStats(userId, { totalSpent: newTotal });
 };
 
-// Увеличить сумму заработана через рефералы
 export const incrementTotalEarned = async (userId, amount) => {
   const user = await getUser(userId);
   if (!user) throw new Error('Пользователь не найден');
-  
   const newTotal = (user.stats?.totalEarned || 0) + amount;
   const newBalance = (user.balance || 0) + amount;
-  
-  return updateDocument(FIRESTORE_COLLECTIONS.USERS, userId, {
-    stats: {
-      ...user.stats,
-      totalEarned: newTotal,
-    },
+  return updateUser(userId, {
+    stats: { ...user.stats, totalEarned: newTotal },
     balance: newBalance,
-    updatedAt: new Date(),
   });
 };
 
-// Обновить количество отзывов
 export const incrementReviewsCount = async (userId, rating) => {
   const user = await getUser(userId);
   if (!user) throw new Error('Пользователь не найден');
-  
   const currentCount = user.stats?.reviewsCount || 0;
   const currentAverage = user.stats?.averageRating || 0;
-  
   const newCount = currentCount + 1;
   const newAverage = ((currentAverage * currentCount) + rating) / newCount;
-  
   return updateUserStats(userId, {
     reviewsCount: newCount,
     averageRating: Math.round(newAverage * 10) / 10,
   });
 };
 
-// Обновить статус бронирования в статистике
 export const updateBookingStats = async (userId, bookingStatus) => {
   const user = await getUser(userId);
   if (!user) throw new Error('Пользователь не найден');
-  
   const stats = { ...user.stats };
-  
   if (bookingStatus === 'completed') {
     stats.completedBookings = (stats.completedBookings || 0) + 1;
   } else if (bookingStatus === 'cancelled') {
     stats.cancelledBookings = (stats.cancelledBookings || 0) + 1;
   }
-  
   return updateUserStats(userId, stats);
 };
 
-/**
- * PROPERTIES Collection
- */
+// ==================== PROPERTIES ====================
 
 export const createProperty = async (propertyData) => {
-  const propertyId = generateDocId(FIRESTORE_COLLECTIONS.PROPERTIES);
-  const defaultData = {
-    id: propertyId,
-    name: propertyData.name,
-    description: propertyData.description || '',
-    location: propertyData.location || {},
-    price: propertyData.price || 0,
-    currency: propertyData.currency || 'USD',
-    images: propertyData.images || [],
-    amenities: propertyData.amenities || [],
-    capacity: propertyData.capacity || 1,
-    rooms: propertyData.rooms || 1,
-    rating: 0,
-    reviewsCount: 0,
-    status: propertyData.status || 'active',
-    availability: propertyData.availability || {},
-  };
-
-  return setDocument(FIRESTORE_COLLECTIONS.PROPERTIES, propertyId, defaultData).then(() => propertyId);
-};
-
-export const getProperty = async (propertyId) => {
-  return getDocument(FIRESTORE_COLLECTIONS.PROPERTIES, propertyId);
-};
-
-export const updateProperty = async (propertyId, propertyData) => {
-  return updateDocument(FIRESTORE_COLLECTIONS.PROPERTIES, propertyId, propertyData);
-};
-
-export const deleteProperty = async (propertyId) => {
-  return deleteDocument(FIRESTORE_COLLECTIONS.PROPERTIES, propertyId);
-};
-
-export const getAllProperties = async () => {
-  return getAllDocuments(FIRESTORE_COLLECTIONS.PROPERTIES);
-};
-
-export const getPropertiesByStatus = async (status) => {
-  return queryDocuments(FIRESTORE_COLLECTIONS.PROPERTIES, [
-    { field: 'status', operator: '==', value: status },
-  ]);
-};
-
-export const getPropertiesByPriceRange = async (minPrice, maxPrice) => {
-  return queryDocuments(FIRESTORE_COLLECTIONS.PROPERTIES, [
-    { field: 'price', operator: '>=', value: minPrice },
-    { field: 'price', operator: '<=', value: maxPrice },
-  ]);
-};
-
-/**
- * BOOKINGS Collection
- */
-
-export const createBooking = async (bookingData, userId) => {
-  const bookingId = generateDocId(FIRESTORE_COLLECTIONS.BOOKINGS);
-  const defaultData = {
-    id: bookingId,
-    userId,
-    propertyId: bookingData.propertyId,
-    checkInDate: bookingData.checkInDate,
-    checkOutDate: bookingData.checkOutDate,
-    guests: bookingData.guests || 1,
-    totalPrice: bookingData.totalPrice,
-    status: 'pending', // 'pending', 'confirmed', 'completed', 'cancelled'
-    specialRequests: bookingData.specialRequests || '',
-    paymentId: null,
-    reviewId: null,
-  };
-
-  return setDocument(FIRESTORE_COLLECTIONS.BOOKINGS, bookingId, defaultData).then(() => bookingId);
-};
-
-export const getBooking = async (bookingId) => {
-  return getDocument(FIRESTORE_COLLECTIONS.BOOKINGS, bookingId);
-};
-
-export const updateBooking = async (bookingId, bookingData) => {
-  return updateDocument(FIRESTORE_COLLECTIONS.BOOKINGS, bookingId, bookingData);
-};
-
-export const deleteBooking = async (bookingId) => {
-  return deleteDocument(FIRESTORE_COLLECTIONS.BOOKINGS, bookingId);
-};
-
-export const getUserBookings = async (userId) => {
-  return queryDocuments(FIRESTORE_COLLECTIONS.BOOKINGS, [
-    { field: 'userId', operator: '==', value: userId },
-  ]);
-};
-
-export const getPropertyBookings = async (propertyId) => {
-  return queryDocuments(FIRESTORE_COLLECTIONS.BOOKINGS, [
-    { field: 'propertyId', operator: '==', value: propertyId },
-  ]);
-};
-
-export const getBookingsByStatus = async (status) => {
-  return queryDocuments(FIRESTORE_COLLECTIONS.BOOKINGS, [
-    { field: 'status', operator: '==', value: status },
-  ]);
-};
-
-/**
- * REVIEWS Collection
- */
-
-export const createReview = async (reviewData) => {
-  const reviewId = generateDocId(FIRESTORE_COLLECTIONS.REVIEWS);
-  const defaultData = {
-    id: reviewId,
-    userId: reviewData.userId,
-    propertyId: reviewData.propertyId,
-    bookingId: reviewData.bookingId,
-    rating: reviewData.rating, // 1-5 stars
-    title: reviewData.title,
-    comment: reviewData.comment,
-    images: reviewData.images || [],
-    category: reviewData.category || 'overall', // 'overall', 'room', 'service', 'food', 'cleanliness'
-    helpful: 0,
-    adminResponse: null,
-    status: 'pending', // 'pending', 'approved', 'rejected'
-  };
-
-  return setDocument(FIRESTORE_COLLECTIONS.REVIEWS, reviewId, defaultData).then(() => reviewId);
-};
-
-export const getReview = async (reviewId) => {
-  return getDocument(FIRESTORE_COLLECTIONS.REVIEWS, reviewId);
-};
-
-export const updateReview = async (reviewId, reviewData) => {
-  return updateDocument(FIRESTORE_COLLECTIONS.REVIEWS, reviewId, reviewData);
-};
-
-export const deleteReview = async (reviewId) => {
-  return deleteDocument(FIRESTORE_COLLECTIONS.REVIEWS, reviewId);
-};
-
-export const getPropertyReviews = async (propertyId) => {
-  return queryDocuments(FIRESTORE_COLLECTIONS.REVIEWS, [
-    { field: 'propertyId', operator: '==', value: propertyId },
-  ]);
-};
-
-export const getUserReviews = async (userId) => {
-  return queryDocuments(FIRESTORE_COLLECTIONS.REVIEWS, [
-    { field: 'userId', operator: '==', value: userId },
-  ]);
-};
-
-export const getApprovedReviews = async (propertyId) => {
-  return queryDocuments(FIRESTORE_COLLECTIONS.REVIEWS, [
-    { field: 'propertyId', operator: '==', value: propertyId },
-    { field: 'status', operator: '==', value: 'approved' },
-  ]);
-};
-
-/**
- * PAYMENTS Collection
- */
-
-export const createPayment = async (paymentData, userId) => {
-  const paymentId = generateDocId(FIRESTORE_COLLECTIONS.PAYMENTS);
-  const defaultData = {
-    id: paymentId,
-    userId,
-    bookingId: paymentData.bookingId,
-    amount: paymentData.amount,
-    currency: paymentData.currency || 'USD',
-    method: paymentData.method, // 'paypal', 'visa', 'crypto', 'stripe', 'yandex'
-    status: 'pending', // 'pending', 'completed', 'failed', 'refunded'
-    transactionId: paymentData.transactionId || null,
-    description: paymentData.description || '',
-    fee: paymentData.fee || 0,
-    netAmount: paymentData.amount - (paymentData.fee || 0),
-  };
-
-  return setDocument(FIRESTORE_COLLECTIONS.PAYMENTS, paymentId, defaultData).then(() => paymentId);
-};
-
-export const getPayment = async (paymentId) => {
-  return getDocument(FIRESTORE_COLLECTIONS.PAYMENTS, paymentId);
-};
-
-export const updatePayment = async (paymentId, paymentData) => {
-  return updateDocument(FIRESTORE_COLLECTIONS.PAYMENTS, paymentId, paymentData);
-};
-
-export const deletePayment = async (paymentId) => {
-  return deleteDocument(FIRESTORE_COLLECTIONS.PAYMENTS, paymentId);
-};
-
-export const getUserPayments = async (userId) => {
-  return queryDocuments(FIRESTORE_COLLECTIONS.PAYMENTS, [
-    { field: 'userId', operator: '==', value: userId },
-  ]);
-};
-
-export const getPaymentsByStatus = async (status) => {
-  return queryDocuments(FIRESTORE_COLLECTIONS.PAYMENTS, [
-    { field: 'status', operator: '==', value: status },
-  ]);
-};
-
-export const getPaymentsByMethod = async (method) => {
-  return queryDocuments(FIRESTORE_COLLECTIONS.PAYMENTS, [
-    { field: 'method', operator: '==', value: method },
-  ]);
-};
-
-/**
- * NOTIFICATIONS Collection
- */
-
-export const createNotification = async (notificationData) => {
-  const notificationId = generateDocId(FIRESTORE_COLLECTIONS.NOTIFICATIONS);
-  const defaultData = {
-    id: notificationId,
-    userId: notificationData.userId,
-    type: notificationData.type, // 'booking', 'payment', 'review', 'referral', 'promotion'
-    title: notificationData.title,
-    message: notificationData.message,
-    data: notificationData.data || {},
-    read: false,
-    status: 'sent',
-  };
-
-  return setDocument(FIRESTORE_COLLECTIONS.NOTIFICATIONS, notificationId, defaultData).then(
-    () => notificationId
-  );
-};
-
-export const getUserNotifications = async (userId) => {
-  return queryDocuments(FIRESTORE_COLLECTIONS.NOTIFICATIONS, [
-    { field: 'userId', operator: '==', value: userId },
-  ]);
-};
-
-export const getUserUnreadNotifications = async (userId) => {
-  return queryDocuments(FIRESTORE_COLLECTIONS.NOTIFICATIONS, [
-    { field: 'userId', operator: '==', value: userId },
-    { field: 'read', operator: '==', value: false },
-  ]);
-};
-
-export const markNotificationAsRead = async (notificationId) => {
-  return updateDocument(FIRESTORE_COLLECTIONS.NOTIFICATIONS, notificationId, { read: true });
-};
-
-/**
- * LOYALTY_TIERS Collection
- */
-
-export const createLoyaltyTier = async (tierData) => {
-  const tierId = generateDocId(FIRESTORE_COLLECTIONS.LOYALTY_TIERS);
-  const defaultData = {
-    id: tierId,
-    name: tierData.name, // 'Bronze', 'Silver', 'Gold', 'Platinum'
-    minPoints: tierData.minPoints,
-    maxPoints: tierData.maxPoints || null,
-    discountPercent: tierData.discountPercent,
-    monthlyBonus: tierData.monthlyBonus,
-    benefits: tierData.benefits || [],
-  };
-
-  return setDocument(FIRESTORE_COLLECTIONS.LOYALTY_TIERS, tierId, defaultData).then(() => tierId);
-};
-
-export const getLoyaltyTiers = async () => {
-  return getAllDocuments(FIRESTORE_COLLECTIONS.LOYALTY_TIERS);
-};
-
-/**
- * PROMOTIONS Collection
- */
-
-export const createPromotion = async (promotionData) => {
-  const promotionId = generateDocId(FIRESTORE_COLLECTIONS.PROMOTIONS);
-  const defaultData = {
-    id: promotionId,
-    code: promotionData.code,
-    type: promotionData.type, // 'percentage', 'fixed', 'free'
-    value: promotionData.value,
-    description: promotionData.description || '',
-    maxUses: promotionData.maxUses || null,
-    currentUses: 0,
-    expiryDate: promotionData.expiryDate,
-    applicableProperties: promotionData.applicableProperties || [],
-    minAmount: promotionData.minAmount || 0,
-    status: 'active',
-  };
-
-  return setDocument(FIRESTORE_COLLECTIONS.PROMOTIONS, promotionId, defaultData).then(
-    () => promotionId
-  );
-};
-
-export const getPromoByCode = async (code) => {
-  const promos = await queryDocuments(FIRESTORE_COLLECTIONS.PROMOTIONS, [
-    { field: 'code', operator: '==', value: code.toUpperCase() },
-  ]);
-  return promos.length > 0 ? promos[0] : null;
-};
-
-export const getAllPromotions = async () => {
-  return getAllDocuments(FIRESTORE_COLLECTIONS.PROMOTIONS);
-};
-
-/**
- * SUPPORT_TICKETS Collection
- */
-
-export const createSupportTicket = async (ticketData) => {
-  const ticketId = generateDocId(FIRESTORE_COLLECTIONS.SUPPORT_TICKETS);
-  const defaultData = {
-    id: ticketId,
-    userId: ticketData.userId,
-    subject: ticketData.subject,
-    description: ticketData.description,
-    type: ticketData.type || 'general', // 'general', 'complaint', 'suggestion', 'bug'
-    priority: ticketData.priority || 'normal', // 'low', 'normal', 'high', 'urgent'
-    status: 'open', // 'open', 'in_progress', 'resolved', 'closed'
-    messages: [],
-  };
-
-  return setDocument(FIRESTORE_COLLECTIONS.SUPPORT_TICKETS, ticketId, defaultData).then(
-    () => ticketId
-  );
-};
-
-export const getUserSupportTickets = async (userId) => {
-  return queryDocuments(FIRESTORE_COLLECTIONS.SUPPORT_TICKETS, [
-    { field: 'userId', operator: '==', value: userId },
-  ]);
-};
-
-export const getAllSupportTickets = async () => {
-  return getAllDocuments(FIRESTORE_COLLECTIONS.SUPPORT_TICKETS);
-};
-
-/**
- * ANALYTICS Collection
- */
-
-export const recordAnalyticsEvent = async (eventData) => {
-  const eventId = generateDocId(FIRESTORE_COLLECTIONS.ANALYTICS);
-  const defaultData = {
-    id: eventId,
-    userId: eventData.userId,
-    eventType: eventData.eventType,
-    eventData: eventData.eventData || {},
-    userAgent: eventData.userAgent || '',
-    ipAddress: eventData.ipAddress || '',
-  };
-
-  return setDocument(FIRESTORE_COLLECTIONS.ANALYTICS, eventId, defaultData).then(() => eventId);
-};
-
-/**
- * Utility Functions
- */
-
-const generateReferralCode = (userId) => {
-  return `REF_${userId.substring(0, 8).toUpperCase()}_${Math.random()
-    .toString(36)
-    .substring(2, 8)
-    .toUpperCase()}`;
-};
-
-// Пакетная операция для сложных операций
-export const performBatchOperation = async (operations) => {
-  return batchWrite(operations);
-};
-
-// EVENTS Collection
-export const createEvent = async (eventData) => {
-  const eventId = generateDocId(FIRESTORE_COLLECTIONS.EVENTS);
-  const defaultData = {
-    id: eventId,
-    title: eventData.title || '',
-    description: eventData.description || '',
-    status: eventData.status || 'Активный',
-    icon: eventData.icon || 'event',
-    color: eventData.color || '#FF6B35',
-    participants: eventData.participants || 0,
-    prize: eventData.prize || null,
-    reward: eventData.reward || null,
-    startBid: eventData.startBid || null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  };
-  
-  console.log('🟡 DatabaseService: createEvent начало, ID:', eventId);
-  
-  // Добавляем timeout для Firebase операции
-  return Promise.race([
-    new Promise(async (resolve, reject) => {
-      try {
-        console.log('🟡 DatabaseService: отправляю в setDocument...');
-        await setDocument(FIRESTORE_COLLECTIONS.EVENTS, eventId, defaultData);
-        console.log('✅ DatabaseService: setDocument успешно');
-        resolve(eventId);
-      } catch (error) {
-        console.error('❌ DatabaseService: ошибка в setDocument:', error);
-        reject(error);
-      }
-    }),
-    new Promise((_, reject) => 
-      setTimeout(() => {
-        console.error('❌ DatabaseService: Firebase timeout (10 сек)');
-        reject(new Error('Firebase timeout - operation exceeded 10 seconds'));
-      }, 10000) // 10 сек timeout
-    )
-  ]);
-};
-
-export const getEvent = (eventId) => {
-  return getDocument(FIRESTORE_COLLECTIONS.EVENTS, eventId);
-};
-
-export const updateEvent = (eventId, eventData) => {
-  return updateDocument(FIRESTORE_COLLECTIONS.EVENTS, eventId, {
-    ...eventData,
-    updatedAt: new Date(),
-  });
-};
-
-export const deleteEvent = (eventId) => {
-  return deleteDocument(FIRESTORE_COLLECTIONS.EVENTS, eventId);
-};
-
-export const getAllEvents = () => {
-  return getAllDocuments(FIRESTORE_COLLECTIONS.EVENTS);
-};
-
-export const getEventsByStatus = (status) => {
-  return queryDocuments(FIRESTORE_COLLECTIONS.EVENTS, [
-    ['status', '==', status],
-  ]);
-};
-
-export const listenToEvents = (callback) => {
   try {
-    if (!db) {
-      console.error('Database not initialized');
-      callback([]);
-      return () => {};
-    }
-    
-    const unsubscribe = onSnapshot(
-      collection(db, FIRESTORE_COLLECTIONS.EVENTS), 
-      (snapshot) => {
-        const eventsData = snapshot.docs.map(doc => {
-          const data = doc.data();
-          // Гарантируем, что все нужные поля имеют значения
-          return {
-            id: data.id || doc.id,
-            title: data.title || '',
-            description: data.description || '',
-            status: data.status || 'Активный',
-            icon: data.icon || 'event',
-            color: data.color || '#FF6B35',
-            participants: data.participants || 0,
-            prize: data.prize || null,
-            reward: data.reward || null,
-            startBid: data.startBid || null,
-            createdAt: data.createdAt,
-            updatedAt: data.updatedAt,
-            participantsCount: data.participants || 0, // Добавляем для AdminEvents совместимости
-          };
-        });
-        callback(eventsData);
-      }, 
-      (error) => {
-        console.error('❌ Ошибка слушания событий:', error);
-        // ⚠️ ВАЖНО: Не вызываем callback([]) при ошибке!
-        // Это сохранит существующие события (локальные или кэшированные)
-        // callback([]);
-      }
-    );
-    return unsubscribe;
+    const response = await fetch(`${getApiUrl()}/properties`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(propertyData),
+    });
+    const data = await response.json();
+    return data.property || propertyData;
   } catch (error) {
-    console.error('Ошибка инициализации слушателя:', error);
-    callback([]);
-    return () => {}; // Возвращаем пустую функцию если ошибка
+    console.error('Failed to create property:', error);
+    throw error;
   }
 };
 
+export const getProperty = async (propertyId) => {
+  try {
+    const response = await fetch(`${getApiUrl()}/properties/${propertyId}`);
+    const data = await response.json();
+    return data.property || null;
+  } catch (error) {
+    console.error('Failed to fetch property:', error);
+    return null;
+  }
+};
+
+export const updateProperty = async (propertyId, propertyData) => {
+  try {
+    const response = await fetch(`${getApiUrl()}/properties/${propertyId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(propertyData),
+    });
+    const data = await response.json();
+    return data.property || propertyData;
+  } catch (error) {
+    console.error('Failed to update property:', error);
+    throw error;
+  }
+};
+
+export const deleteProperty = async (propertyId) => {
+  try {
+    await fetch(`${getApiUrl()}/properties/${propertyId}`, {
+      method: 'DELETE',
+    });
+    return true;
+  } catch (error) {
+    console.error('Failed to delete property:', error);
+    return false;
+  }
+};
+
+export const getAllProperties = async () => {
+  try {
+    const response = await fetch(`${getApiUrl()}/properties`);
+    const data = await response.json();
+    return data.properties || [];
+  } catch (error) {
+    console.error('Failed to fetch properties:', error);
+    return [];
+  }
+};
+
+export const getPropertiesByStatus = async (status) => {
+  try {
+    const response = await fetch(`${getApiUrl()}/properties?status=${status}`);
+    const data = await response.json();
+    return data.properties || [];
+  } catch (error) {
+    console.error('Failed to fetch properties by status:', error);
+    return [];
+  }
+};
+
+export const getPropertiesByPriceRange = async (minPrice, maxPrice) => {
+  try {
+    const response = await fetch(
+      `${getApiUrl()}/properties?minPrice=${minPrice}&maxPrice=${maxPrice}`
+    );
+    const data = await response.json();
+    return data.properties || [];
+  } catch (error) {
+    console.error('Failed to fetch properties by price:', error);
+    return [];
+  }
+};
+
+// ==================== BOOKINGS ====================
+
+export const createBooking = async (bookingData, userId) => {
+  try {
+    const payload = { userId, ...bookingData };
+    const response = await fetch(`${getApiUrl()}/bookings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json();
+    return data.booking || payload;
+  } catch (error) {
+    console.error('Failed to create booking:', error);
+    throw error;
+  }
+};
+
+export const getBooking = async (bookingId) => {
+  try {
+    const response = await fetch(`${getApiUrl()}/bookings/${bookingId}`);
+    const data = await response.json();
+    return data.booking || null;
+  } catch (error) {
+    console.error('Failed to fetch booking:', error);
+    return null;
+  }
+};
+
+export const updateBooking = async (bookingId, bookingData) => {
+  try {
+    const response = await fetch(`${getApiUrl()}/bookings/${bookingId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(bookingData),
+    });
+    const data = await response.json();
+    return data.booking || bookingData;
+  } catch (error) {
+    console.error('Failed to update booking:', error);
+    throw error;
+  }
+};
+
+export const deleteBooking = async (bookingId) => {
+  try {
+    await fetch(`${getApiUrl()}/bookings/${bookingId}`, {
+      method: 'DELETE',
+    });
+    return true;
+  } catch (error) {
+    console.error('Failed to delete booking:', error);
+    return false;
+  }
+};
+
+export const getUserBookings = async (userId) => {
+  try {
+    const response = await fetch(`${getApiUrl()}/bookings/user/${userId}`);
+    const data = await response.json();
+    return data.bookings || [];
+  } catch (error) {
+    console.error('Failed to fetch user bookings:', error);
+    return [];
+  }
+};
+
+export const getPropertyBookings = async (propertyId) => {
+  try {
+    const response = await fetch(`${getApiUrl()}/bookings/property/${propertyId}`);
+    const data = await response.json();
+    return data.bookings || [];
+  } catch (error) {
+    console.error('Failed to fetch property bookings:', error);
+    return [];
+  }
+};
+
+export const getBookingsByStatus = async (status) => {
+  try {
+    const response = await fetch(`${getApiUrl()}/bookings?status=${status}`);
+    const data = await response.json();
+    return data.bookings || [];
+  } catch (error) {
+    console.error('Failed to fetch bookings by status:', error);
+    return [];
+  }
+};
+
+export const getPropertyBookedDates = async (propertyId) => {
+  try {
+    const response = await fetch(
+      `${getApiUrl()}/bookings/property/${propertyId}/booked-dates`
+    );
+    const data = await response.json();
+    return data.bookedDates || [];
+  } catch (error) {
+    console.error('Failed to fetch booked dates:', error);
+    return [];
+  }
+};
+
+export const confirmBookingPayment = async (bookingId) => {
+  try {
+    const response = await fetch(`${getApiUrl()}/bookings/${bookingId}/confirm-payment`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const data = await response.json();
+    return data.booking || null;
+  } catch (error) {
+    console.error('Failed to confirm payment:', error);
+    throw error;
+  }
+};
+
+export const cancelBooking = async (bookingId, reason = '') => {
+  try {
+    const response = await fetch(`${getApiUrl()}/bookings/${bookingId}/cancel`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason }),
+    });
+    const data = await response.json();
+    return data.booking || null;
+  } catch (error) {
+    console.error('Failed to cancel booking:', error);
+    throw error;
+  }
+};
+
+// ==================== REVIEWS ====================
+
+export const createReview = async (reviewData) => {
+  try {
+    const response = await fetch(`${getApiUrl()}/reviews`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(reviewData),
+    });
+    const data = await response.json();
+    return data.review || reviewData;
+  } catch (error) {
+    console.error('Failed to create review:', error);
+    throw error;
+  }
+};
+
+export const getReview = async (reviewId) => {
+  try {
+    const response = await fetch(`${getApiUrl()}/reviews/${reviewId}`);
+    const data = await response.json();
+    return data.review || null;
+  } catch (error) {
+    console.error('Failed to fetch review:', error);
+    return null;
+  }
+};
+
+export const updateReview = async (reviewId, reviewData) => {
+  try {
+    const response = await fetch(`${getApiUrl()}/reviews/${reviewId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(reviewData),
+    });
+    const data = await response.json();
+    return data.review || reviewData;
+  } catch (error) {
+    console.error('Failed to update review:', error);
+    throw error;
+  }
+};
+
+export const deleteReview = async (reviewId) => {
+  try {
+    await fetch(`${getApiUrl()}/reviews/${reviewId}`, {
+      method: 'DELETE',
+    });
+    return true;
+  } catch (error) {
+    console.error('Failed to delete review:', error);
+    return false;
+  }
+};
+
+export const getPropertyReviews = async (propertyId) => {
+  try {
+    const response = await fetch(`${getApiUrl()}/reviews/property/${propertyId}`);
+    const data = await response.json();
+    return data.reviews || [];
+  } catch (error) {
+    console.error('Failed to fetch reviews:', error);
+    return [];
+  }
+};
+
+export const getUserReviews = async (userId) => {
+  try {
+    const response = await fetch(`${getApiUrl()}/reviews/user/${userId}`);
+    const data = await response.json();
+    return data.reviews || [];
+  } catch (error) {
+    console.error('Failed to fetch user reviews:', error);
+    return [];
+  }
+};
+
+export const getApprovedReviews = async (propertyId) => {
+  try {
+    const response = await fetch(
+      `${getApiUrl()}/reviews/property/${propertyId}?status=approved`
+    );
+    const data = await response.json();
+    return data.reviews || [];
+  } catch (error) {
+    console.error('Failed to fetch approved reviews:', error);
+    return [];
+  }
+};
+
+// ==================== PAYMENTS ====================
+
+export const createPayment = async (paymentData, userId) => {
+  try {
+    const payload = { userId, ...paymentData };
+    const response = await fetch(`${getApiUrl()}/payments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json();
+    return data.payment || payload;
+  } catch (error) {
+    console.error('Failed to create payment:', error);
+    throw error;
+  }
+};
+
+export const getPayment = async (paymentId) => {
+  try {
+    const response = await fetch(`${getApiUrl()}/payments/${paymentId}`);
+    const data = await response.json();
+    return data.payment || null;
+  } catch (error) {
+    console.error('Failed to fetch payment:', error);
+    return null;
+  }
+};
+
+export const updatePayment = async (paymentId, paymentData) => {
+  try {
+    const response = await fetch(`${getApiUrl()}/payments/${paymentId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(paymentData),
+    });
+    const data = await response.json();
+    return data.payment || paymentData;
+  } catch (error) {
+    console.error('Failed to update payment:', error);
+    throw error;
+  }
+};
+
+export const deletePayment = async (paymentId) => {
+  try {
+    await fetch(`${getApiUrl()}/payments/${paymentId}`, {
+      method: 'DELETE',
+    });
+    return true;
+  } catch (error) {
+    console.error('Failed to delete payment:', error);
+    return false;
+  }
+};
+
+export const getUserPayments = async (userId) => {
+  try {
+    const response = await fetch(`${getApiUrl()}/payments/user/${userId}`);
+    const data = await response.json();
+    return data.payments || [];
+  } catch (error) {
+    console.error('Failed to fetch payments:', error);
+    return [];
+  }
+};
+
+export const getPaymentsByStatus = async (status) => {
+  try {
+    const response = await fetch(`${getApiUrl()}/payments?status=${status}`);
+    const data = await response.json();
+    return data.payments || [];
+  } catch (error) {
+    console.error('Failed to fetch payments by status:', error);
+    return [];
+  }
+};
+
+export const getPaymentsByMethod = async (method) => {
+  try {
+    const response = await fetch(`${getApiUrl()}/payments?method=${method}`);
+    const data = await response.json();
+    return data.payments || [];
+  } catch (error) {
+    console.error('Failed to fetch payments by method:', error);
+    return [];
+  }
+};
+
+// ==================== NOTIFICATIONS ====================
+
+export const createNotification = async (notificationData) => {
+  try {
+    const response = await fetch(`${getApiUrl()}/notifications`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(notificationData),
+    });
+    const data = await response.json();
+    return data.notification || notificationData;
+  } catch (error) {
+    console.error('Failed to create notification:', error);
+    throw error;
+  }
+};
+
+export const getUserNotifications = async (userId) => {
+  try {
+    const response = await fetch(`${getApiUrl()}/notifications/user/${userId}`);
+    const data = await response.json();
+    return data.notifications || [];
+  } catch (error) {
+    console.error('Failed to fetch notifications:', error);
+    return [];
+  }
+};
+
+export const getUserUnreadNotifications = async (userId) => {
+  try {
+    const response = await fetch(`${getApiUrl()}/notifications/user/${userId}?read=false`);
+    const data = await response.json();
+    return data.notifications || [];
+  } catch (error) {
+    console.error('Failed to fetch unread notifications:', error);
+    return [];
+  }
+};
+
+export const markNotificationAsRead = async (notificationId) => {
+  try {
+    await fetch(`${getApiUrl()}/notifications/${notificationId}/read`, {
+      method: 'PATCH',
+    });
+    return true;
+  } catch (error) {
+    console.error('Failed to mark notification as read:', error);
+    return false;
+  }
+};
+
+// ==================== LOYALTY ====================
+
+export const getLoyaltyCard = async (userId) => {
+  try {
+    const response = await fetch(`${getApiUrl()}/loyalty-card/${userId}`);
+    const data = await response.json();
+    return data.card || null;
+  } catch (error) {
+    console.error('Failed to fetch loyalty card:', error);
+    return null;
+  }
+};
+
+export const topUpLoyaltyCard = async (userId, amount) => {
+  try {
+    const response = await fetch(`${getApiUrl()}/loyalty-card/${userId}/top-up`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ amount }),
+    });
+    const data = await response.json();
+    return data.card || null;
+  } catch (error) {
+    console.error('Failed to top up loyalty card:', error);
+    throw error;
+  }
+};
+
+export const getLoyaltyTransactions = async (userId) => {
+  try {
+    const response = await fetch(`${getApiUrl()}/loyalty-card/${userId}/transactions`);
+    const data = await response.json();
+    return data.transactions || [];
+  } catch (error) {
+    console.error('Failed to fetch transactions:', error);
+    return [];
+  }
+};
+
+export const createLoyaltyTier = async (tierData) => {
+  try {
+    const response = await fetch(`${getApiUrl()}/loyalty-tiers`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(tierData),
+    });
+    const data = await response.json();
+    return data.tier || tierData;
+  } catch (error) {
+    console.error('Failed to create loyalty tier:', error);
+    throw error;
+  }
+};
+
+export const getLoyaltyTiers = async () => {
+  try {
+    const response = await fetch(`${getApiUrl()}/loyalty-tiers`);
+    const data = await response.json();
+    return data.tiers || [];
+  } catch (error) {
+    console.error('Failed to fetch loyalty tiers:', error);
+    return [];
+  }
+};
+
+// ==================== PROMOTIONS ====================
+
+export const createPromotion = async (promotionData) => {
+  try {
+    const response = await fetch(`${getApiUrl()}/promotions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(promotionData),
+    });
+    const data = await response.json();
+    return data.promotion || promotionData;
+  } catch (error) {
+    console.error('Failed to create promotion:', error);
+    throw error;
+  }
+};
+
+export const getPromoByCode = async (code) => {
+  try {
+    const response = await fetch(`${getApiUrl()}/promotions/code/${code}`);
+    const data = await response.json();
+    return data.promotion || null;
+  } catch (error) {
+    console.warn('Promotion not found:', error);
+    return null;
+  }
+};
+
+export const getAllPromotions = async () => {
+  try {
+    const response = await fetch(`${getApiUrl()}/promotions`);
+    const data = await response.json();
+    return data.promotions || [];
+  } catch (error) {
+    console.error('Failed to fetch promotions:', error);
+    return [];
+  }
+};
+
+// ==================== SUPPORT ====================
+
+export const createSupportTicket = async (ticketData) => {
+  try {
+    const response = await fetch(`${getApiUrl()}/support-tickets`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(ticketData),
+    });
+    const data = await response.json();
+    return data.ticket || ticketData;
+  } catch (error) {
+    console.error('Failed to create support ticket:', error);
+    throw error;
+  }
+};
+
+export const getUserSupportTickets = async (userId) => {
+  try {
+    const response = await fetch(`${getApiUrl()}/support-tickets/user/${userId}`);
+    const data = await response.json();
+    return data.tickets || [];
+  } catch (error) {
+    console.error('Failed to fetch user tickets:', error);
+    return [];
+  }
+};
+
+export const getAllSupportTickets = async () => {
+  try {
+    const response = await fetch(`${getApiUrl()}/support-tickets`);
+    const data = await response.json();
+    return data.tickets || [];
+  } catch (error) {
+    console.error('Failed to fetch support tickets:', error);
+    return [];
+  }
+};
+
+// ==================== ANALYTICS ====================
+
+export const recordAnalyticsEvent = async (eventData) => {
+  try {
+    await fetch(`${getApiUrl()}/analytics`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(eventData),
+    });
+  } catch (error) {
+    console.error('Failed to record analytics:', error);
+  }
+};
+
+// ==================== EVENTS ====================
+
+export const createEvent = async (eventData) => {
+  try {
+    const response = await fetch(`${getApiUrl()}/events`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(eventData),
+    });
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    const data = await response.json();
+    return data.event || eventData;
+  } catch (error) {
+    console.error('Failed to create event:', error);
+    throw error;
+  }
+};
+
+export const getEvent = async (eventId) => {
+  try {
+    const response = await fetch(`${getApiUrl()}/events/${eventId}`);
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    const data = await response.json();
+    return data.event || null;
+  } catch (error) {
+    console.error('Failed to fetch event:', error);
+    return null;
+  }
+};
+
+export const updateEvent = async (eventId, eventData) => {
+  try {
+    const response = await fetch(`${getApiUrl()}/events/${eventId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(eventData),
+    });
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    const data = await response.json();
+    return data.event || eventData;
+  } catch (error) {
+    console.error('Failed to update event:', error);
+    throw error;
+  }
+};
+
+export const deleteEvent = async (eventId) => {
+  try {
+    const response = await fetch(`${getApiUrl()}/events/${eventId}`, {
+      method: 'DELETE',
+    });
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    return true;
+  } catch (error) {
+    console.error('Failed to delete event:', error);
+    return false;
+  }
+};
+
+// Функция для добавления пользователя участником события
+export const joinEvent = async (eventId, userId) => {
+  try {
+    const response = await fetch(`${getApiUrl()}/events/${eventId}/join`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId }),
+    });
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    const data = await response.json();
+    return data.event || null;
+  } catch (error) {
+    console.error('Failed to join event:', error);
+    return null;
+  }
+};
+
+
+// ==================== HELPER FUNCTIONS ====================
+
+// Функция для перевода статуса на русский
+const translateEventStatus = (status) => {
+  const statusMap = {
+    'active': 'Активный',
+    'upcoming': 'Скоро',
+    'completed': 'Завершён',
+    'Активный': 'Активный',
+    'Скоро': 'Скоро',
+    'Завершён': 'Завершён',
+  };
+  return statusMap[status] || status;
+};
+
+// ==================== EVENTS ====================
+
+export const getAllEvents = async () => {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 сек timeout
+    
+    const response = await fetch(`${getApiUrl()}/events`, {
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    
+    const data = await response.json();
+    // Переводим статус на русский
+    const events = (data.events || []).map(event => ({
+      ...event,
+      status: translateEventStatus(event.status),
+    }));
+    return events;
+  } catch (error) {
+    // Подавляем логи при сетевых ошибках - возвращаем пустой массив
+    return [];
+  }
+};
+
+export const getEventsByStatus = async (status) => {
+  try {
+    const response = await fetch(`${getApiUrl()}/events?status=${status}`);
+    const data = await response.json();
+    // Переводим статус на русский
+    const events = (data.events || []).map(event => ({
+      ...event,
+      status: translateEventStatus(event.status),
+    }));
+    return events;
+  } catch (error) {
+    console.error('Failed to fetch events by status:', error);
+    return [];
+  }
+};
+
+export const listenToEvents = (callback) => {
+  let isServerAvailable = true;
+  let failureCount = 0;
+  const MAX_FAILURES = 3; // После 3 ошибок прекращаем попытки
+  
+  // Первый вызов сразу
+  getAllEvents().then(events => {
+    callback(events);
+    if (events.length > 0) {
+      isServerAvailable = true;
+      failureCount = 0;
+    }
+  }).catch(err => {
+    failureCount++;
+  });
+  
+  // Периодически проверяем обновления каждые 20 секунд (баланс между скоростью и стабильностью)
+  // с exponential backoff если сервер недоступен
+  let interval = setInterval(() => {
+    if (failureCount >= MAX_FAILURES) {
+      console.warn('⚠️ DatabaseService: прекращаю попытки подключения к серверу после', MAX_FAILURES, 'ошибок');
+      clearInterval(interval);
+      return;
+    }
+    
+    getAllEvents()
+      .then(events => {
+        if (isServerAvailable === false) {
+          console.log('✅ DatabaseService: сервер восстановлен');
+        }
+        isServerAvailable = true;
+        failureCount = 0;
+        callback(events);
+      })
+      .catch(err => {
+        failureCount++;
+        if (!isServerAvailable) {
+          return;
+        }
+        isServerAvailable = false;
+        console.warn('⚠️ DatabaseService: сервер недоступен (' + failureCount + '/' + MAX_FAILURES + ')');
+      });
+  }, 20000); // 20 секунд для стабильности при долгих сессиях
+  
+  // Возвращаем функцию для отписки
+  return () => {
+    clearInterval(interval);
+  };
+};
+
+// ==================== EXPORT ====================
+
 export default {
-  // Users
-  createUser,
-  getUser,
-  updateUser,
-  deleteUser,
-  getUserByEmail,
-  getAllUsers,
-  getUsersByRole,
-  updateUserLoyalty,
-
-  // Properties
-  createProperty,
-  getProperty,
-  updateProperty,
-  deleteProperty,
-  getAllProperties,
-  getPropertiesByStatus,
-  getPropertiesByPriceRange,
-
-  // Bookings
-  createBooking,
-  getBooking,
-  updateBooking,
-  deleteBooking,
-  getUserBookings,
-  getPropertyBookings,
-  getBookingsByStatus,
-
-  // Reviews
-  createReview,
-  getReview,
-  updateReview,
-  deleteReview,
-  getPropertyReviews,
-  getUserReviews,
-  getApprovedReviews,
-
-  // Payments
-  createPayment,
-  getPayment,
-  updatePayment,
-  deletePayment,
-  getUserPayments,
-  getPaymentsByStatus,
-  getPaymentsByMethod,
-
-  // Notifications
-  createNotification,
-  getUserNotifications,
-  getUserUnreadNotifications,
+  createUser, getUser, updateUser, deleteUser, getUserByEmail, getAllUsers, getUsersByRole,
+  updateUserLoyalty, updateUserBalance, updateWalletBalance, addToBalance, deductFromBalance,
+  updateUserStats, incrementTotalBookings, incrementTotalSpent, incrementTotalEarned,
+  incrementReviewsCount, updateBookingStats,
+  
+  createProperty, getProperty, updateProperty, deleteProperty, getAllProperties,
+  getPropertiesByStatus, getPropertiesByPriceRange,
+  
+  createBooking, getBooking, updateBooking, deleteBooking, getUserBookings,
+  getPropertyBookings, getBookingsByStatus, getPropertyBookedDates,
+  confirmBookingPayment, cancelBooking,
+  
+  createReview, getReview, updateReview, deleteReview, getPropertyReviews,
+  getUserReviews, getApprovedReviews,
+  
+  createPayment, getPayment, updatePayment, deletePayment, getUserPayments,
+  getPaymentsByStatus, getPaymentsByMethod,
+  
+  createNotification, getUserNotifications, getUserUnreadNotifications,
   markNotificationAsRead,
-
-  // Loyalty
-  createLoyaltyTier,
+  
+  getLoyaltyCard, topUpLoyaltyCard, getLoyaltyTransactions, createLoyaltyTier,
   getLoyaltyTiers,
-
-  // Promotions
-  createPromotion,
-  getPromoByCode,
-  getAllPromotions,
-
-  // Support
-  createSupportTicket,
-  getUserSupportTickets,
-  getAllSupportTickets,
-
-  // Analytics
+  
+  createPromotion, getPromoByCode, getAllPromotions,
+  
+  createSupportTicket, getUserSupportTickets, getAllSupportTickets,
+  
   recordAnalyticsEvent,
-
-  // Events
-  createEvent,
-  getEvent,
-  updateEvent,
-  deleteEvent,
-  getAllEvents,
-  getEventsByStatus,
-  listenToEvents,
-
-  // Utility
-  performBatchOperation,
+  
+  createEvent, getEvent, updateEvent, deleteEvent, getAllEvents,
+  getEventsByStatus, listenToEvents, joinEvent,
 };

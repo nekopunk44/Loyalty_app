@@ -1,50 +1,39 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  TextInput,
   ActivityIndicator,
   Alert,
   Modal,
-  Dimensions,
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-import QRCode from 'react-native-qrcode-svg';
-import { colors, spacing, borderRadius } from '../constants/theme';
+import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
+import { spacing, borderRadius } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
-import { usePayment } from '../context/PaymentContext';
+import { useAuth } from '../context/AuthContext';
 import { useBookings } from '../context/BookingContext';
-
-const PAYMENT_METHODS = {
-  PAYPAL: 'paypal',
-  VISA: 'visa',
-  CRYPTO: 'crypto',
-};
-
-const CRYPTO_OPTIONS = {
-  bitcoin: { name: 'Bitcoin', symbol: 'BTC', icon: '₿' },
-  ethereum: { name: 'Ethereum', symbol: 'ETH', icon: 'Ξ' },
-  usdt: { name: 'Tether (USDT)', symbol: 'USDT', icon: '₮' },
-};
+import { useNotification } from '../context/NotificationContext';
+import { usePayment } from '../context/PaymentContext';
+import BookingService from '../services/BookingService';
+import LoyaltyCardService from '../services/LoyaltyCardService';
+import { getApiUrl } from '../utils/apiUrl';
 
 export default function CheckoutScreen({ route, navigation }) {
   const { theme } = useTheme();
-  const { processPayPalPayment, processVisaPayment, processCryptoPayment, isProcessing } = usePayment();
-  const { addBooking } = useBookings();
+  const { user } = useAuth();
+  const { refreshBookings } = useBookings();
+  const { notifyNewBooking, notifyPaymentSuccess, notifyAdminEvent } = useNotification();
+  const { payBookingFromCard, getCardBalance, cardBalance, setCardBalance } = usePayment();
 
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(null);
-  const [selectedCrypto, setSelectedCrypto] = useState('bitcoin');
-  const [showCryptoModal, setShowCryptoModal] = useState(false);
-  const [cryptoPayment, setCryptoPayment] = useState(null);
-  const [cardData, setCardData] = useState({
-    number: '',
-    expiry: '',
-    cvv: '',
-    name: '',
-  });
+  const [balance, setBalance] = useState(0);
+  const [loadingBalance, setLoadingBalance] = useState(true);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [insufficientFunds, setInsufficientFunds] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [bookingInfo, setBookingInfo] = useState(null);
 
   // Get booking data from route params
   const bookingData = route.params || {
@@ -53,657 +42,522 @@ export default function CheckoutScreen({ route, navigation }) {
     amount: 5000,
     checkIn: new Date().toISOString().split('T')[0],
     checkOut: new Date(Date.now() + 86400000).toISOString().split('T')[0],
+    guests: 1,
+    propertyId: '1',
+    userId: 'web_user',
+    saunaHours: 0,
+    kitchenware: false,
   };
 
-  const handlePayPalPayment = async () => {
-    try {
-      Alert.alert('PayPal', 'Перенаправляем на PayPal...');
-      const payment = await processPayPalPayment(
-        bookingData.amount,
-        'booking_' + Date.now(),
-        bookingData.serviceType
-      );
-
-      if (payment.status === 'completed') {
-        // Добавляем бронирование в историю
-        await addBooking({
-          serviceType: bookingData.serviceType,
-          guestName: bookingData.guestName,
-          amount: bookingData.amount,
-          checkIn: bookingData.checkIn,
-          checkOut: bookingData.checkOut,
-          paymentMethod: 'PayPal',
-          paymentId: payment.id,
-        });
-
-        Alert.alert(
-          'Успешно!',
-          `Платёж на сумму ${bookingData.amount} ₽ прошел успешно!\n\nID транзакции: ${payment.transactionId}`,
-          [{ text: 'OK', onPress: () => navigation.goBack() }]
-        );
+  // Загружаем баланс карты лояльности при загрузке экрана
+  useEffect(() => {
+    const loadBalance = async () => {
+      if (!user?.id) {
+        setLoadingBalance(false);
+        return;
       }
-    } catch (error) {
-      Alert.alert('Ошибка', 'Платёж не прошёл: ' + error.message);
-    }
-  };
 
-  const handleVisaPayment = async () => {
-    if (!cardData.number || !cardData.expiry || !cardData.cvv || !cardData.name) {
-      Alert.alert('Ошибка', 'Заполните все поля карты');
+      try {
+        setLoadingBalance(true);
+        const data = await getCardBalance(user.id);
+        setBalance(data.balance);
+        setCardBalance(data.balance);
+        setInsufficientFunds(data.balance < bookingData.amount);
+      } catch (error) {
+        console.error('❌ Ошибка загрузки баланса:', error);
+        setInsufficientFunds(true);
+      } finally {
+        setLoadingBalance(false);
+      }
+    };
+
+    loadBalance();
+  }, [user?.id, bookingData.amount]);
+
+  const handleConfirmBooking = async () => {
+    console.log('🔘 handleConfirmBooking вызвана');
+    console.log('insufficientFunds:', insufficientFunds);
+    console.log('bookingData:', bookingData);
+    
+    if (insufficientFunds) {
+      Alert.alert('❌ Ошибка', 'Недостаточно средств на карте лояльности', [
+        {
+          text: 'Пополнить карту',
+          onPress: () => {
+            navigation.navigate('CardTopUp');
+          },
+        },
+        {
+          text: 'Отмена',
+        },
+      ]);
       return;
     }
 
     try {
-      const payment = await processVisaPayment(
-        cardData.number,
-        bookingData.amount,
-        'booking_' + Date.now(),
-        bookingData.serviceType
-      );
+      setIsProcessing(true);
+      const userId = user?.id || bookingData.userId;
+      console.log('✅ Создаем бронирование для userId:', userId);
 
-      if (payment.status === 'completed') {
-        await addBooking({
-          serviceType: bookingData.serviceType,
-          guestName: bookingData.guestName,
-          amount: bookingData.amount,
-          checkIn: bookingData.checkIn,
-          checkOut: bookingData.checkOut,
-          paymentMethod: 'Visa',
-          paymentId: payment.id,
-        });
+      // Шаг 1: Создаем бронирование (статус: pending, деньги НЕ списываются)
+      const booking = await BookingService.createBooking({
+        propertyId: bookingData.propertyId || '1',
+        userId: userId,
+        checkInDate: bookingData.checkIn,
+        checkOutDate: bookingData.checkOut,
+        guests: bookingData.guests || 1,
+        notes: bookingData.notes || `Бронирование через мобильное приложение`,
+        totalPrice: bookingData.amount || 0,
+        // Дополнительные услуги
+        saunaHours: bookingData.saunaHours || 0,
+        kitchenware: bookingData.kitchenware || false,
+      });
+      
+      console.log('✅ Бронирование создано (статус: PENDING):', booking);
 
-        Alert.alert(
-          'Успешно!',
-          `Платёж на сумму ${bookingData.amount} ₽ прошел успешно!\n\nID транзакции: ${payment.transactionId}`,
-          [{ text: 'OK', onPress: () => {
-            setCardData({ number: '', expiry: '', cvv: '', name: '' });
-            navigation.goBack();
-          }}]
-        );
-      }
-    } catch (error) {
-      Alert.alert('Ошибка', 'Платёж не прошёл: ' + error.message);
-    }
-  };
+      // Шаг 2: Оплачиваем бронирование с карты лояльности
+      const paymentResult = await payBookingFromCard(booking.id, userId);
+      console.log('✅ Платеж подтвержден:', paymentResult);
 
-  const handleCryptoPayment = async () => {
-    try {
-      const payment = await processCryptoPayment(
-        selectedCrypto,
-        bookingData.amount,
-        'booking_' + Date.now(),
-        bookingData.serviceType
-      );
+      // Обновляем баланс
+      setBalance(paymentResult.newBalance);
+      setCardBalance(paymentResult.newBalance);
 
-      setCryptoPayment(payment);
-      setShowCryptoModal(true);
-    } catch (error) {
-      Alert.alert('Ошибка', 'Не удалось подготовить платёж: ' + error.message);
-    }
-  };
-
-  const handleCryptoConfirm = async () => {
-    try {
-      await addBooking({
-        serviceType: bookingData.serviceType,
-        guestName: bookingData.guestName,
-        amount: bookingData.amount,
+      // Отправляем уведомления
+      await notifyNewBooking(bookingData.serviceType, user?.name || 'Пользователь', bookingData.checkIn, bookingData.checkOut);
+      await notifyPaymentSuccess(bookingData.amount, 'карта лояльности');
+      
+      // Уведомляем администратора о новом бронировании
+      await notifyAdminEvent('new_booking', {
+        guestName: user?.name || 'Пользователь',
+        propertyName: bookingData.serviceType,
         checkIn: bookingData.checkIn,
         checkOut: bookingData.checkOut,
-        paymentMethod: `${CRYPTO_OPTIONS[selectedCrypto].name} (QR)`,
-        paymentId: cryptoPayment.id,
+        guests: bookingData.guests || 1,
+        amount: bookingData.amount,
+        bookingId: booking.id,
+        saunaHours: bookingData.saunaHours || 0,
+        kitchenware: bookingData.kitchenware || false,
       });
 
-      Alert.alert(
-        'Платёж инициирован',
-        `Отправьте ${bookingData.amount / 100000} ${CRYPTO_OPTIONS[selectedCrypto].symbol} на адрес из QR-кода.\n\nПосле подтверждения в блокчейне ваше бронирование будет активировано.`,
-        [{ text: 'OK', onPress: () => {
-          setShowCryptoModal(false);
-          navigation.goBack();
-        }}]
-      );
+      // Обновляем список бронирований в контексте
+      await refreshBookings();
+
+      // Сохраняем информацию о бронировании и показываем красивый modal
+      setBookingInfo({
+        id: booking.id,
+        propertyName: bookingData.serviceType,
+        checkIn: bookingData.checkIn,
+        checkOut: bookingData.checkOut,
+        guests: bookingData.guests || 1,
+        amount: bookingData.amount,
+        newBalance: newCard.balance,
+      });
+      setShowSuccessModal(true);
     } catch (error) {
-      Alert.alert('Ошибка', 'Не удалось создать бронирование: ' + error.message);
+      console.error('❌ Ошибка при бронировании:', error);
+      Alert.alert(
+        '❌ Ошибка',
+        error.message || 'Не удалось создать бронирование. Попробуйте позже.'
+      );
+    } finally {
+      setIsProcessing(false);
     }
   };
 
-  const renderPaymentMethodButton = (method, icon, title, description, onPress) => (
-    <TouchableOpacity
-      style={[
-        styles.methodButton,
-        {
-          backgroundColor: theme.colors.cardBg,
-          borderColor: selectedPaymentMethod === method ? theme.colors.primary : theme.colors.border,
-          borderWidth: selectedPaymentMethod === method ? 2 : 1,
-        }
-      ]}
-      onPress={onPress}
-    >
-      <View style={[styles.methodIcon, { backgroundColor: theme.colors.primary }]}>
-        <MaterialIcons name={icon} size={24} color="#fff" />
+  const styles = useMemo(() => StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+    header: {
+      backgroundColor: theme.colors.primary,
+      padding: spacing.lg,
+      paddingTop: spacing.xl,
+    },
+    headerTitle: {
+      color: '#fff',
+      fontSize: 20,
+      fontWeight: '700',
+    },
+    content: {
+      padding: spacing.lg,
+      paddingBottom: spacing.xl,
+    },
+    section: {
+      backgroundColor: theme.colors.cardBg,
+      borderRadius: borderRadius.lg,
+      padding: spacing.lg,
+      marginBottom: spacing.lg,
+    },
+    sectionTitle: {
+      color: theme.colors.text,
+      fontSize: 16,
+      fontWeight: '700',
+      marginBottom: spacing.md,
+    },
+    row: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: spacing.md,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+    },
+    lastRow: {
+      borderBottomWidth: 0,
+    },
+    label: {
+      color: theme.colors.textSecondary,
+      fontSize: 14,
+    },
+    value: {
+      color: theme.colors.text,
+      fontSize: 14,
+      fontWeight: '600',
+    },
+    totalValue: {
+      color: theme.colors.primary,
+      fontSize: 18,
+      fontWeight: '700',
+    },
+    balanceSection: {
+      backgroundColor: insufficientFunds ? '#FFE5E5' : '#E8F5E9',
+      borderLeftWidth: 4,
+      borderLeftColor: insufficientFunds ? '#FF4444' : '#4CAF50',
+    },
+    balanceRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    balanceInfo: {
+      flex: 1,
+    },
+    balanceLabel: {
+      color: theme.colors.text,
+      fontSize: 14,
+      fontWeight: '600',
+      marginBottom: spacing.xs,
+    },
+    balanceAmount: {
+      color: insufficientFunds ? '#FF4444' : '#4CAF50',
+      fontSize: 20,
+      fontWeight: '700',
+    },
+    balanceIcon: {
+      marginLeft: spacing.md,
+    },
+    warningText: {
+      color: '#FF4444',
+      fontSize: 12,
+      marginTop: spacing.md,
+    },
+    button: {
+      borderRadius: borderRadius.lg,
+      padding: spacing.lg,
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexDirection: 'row',
+      marginHorizontal: spacing.lg,
+      marginBottom: spacing.lg,
+    },
+    buttonEnabled: {
+      backgroundColor: theme.colors.primary,
+    },
+    buttonDisabled: {
+      backgroundColor: '#CCC',
+    },
+    buttonText: {
+      color: '#fff',
+      fontSize: 16,
+      fontWeight: '700',
+      marginLeft: spacing.md,
+    },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    successModalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.6)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    successModalScroll: {
+      flexGrow: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingVertical: spacing.xl,
+    },
+    successModal: {
+      backgroundColor: theme.colors.cardBg,
+      borderRadius: borderRadius.xl,
+      padding: spacing.xl,
+      width: '85%',
+      maxHeight: '90%',
+    },
+    checkmarkContainer: {
+      alignItems: 'center',
+      marginBottom: spacing.lg,
+    },
+    successTitle: {
+      color: theme.colors.text,
+      fontSize: 22,
+      fontWeight: '700',
+      textAlign: 'center',
+      marginBottom: spacing.lg,
+    },
+    bookingDetailsCard: {
+      backgroundColor: theme.colors.background,
+      borderRadius: borderRadius.md,
+      padding: spacing.lg,
+      marginBottom: spacing.lg,
+    },
+    detailRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      paddingVertical: spacing.md,
+    },
+    detailRowBorder: {
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+    },
+    detailContent: {
+      marginLeft: spacing.md,
+      flex: 1,
+    },
+    detailLabel: {
+      color: theme.colors.textSecondary,
+      fontSize: 12,
+      marginBottom: spacing.xs,
+    },
+    detailValue: {
+      color: theme.colors.text,
+      fontSize: 16,
+      fontWeight: '600',
+    },
+    successButton: {
+      backgroundColor: theme.colors.primary,
+      borderRadius: borderRadius.lg,
+      padding: spacing.lg,
+      alignItems: 'center',
+    },
+    successButtonText: {
+      color: '#fff',
+      fontSize: 16,
+      fontWeight: '700',
+    },
+  }), [theme.colors]);
+
+  if (loadingBalance) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
       </View>
-      <View style={styles.methodInfo}>
-        <Text style={[styles.methodTitle, { color: theme.colors.text }]}>{title}</Text>
-        <Text style={[styles.methodDesc, { color: theme.colors.textSecondary }]}>{description}</Text>
-      </View>
-      {selectedPaymentMethod === method && (
-        <MaterialIcons name="check-circle" size={24} color={theme.colors.primary} />
-      )}
-    </TouchableOpacity>
-  );
+    );
+  }
 
   return (
-    <>
-      <ScrollView contentContainerStyle={[styles.container, { backgroundColor: theme.colors.background }]}>
-      {/* Order Summary */}
-      <View style={[styles.orderCard, { backgroundColor: theme.colors.cardBg }]}>
-        <Text style={[styles.orderTitle, { color: theme.colors.text }]}>Сводка заказа</Text>
+    <View style={styles.container}>
+      <ScrollView contentContainerStyle={styles.content}>
+        {/* Booking Summary */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Сводка заказа</Text>
 
-        <View style={[styles.orderItem, { borderBottomColor: theme.colors.border }]}>
-          <Text style={[styles.orderLabel, { color: theme.colors.textSecondary }]}>Услуга</Text>
-          <Text style={[styles.orderValue, { color: theme.colors.text }]}>{bookingData.serviceType}</Text>
-        </View>
-
-        <View style={[styles.orderItem, { borderBottomColor: theme.colors.border }]}>
-          <Text style={[styles.orderLabel, { color: theme.colors.textSecondary }]}>Гость</Text>
-          <Text style={[styles.orderValue, { color: theme.colors.text }]}>{bookingData.guestName}</Text>
-        </View>
-
-        <View style={[styles.orderItem, { borderBottomColor: theme.colors.border }]}>
-          <Text style={[styles.orderLabel, { color: theme.colors.textSecondary }]}>Дата заезда</Text>
-          <Text style={[styles.orderValue, { color: theme.colors.text }]}>{bookingData.checkIn}</Text>
-        </View>
-
-        <View style={[styles.orderItem, { borderBottomColor: theme.colors.border }]}>
-          <Text style={[styles.orderLabel, { color: theme.colors.textSecondary }]}>Дата выезда</Text>
-          <Text style={[styles.orderValue, { color: theme.colors.text }]}>{bookingData.checkOut}</Text>
-        </View>
-
-        <View style={styles.orderItem}>
-          <Text style={[styles.totalLabel, { color: theme.colors.textSecondary }]}>Итого</Text>
-          <Text style={[styles.totalAmount, { color: theme.colors.primary }]}>₽ {bookingData.amount.toLocaleString('ru-RU')}</Text>
-        </View>
-      </View>
-
-      {/* Payment Methods */}
-      <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Способ оплаты</Text>
-
-      {renderPaymentMethodButton(
-        PAYMENT_METHODS.PAYPAL,
-        'payment',
-        'PayPal',
-        'Быстрая и безопасная оплата',
-        () => setSelectedPaymentMethod(PAYMENT_METHODS.PAYPAL)
-      )}
-
-      {renderPaymentMethodButton(
-        PAYMENT_METHODS.VISA,
-        'credit-card',
-        'Visa / Mastercard',
-        'Оплата по банковской карте',
-        () => setSelectedPaymentMethod(PAYMENT_METHODS.VISA)
-      )}
-
-      {renderPaymentMethodButton(
-        PAYMENT_METHODS.CRYPTO,
-        'currency-btc',
-        'Криптовалюта',
-        'Bitcoin, Ethereum, USDT',
-        () => setSelectedPaymentMethod(PAYMENT_METHODS.CRYPTO)
-      )}
-
-      {/* PayPal Payment Form */}
-      {selectedPaymentMethod === PAYMENT_METHODS.PAYPAL && (
-        <View style={[styles.formCard, { backgroundColor: theme.colors.cardBg }]}>
-          <MaterialIcons name="info" size={20} color={theme.colors.primary} />
-          <Text style={[styles.formInfo, { color: theme.colors.text }]}>
-            Вы будете перенаправлены на безопасный сервер PayPal для завершения платежа.
-          </Text>
-          <TouchableOpacity
-            style={[styles.payButton, { backgroundColor: theme.colors.primary }]}
-            onPress={handlePayPalPayment}
-            disabled={isProcessing}
-          >
-            {isProcessing ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <>
-                <MaterialIcons name="payment" size={20} color="#fff" />
-                <Text style={styles.payButtonText}>Оплатить через PayPal</Text>
-              </>
-            )}
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* Visa Payment Form */}
-      {selectedPaymentMethod === PAYMENT_METHODS.VISA && (
-        <View style={[styles.formCard, { backgroundColor: theme.colors.cardBg }]}>
-          <Text style={[styles.formLabel, { color: theme.colors.text }]}>Номер карты</Text>
-          <TextInput
-            style={[styles.input, { backgroundColor: theme.colors.background, color: theme.colors.text, borderColor: theme.colors.border }]}
-            placeholder="1234 5678 9012 3456"
-            placeholderTextColor={theme.colors.textSecondary}
-            value={cardData.number}
-            onChangeText={(text) => setCardData({ ...cardData, number: text })}
-            keyboardType="numeric"
-            maxLength={19}
-          />
-
-          <Text style={[styles.formLabel, { color: theme.colors.text }]}>Имя держателя</Text>
-          <TextInput
-            style={[styles.input, { backgroundColor: theme.colors.background, color: theme.colors.text, borderColor: theme.colors.border }]}
-            placeholder="Ivan Petrov"
-            placeholderTextColor={theme.colors.textSecondary}
-            value={cardData.name}
-            onChangeText={(text) => setCardData({ ...cardData, name: text })}
-          />
-
-          <View style={styles.cardRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.formLabel, { color: theme.colors.text }]}>Срок действия</Text>
-              <TextInput
-                style={[styles.input, { backgroundColor: theme.colors.background, color: theme.colors.text, borderColor: theme.colors.border }]}
-                placeholder="MM/YY"
-                placeholderTextColor={theme.colors.textSecondary}
-                value={cardData.expiry}
-                onChangeText={(text) => setCardData({ ...cardData, expiry: text })}
-                maxLength={5}
-              />
-            </View>
-            <View style={{ flex: 1, marginLeft: spacing.md }}>
-              <Text style={[styles.formLabel, { color: theme.colors.text }]}>CVV</Text>
-              <TextInput
-                style={[styles.input, { backgroundColor: theme.colors.background, color: theme.colors.text, borderColor: theme.colors.border }]}
-                placeholder="123"
-                placeholderTextColor={theme.colors.textSecondary}
-                value={cardData.cvv}
-                onChangeText={(text) => setCardData({ ...cardData, cvv: text })}
-                keyboardType="numeric"
-                maxLength={3}
-              />
-            </View>
+          <View style={styles.row}>
+            <Text style={styles.label}>Услуга</Text>
+            <Text style={styles.value}>{bookingData.serviceType}</Text>
           </View>
 
-          <TouchableOpacity
-            style={[styles.payButton, { backgroundColor: theme.colors.primary }]}
-            onPress={handleVisaPayment}
-            disabled={isProcessing}
-          >
-            {isProcessing ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <>
-                <MaterialIcons name="lock" size={20} color="#fff" />
-                <Text style={styles.payButtonText}>Оплатить {bookingData.amount} ₽</Text>
-              </>
-            )}
-          </TouchableOpacity>
+          <View style={styles.row}>
+            <Text style={styles.label}>Дата заезда</Text>
+            <Text style={styles.value}>{bookingData.checkIn}</Text>
+          </View>
 
-          <Text style={[styles.securityNote, { color: theme.colors.textSecondary }]}>
-            ✓ Ваши данные защищены шифрованием SSL
-          </Text>
+          <View style={styles.row}>
+            <Text style={styles.label}>Дата выезда</Text>
+            <Text style={styles.value}>{bookingData.checkOut}</Text>
+          </View>
+
+          <View style={styles.row}>
+            <Text style={styles.label}>Гостей</Text>
+            <Text style={styles.value}>{bookingData.guests || 1}</Text>
+          </View>
+
+          {bookingData.saunaHours > 0 && (
+            <View style={styles.row}>
+              <Text style={styles.label}>Парилка</Text>
+              <Text style={styles.value}>{bookingData.saunaHours} ч. × 250PRB</Text>
+            </View>
+          )}
+
+          {bookingData.kitchenware && (
+            <View style={styles.row}>
+              <Text style={styles.label}>Кухонный сервиз</Text>
+              <Text style={styles.value}>100PRB</Text>
+            </View>
+          )}
+
+          <View style={[styles.row, styles.lastRow]}>
+            <Text style={styles.label}>Итого</Text>
+            <Text style={styles.totalValue}>PRB {bookingData.amount.toLocaleString('ru-RU')}</Text>
+          </View>
         </View>
-      )}
 
-      {/* Crypto Payment Form */}
-      {selectedPaymentMethod === PAYMENT_METHODS.CRYPTO && (
-        <View style={[styles.formCard, { backgroundColor: theme.colors.cardBg }]}>
-          <Text style={[styles.formLabel, { color: theme.colors.text }]}>Выберите криптовалюту</Text>
-          {Object.entries(CRYPTO_OPTIONS).map(([key, crypto]) => (
-            <TouchableOpacity
-              key={key}
-              style={[
-                styles.cryptoOption,
-                {
-                  backgroundColor: theme.colors.background,
-                  borderColor: selectedCrypto === key ? theme.colors.primary : theme.colors.border,
-                  borderWidth: selectedCrypto === key ? 2 : 1,
-                }
-              ]}
-              onPress={() => setSelectedCrypto(key)}
-            >
-              <Text style={styles.cryptoIcon}>{crypto.icon}</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.cryptoName, { color: theme.colors.text }]}>{crypto.name}</Text>
-                <Text style={[styles.cryptoSymbol, { color: theme.colors.textSecondary }]}>{crypto.symbol}</Text>
-              </View>
-              {selectedCrypto === key && (
-                <MaterialIcons name="check-circle" size={20} color={theme.colors.primary} />
+        {/* Loyalty Card Balance */}
+        <View style={[styles.section, { backgroundColor: insufficientFunds ? '#FEE4E4' : '#E8F5E9', borderLeftWidth: 4, borderLeftColor: insufficientFunds ? '#FF6B6B' : '#4CAF50' }]}>
+          <View style={styles.balanceRow}>
+            <View style={styles.balanceInfo}>
+              <Text style={styles.balanceLabel}>Баланс карты лояльности</Text>
+              {loadingBalance ? (
+                <ActivityIndicator size="small" color={theme.colors.primary} />
+              ) : (
+                <Text style={[styles.balanceAmount, { color: insufficientFunds ? '#FF6B6B' : '#4CAF50' }]}>
+                  {cardBalance.toLocaleString('ru-RU')}PRB
+                </Text>
               )}
-            </TouchableOpacity>
-          ))}
-
-          <TouchableOpacity
-            style={[styles.payButton, { backgroundColor: theme.colors.primary }]}
-            onPress={handleCryptoPayment}
-            disabled={isProcessing}
-          >
-            {isProcessing ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <>
-                <MaterialIcons name="qr-code" size={20} color="#fff" />
-                <Text style={styles.payButtonText}>Получить QR-код</Text>
-              </>
-            )}
-          </TouchableOpacity>
-        </View>
-      )}
-    </ScrollView>
-
-    <CryptoQRModal
-      visible={showCryptoModal}
-      cryptoPayment={cryptoPayment}
-      selectedCrypto={selectedCrypto}
-      onConfirm={handleCryptoConfirm}
-      onClose={() => setShowCryptoModal(false)}
-      theme={theme}
-    />
-  </>
-  );
-}
-
-// Crypto QR Modal
-function CryptoQRModal({ visible, cryptoPayment, selectedCrypto, onConfirm, onClose, theme }) {
-  if (!cryptoPayment) return null;
-
-  const crypto = CRYPTO_OPTIONS[selectedCrypto];
-  const qrValue = JSON.stringify({
-    address: cryptoPayment.walletAddress,
-    amount: cryptoPayment.amount / 100000,
-    currency: selectedCrypto.toUpperCase(),
-  });
-
-  return (
-    <Modal visible={visible} transparent animationType="slide">
-      <View style={[styles.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.7)' }]}>
-        <View style={[styles.modalContent, { backgroundColor: theme.colors.cardBg }]}>
-          <View style={styles.modalHeader}>
-            <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Оплата в {crypto.name}</Text>
-            <TouchableOpacity onPress={onClose}>
-              <MaterialIcons name="close" size={24} color={theme.colors.text} />
-            </TouchableOpacity>
+            </View>
+            <MaterialIcons
+              name={insufficientFunds ? 'error-outline' : 'check-circle'}
+              size={32}
+              color={insufficientFunds ? '#FF6B6B' : '#4CAF50'}
+              style={styles.balanceIcon}
+            />
           </View>
 
-          <ScrollView style={styles.modalBody}>
-            <Text style={[styles.qrLabel, { color: theme.colors.text }]}>Сумма:</Text>
-            <Text style={[styles.qrAmount, { color: theme.colors.primary }]}>
-              {(cryptoPayment.amount / 100000).toFixed(6)} {crypto.symbol}
-            </Text>
-
-            <Text style={[styles.qrLabel, { color: theme.colors.text, marginTop: spacing.lg }]}>QR-код для оплаты:</Text>
-            <View style={[styles.qrContainer, { backgroundColor: theme.colors.background }]}>
-              <QRCode
-                value={qrValue}
-                size={250}
-                color={theme.colors.text}
-                backgroundColor={theme.colors.background}
-              />
-            </View>
-
-            <Text style={[styles.qrLabel, { color: theme.colors.text, marginTop: spacing.lg }]}>Адрес кошелька:</Text>
-            <View style={[styles.addressBox, { backgroundColor: theme.colors.background, borderColor: theme.colors.border }]}>
-              <Text style={[styles.addressText, { color: theme.colors.text }]}>{cryptoPayment.walletAddress}</Text>
-              <TouchableOpacity
-                onPress={() => Alert.alert('Скопировано', 'Адрес скопирован в буфер обмена')}
-              >
-                <MaterialIcons name="content-copy" size={20} color={theme.colors.primary} />
-              </TouchableOpacity>
-            </View>
-
-            <View style={[styles.warning, { backgroundColor: theme.colors.accent + '20', borderColor: theme.colors.accent }]}>
-              <MaterialIcons name="warning" size={20} color={theme.colors.accent} />
-              <Text style={[styles.warningText, { color: theme.colors.text }]}>
-                Убедитесь, что вы отправляете ровно указанную сумму на этот адрес
+          {insufficientFunds && (
+            <View style={{ marginTop: spacing.lg, paddingTop: spacing.lg, borderTopWidth: 1, borderTopColor: '#FFB3B3' }}>
+              <Text style={{ color: '#FF6B6B', fontSize: 13, lineHeight: 20, fontWeight: '600', marginBottom: spacing.sm }}>⚠️ Недостаточно средств</Text>
+              <Text style={{ color: '#D32F2F', fontSize: 12, lineHeight: 18 }}>
+                Требуется: {bookingData.amount.toLocaleString('ru-RU')}PRB{'\n'}Доступно: {cardBalance.toLocaleString('ru-RU')}PRB{'\n'}Не хватает: {(bookingData.amount - cardBalance).toLocaleString('ru-RU')}PRB
               </Text>
             </View>
-          </ScrollView>
-
-          <TouchableOpacity
-            style={[styles.confirmButton, { backgroundColor: theme.colors.primary }]}
-            onPress={onConfirm}
-          >
-            <Text style={styles.confirmButtonText}>Я отправил платёж</Text>
-          </TouchableOpacity>
+          )}
         </View>
-      </View>
-    </Modal>
+
+        {/* Confirm Button */}
+        <TouchableOpacity
+          style={[
+            styles.button,
+            insufficientFunds ? styles.buttonDisabled : styles.buttonEnabled,
+          ]}
+          onPress={handleConfirmBooking}
+          disabled={insufficientFunds || isProcessing}
+        >
+          {isProcessing ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <>
+              <MaterialIcons
+                name={insufficientFunds ? 'block' : 'check-circle'}
+                size={24}
+                color="#fff"
+              />
+              <Text style={styles.buttonText}>
+                Подтвердить оплату
+              </Text>
+            </>
+          )}
+        </TouchableOpacity>
+
+        {insufficientFunds && (
+          <View style={[styles.section, { backgroundColor: '#FFF3CD' }]}>
+            <Text style={{ color: '#856404', fontSize: 13, lineHeight: 20 }}>
+              ℹ️ Для завершения бронирования пополните баланс карты лояльности. Перейдите на вкладку "Мои карты" и пополните необходимую сумму.
+            </Text>
+          </View>
+        )}
+      </ScrollView>
+
+      {/* Success Modal */}
+      <Modal
+        visible={showSuccessModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setShowSuccessModal(false);
+          navigation.goBack();
+        }}
+      >
+        <View style={styles.successModalOverlay}>
+          <ScrollView contentContainerStyle={styles.successModalScroll} style={{ flex: 1 }}>
+            <View style={styles.successModal}>
+              {/* Checkmark Animation */}
+              <View style={styles.checkmarkContainer}>
+                <MaterialCommunityIcons name="check-circle" size={80} color="#4CAF50" />
+              </View>
+
+              <Text style={styles.successTitle}>Бронирование подтверждено!</Text>
+
+              {bookingInfo && (
+                <>
+                  <View style={styles.bookingDetailsCard}>
+                    <View style={styles.detailRow}>
+                      <MaterialIcons name="apartment" size={20} color={theme.colors.primary} />
+                      <View style={styles.detailContent}>
+                        <Text style={styles.detailLabel}>Объект</Text>
+                        <Text style={styles.detailValue}>{bookingInfo.propertyName}</Text>
+                      </View>
+                    </View>
+
+                    <View style={[styles.detailRow, styles.detailRowBorder]}>
+                      <MaterialIcons name="calendar-today" size={20} color={theme.colors.primary} />
+                      <View style={styles.detailContent}>
+                        <Text style={styles.detailLabel}>Даты</Text>
+                        <Text style={styles.detailValue}>{bookingInfo.checkIn} - {bookingInfo.checkOut}</Text>
+                      </View>
+                    </View>
+
+                    <View style={[styles.detailRow, styles.detailRowBorder]}>
+                      <MaterialIcons name="people" size={20} color={theme.colors.primary} />
+                      <View style={styles.detailContent}>
+                        <Text style={styles.detailLabel}>Гостей</Text>
+                        <Text style={styles.detailValue}>{bookingInfo.guests}</Text>
+                      </View>
+                    </View>
+
+                    <View style={[styles.detailRow, styles.detailRowBorder]}>
+                      <MaterialIcons name="confirmation-number" size={20} color={theme.colors.primary} />
+                      <View style={styles.detailContent}>
+                        <Text style={styles.detailLabel}>Номер бронирования</Text>
+                        <Text style={styles.detailValue}>#{bookingInfo.id}</Text>
+                      </View>
+                    </View>
+
+                    <View style={[styles.detailRow, styles.detailRowBorder]}>
+                      <MaterialIcons name="payments" size={20} color="#FF9800" />
+                      <View style={styles.detailContent}>
+                        <Text style={styles.detailLabel}>Оплачено</Text>
+                        <Text style={[styles.detailValue, { color: '#FF6B00' }]}>{bookingInfo.amount.toLocaleString('ru-RU')} PRB</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.detailRow}>
+                      <MaterialIcons name="account-balance-wallet" size={20} color="#4CAF50" />
+                      <View style={styles.detailContent}>
+                        <Text style={styles.detailLabel}>Остаток на карте</Text>
+                        <Text style={[styles.detailValue, { color: '#4CAF50' }]}>{bookingInfo.newBalance.toLocaleString('ru-RU')} PRB</Text>
+                      </View>
+                    </View>
+                  </View>
+                </>
+              )}
+
+              <TouchableOpacity
+                style={styles.successButton}
+                onPress={() => {
+                  setShowSuccessModal(false);
+                  navigation.goBack();
+                }}
+              >
+                <Text style={styles.successButtonText}>Готово</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </View>
+      </Modal>
+    </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    padding: spacing.md,
-    flexGrow: 1,
-  },
-  orderCard: {
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    marginBottom: spacing.lg,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  orderTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: spacing.md,
-  },
-  orderItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-  },
-  orderLabel: {
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  orderValue: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  totalLabel: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  totalAmount: {
-    fontSize: 18,
-    fontWeight: '800',
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: spacing.lg,
-  },
-  methodButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing.md,
-    borderRadius: borderRadius.lg,
-    marginBottom: spacing.md,
-  },
-  methodIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: borderRadius.md,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: spacing.md,
-  },
-  methodInfo: {
-    flex: 1,
-  },
-  methodTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  methodDesc: {
-    fontSize: 12,
-    marginTop: spacing.xs,
-  },
-  formCard: {
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    marginBottom: spacing.lg,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  formInfo: {
-    fontSize: 13,
-    marginLeft: spacing.md,
-    marginTop: spacing.sm,
-    lineHeight: 18,
-  },
-  formLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    marginTop: spacing.md,
-    marginBottom: spacing.sm,
-  },
-  input: {
-    borderWidth: 1,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    fontSize: 14,
-    marginBottom: spacing.sm,
-  },
-  cardRow: {
-    flexDirection: 'row',
-  },
-  payButton: {
-    flexDirection: 'row',
-    padding: spacing.lg,
-    borderRadius: borderRadius.lg,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: spacing.lg,
-    gap: spacing.sm,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  payButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  securityNote: {
-    fontSize: 12,
-    marginTop: spacing.md,
-    textAlign: 'center',
-  },
-  cryptoOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    marginBottom: spacing.md,
-    borderWidth: 1,
-  },
-  cryptoIcon: {
-    fontSize: 24,
-    marginRight: spacing.md,
-    width: 30,
-    textAlign: 'center',
-  },
-  cryptoName: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  cryptoSymbol: {
-    fontSize: 12,
-    marginTop: spacing.xs,
-  },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    borderTopLeftRadius: borderRadius.lg,
-    borderTopRightRadius: borderRadius.lg,
-    maxHeight: '80%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  modalBody: {
-    padding: spacing.lg,
-  },
-  qrLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: spacing.sm,
-  },
-  qrAmount: {
-    fontSize: 24,
-    fontWeight: '800',
-  },
-  qrContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing.lg,
-    borderRadius: borderRadius.lg,
-    marginVertical: spacing.lg,
-  },
-  addressBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    marginVertical: spacing.md,
-  },
-  addressText: {
-    flex: 1,
-    fontSize: 12,
-    fontFamily: 'monospace',
-  },
-  warning: {
-    flexDirection: 'row',
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    marginTop: spacing.lg,
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-  },
-  warningText: {
-    flex: 1,
-    fontSize: 12,
-    lineHeight: 16,
-  },
-  confirmButton: {
-    padding: spacing.lg,
-    borderRadius: borderRadius.lg,
-    justifyContent: 'center',
-    alignItems: 'center',
-    margin: spacing.lg,
-    marginBottom: spacing.xl,
-  },
-  confirmButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-});
-
-export { CryptoQRModal };
