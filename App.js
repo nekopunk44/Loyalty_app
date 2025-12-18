@@ -2,9 +2,9 @@ import 'react-native-gesture-handler';
 import * as Sentry from '@sentry/react-native';
 
 Sentry.init({
-  dsn: 'https://3190163e6e38e5fc127db1ce4892e9cf@o4511358969053184.ingest.de.sentry.io/4511358996381776',
+  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
   tracesSampleRate: __DEV__ ? 1.0 : 0.1,
-  enabled: !__DEV__,
+  enabled: !__DEV__ && !!process.env.EXPO_PUBLIC_SENTRY_DSN,
 });
 
 // В production глушим console.* чтобы не течь отладочная информация
