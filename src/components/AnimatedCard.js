@@ -1,0 +1,183 @@
+import React, { useEffect } from 'react';
+import { Animated, View } from 'react-native';
+
+// Определяем поддержку native driver (false на web, true на мобильных)
+const USE_NATIVE = typeof window === 'undefined';
+
+/**
+ * Компонент с плавной fade-in анимацией
+ */
+export const FadeInCard = ({ children, delay = 0, style }) => {
+  const fadeAnim = new Animated.Value(0);
+
+  useEffect(() => {
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 600,
+      delay: delay,
+      useNativeDriver: USE_NATIVE,
+    }).start();
+  }, []);
+
+  return (
+    <Animated.View style={[{ opacity: fadeAnim }, style]}>
+      {children}
+    </Animated.View>
+  );
+};
+
+/**
+ * Компонент с плавной scale анимацией (увеличение)
+ */
+export const ScaleInCard = ({ children, delay = 0, style }) => {
+  const scaleAnim = new Animated.Value(0.8);
+  const fadeAnim = new Animated.Value(0);
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(scaleAnim, {
+        toValue: 1,
+        duration: 500,
+        delay: delay,
+        useNativeDriver: USE_NATIVE,
+      }),
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 500,
+        delay: delay,
+        useNativeDriver: USE_NATIVE,
+      }),
+    ]).start();
+  }, []);
+
+  return (
+    <Animated.View
+      style={[
+        {
+          transform: [{ scale: scaleAnim }],
+          opacity: fadeAnim,
+        },
+        style,
+      ]}
+    >
+      {children}
+    </Animated.View>
+  );
+};
+
+/**
+ * Компонент с плавной slide-from-left анимацией
+ */
+export const SlideInLeftCard = ({ children, delay = 0, style }) => {
+  const slideAnim = new Animated.Value(-50);
+  const fadeAnim = new Animated.Value(0);
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 600,
+        delay: delay,
+        useNativeDriver: USE_NATIVE,
+      }),
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 600,
+        delay: delay,
+        useNativeDriver: USE_NATIVE,
+      }),
+    ]).start();
+  }, []);
+
+  return (
+    <Animated.View
+      style={[
+        {
+          transform: [{ translateX: slideAnim }],
+          opacity: fadeAnim,
+        },
+        style,
+      ]}
+    >
+      {children}
+    </Animated.View>
+  );
+};
+
+/**
+ * Компонент с плавной slide-from-right анимацией
+ */
+export const SlideInRightCard = ({ children, delay = 0, style }) => {
+  const slideAnim = new Animated.Value(50);
+  const fadeAnim = new Animated.Value(0);
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 600,
+        delay: delay,
+        useNativeDriver: USE_NATIVE,
+      }),
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 600,
+        delay: delay,
+        useNativeDriver: USE_NATIVE,
+      }),
+    ]).start();
+  }, []);
+
+  return (
+    <Animated.View
+      style={[
+        {
+          transform: [{ translateX: slideAnim }],
+          opacity: fadeAnim,
+        },
+        style,
+      ]}
+    >
+      {children}
+    </Animated.View>
+  );
+};
+
+/**
+ * Компонент с плавной slide-from-bottom анимацией
+ */
+export const SlideInBottomCard = ({ children, delay = 0, style }) => {
+  const slideAnim = new Animated.Value(50);
+  const fadeAnim = new Animated.Value(0);
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 600,
+        delay: delay,
+        useNativeDriver: USE_NATIVE,
+      }),
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 600,
+        delay: delay,
+        useNativeDriver: USE_NATIVE,
+      }),
+    ]).start();
+  }, []);
+
+  return (
+    <Animated.View
+      style={[
+        {
+          transform: [{ translateY: slideAnim }],
+          opacity: fadeAnim,
+        },
+        style,
+      ]}
+    >
+      {children}
+    </Animated.View>
+  );
+};
