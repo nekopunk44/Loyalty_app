@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Animated, View } from 'react-native';
+import { Animated } from 'react-native';
 
 // Определяем поддержку native driver (false на web, true на мобильных)
 const USE_NATIVE = typeof window === 'undefined';

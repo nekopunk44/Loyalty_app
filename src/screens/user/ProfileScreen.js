@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, TextInput, FlatList, Alert, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, TextInput, Alert, Image } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { colors, spacing, borderRadius } from '../../constants/theme';
+import { spacing, borderRadius } from '../../constants/theme';
 import { GradientView } from '../../components/ui/GradientView';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
@@ -25,8 +25,8 @@ export default function ProfileScreen() {
 
   const { theme } = useTheme();
   const { user, updateProfile } = useAuth();
-  const { bookings, addBooking, updateBookingReview } = useBookings();
-  const { referralCode, referredFriends, bonusEarned, addReferredFriend, completeFriendReferral } = useReferral();
+  const { bookings, addBooking: _addBooking, updateBookingReview } = useBookings();
+  const { referralCode, referredFriends, bonusEarned, addReferredFriend, completeFriendReferral: _completeFriendReferral } = useReferral();
   const { trackEvent } = useAnalytics();
 
   const [avatarModalVisible, setAvatarModalVisible] = useState(false);
@@ -51,22 +51,6 @@ export default function ProfileScreen() {
     else if (balance < 5000) setTier('Gold');
     else setTier('Platinum');
   }, [balance]);
-
-  const addBonus = async () => {
-    const newBal = balance + 100;
-    setBalance(newBal);
-    await AsyncStorage.setItem(BALANCE_KEY, String(newBal));
-  };
-
-  const getTierColor = () => {
-    switch (tier) {
-      case 'Bronze': return '#CD7F32';
-      case 'Silver': return '#C0C0C0';
-      case 'Gold': return '#FFD700';
-      case 'Platinum': return '#E5E4E2';
-      default: return theme.colors.primary;
-    }
-  };
 
   const getTierGradient = () => {
     switch (tier) {
@@ -500,9 +484,9 @@ export default function ProfileScreen() {
 
       {/* Модал смены аватара */}
       <Modal visible={avatarModalVisible} transparent animationType="fade" onRequestClose={() => setAvatarModalVisible(false)}>
-        <View style={styles.modalOverlay}>
+        <View style={styles.avatarModalOverlay}>
           <View style={[styles.modalContainer, { backgroundColor: theme.colors.cardBg }]}>
-            <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Изменить фото профиля</Text>
+            <Text style={[styles.avatarModalTitle, { color: theme.colors.text }]}>Изменить фото профиля</Text>
             <Text style={[styles.modalSubtitle, { color: theme.colors.textSecondary }]}>Введите URL изображения</Text>
             <TextInput
               style={[styles.modalInput, { borderColor: theme.colors.border, color: theme.colors.text, backgroundColor: theme.colors.background }]}
@@ -513,7 +497,7 @@ export default function ProfileScreen() {
               autoCapitalize="none"
               keyboardType="url"
             />
-            <View style={styles.modalButtons}>
+            <View style={styles.avatarModalButtons}>
               <TouchableOpacity
                 style={[styles.modalCancelBtn, { borderColor: theme.colors.border }]}
                 onPress={() => setAvatarModalVisible(false)}
@@ -1016,7 +1000,7 @@ const styles = StyleSheet.create({
   userPhone: {
     fontSize: 13,
   },
-  modalOverlay: {
+  avatarModalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
@@ -1029,7 +1013,7 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 360,
   },
-  modalTitle: {
+  avatarModalTitle: {
     fontSize: 18,
     fontWeight: '700',
     marginBottom: spacing.xs,
@@ -1045,7 +1029,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginBottom: spacing.lg,
   },
-  modalButtons: {
+  avatarModalButtons: {
     flexDirection: 'row',
     gap: spacing.sm,
   },

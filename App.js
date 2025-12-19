@@ -1,58 +1,34 @@
 import 'react-native-gesture-handler';
 import * as Sentry from '@sentry/react-native';
 
-Sentry.init({
-  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
-  tracesSampleRate: __DEV__ ? 1.0 : 0.1,
-  enabled: !__DEV__ && !!process.env.EXPO_PUBLIC_SENTRY_DSN,
-});
-
-// В production глушим console.* чтобы не течь отладочная информация
-if (!__DEV__) {
-  const noop = () => {};
-  console.log = noop;
-  console.info = noop;
-  console.warn = noop;
-  console.debug = noop;
-  console.error = noop;
-}
-
+// eslint-disable-next-line import/first
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { useFocusEffect } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { ActivityIndicator, View, StatusBar, Platform, Animated } from 'react-native';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { ActivityIndicator, View, StatusBar, Platform, Animated, StyleSheet, Keyboard } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-import { colors } from './src/constants/theme';
+import { NAVY as USER_NAVY } from './src/constants/loginPalette';
 import NotificationBell from './src/components/ui/NotificationBell';
-import ErrorBoundary from './src/components/ErrorBoundary';
-import { AuthProvider, useAuth } from './src/context/AuthContext';
-import { ThemeProvider, useTheme } from './src/context/ThemeContext';
-import { BookingProvider } from './src/context/BookingContext';
-import { ReferralProvider } from './src/context/ReferralContext';
-import { PaymentProvider } from './src/context/PaymentContext';
-import { NotificationProvider } from './src/context/NotificationContext';
-import { AnalyticsProvider } from './src/context/AnalyticsContext';
-import { EventProvider } from './src/context/EventContext';
-import { UserDataProvider } from './src/context/UserDataContext';
+import OfflineBanner from './src/components/ui/OfflineBanner';
+import AppProviders from './src/app/AppProviders';
+import { useAuth } from './src/context/AuthContext';
+import { useTheme } from './src/context/ThemeContext';
 
 // Auth screens
 import LoginTransitionOverlay from './src/components/auth/LoginTransitionOverlay';
 import LoginScreen from './src/screens/auth/LoginScreen';
-import RegisterScreen from './src/screens/auth/RegisterScreen';
 import SplashScreen from './src/screens/auth/SplashScreen';
 
 // User screens
 import HomeScreen from './src/screens/user/HomeScreen';
-import BookingScreen from './src/screens/user/BookingScreen';
+import BookingScreen, { preloadBookingImages } from './src/screens/user/BookingScreen';
 import CheckoutScreen from './src/screens/user/CheckoutScreen';
 import MyCardScreen from './src/screens/user/MyCardScreen';
 import CardTopUpScreen from './src/screens/user/CardTopUpScreen';
 import EventsScreen from './src/screens/user/EventsScreen';
 import SettingsScreen from './src/screens/user/SettingsScreen';
-import NotificationCenter from './src/screens/user/NotificationCenter';
 import ProfileScreen from './src/screens/user/ProfileScreen';
 import ShopScreen from './src/screens/user/ShopScreen';
 
@@ -63,8 +39,62 @@ import AdminEvents from './src/screens/admin/AdminEvents';
 import AdminStats from './src/screens/admin/AdminStats';
 import AdminUsers from './src/screens/admin/AdminUsers';
 
+Sentry.init({
+  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
+  tracesSampleRate: __DEV__ ? 1.0 : 0.1,
+  enabled: !__DEV__ && !!process.env.EXPO_PUBLIC_SENTRY_DSN,
+});
+
+// В production глушим отладочный вывод, но оставляем console.error для Sentry
+if (!__DEV__) {
+  const noop = () => {};
+  // eslint-disable-next-line no-console
+  console.log = console.info = console.warn = console.debug = noop;
+  // console.error намеренно НЕ отключается — нужен для ErrorBoundary и Sentry
+}
+
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
+const HEADER_RADIUS = 28;
+const USER_HEADER_LIGHT = '#F2C6A2';
+const USER_HEADER_DARK = '#0B5F73';
+
+function isIntegratedHeaderRoute(routeName) {
+  return routeName === 'Home' || routeName === 'Settings';
+}
+
+function RoundedHeaderBackground({ color, underlayColor }) {
+  return (
+    <View style={[StyleSheet.absoluteFill, { backgroundColor: underlayColor || 'transparent' }]}>
+      <View
+        style={[
+          StyleSheet.absoluteFill,
+          {
+            backgroundColor: color,
+            borderBottomLeftRadius: HEADER_RADIUS,
+            borderBottomRightRadius: HEADER_RADIUS,
+            overflow: 'hidden',
+          },
+        ]}
+      />
+    </View>
+  );
+}
+
+function getUserHeaderColor(isDark) {
+  return isDark ? USER_HEADER_DARK : USER_HEADER_LIGHT;
+}
+
+function getUserHeaderUnderlayColor(routeName, isDark, fallback) {
+  if (isIntegratedHeaderRoute(routeName)) {
+    return isDark ? '#07111F' : '#E9EFE8';
+  }
+  return fallback;
+}
+
+function getUserHeaderTint(isDark) {
+  return isDark ? '#fff' : USER_NAVY;
+}
 
 function withTabTransition(Component) {
   function TransitionWrapper(props) {
@@ -90,6 +120,44 @@ function withTabTransition(Component) {
   return TransitionWrapper;
 }
 
+function AnimatedTabBarIcon({ iconName, focused, color, activeColor, size, activeBg }) {
+  const progress = useRef(new Animated.Value(focused ? 1 : 0)).current;
+
+  useEffect(() => {
+    Animated.spring(progress, {
+      toValue: focused ? 1 : 0,
+      damping: 18,
+      stiffness: 220,
+      mass: 0.8,
+      useNativeDriver: true,
+    }).start();
+  }, [focused, progress]);
+
+  const scale = progress.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1] });
+  const fillScale = progress.interpolate({ inputRange: [0, 1], outputRange: [0.35, 1] });
+
+  return (
+    <Animated.View style={{ width: 46, height: 42, alignItems: 'center', justifyContent: 'center', transform: [{ scale }] }}>
+      <Animated.View
+        style={{
+          position: 'absolute',
+          width: 46,
+          height: 42,
+          borderRadius: 16,
+          backgroundColor: activeBg,
+          opacity: progress,
+          transform: [{ scale: fillScale }],
+        }}
+      />
+      <MaterialIcons
+        name={iconName}
+        size={focused ? size + 2 : size}
+        color={focused ? activeColor : color}
+      />
+    </Animated.View>
+  );
+}
+
 const HomeTab        = withTabTransition(HomeScreen);
 const BookingTab     = withTabTransition(BookingScreen);
 const MyCardTab      = withTabTransition(MyCardScreen);
@@ -103,53 +171,84 @@ const AdminStatsTab  = withTabTransition(AdminStats);
 
 // User Navigation
 function UserTabs() {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const themeColors = theme.colors;
   
   return (
     <Tab.Navigator
       initialRouteName="Home"
-      screenOptions={({ route }) => ({
+      screenOptions={({ route }) => {
+        const headerColor = getUserHeaderColor(isDark);
+        const headerUnderlay = getUserHeaderUnderlayColor(route.name, isDark, themeColors.background);
+        const headerTint = getUserHeaderTint(isDark);
+
+        return {
         headerShown: true,
         headerStyle: {
-          backgroundColor: themeColors.primary,
-          elevation: 3,
-          shadowOpacity: 0.2,
+          backgroundColor: 'transparent',
+          elevation: 0,
+          shadowOpacity: 0,
         },
-        headerTintColor: '#fff',
+        headerBackground: () => (
+          <RoundedHeaderBackground
+            color={headerColor}
+            underlayColor={headerUnderlay}
+          />
+        ),
+        headerShadowVisible: false,
+        headerTintColor: headerTint,
         headerTitleAlign: 'center',
         headerTitleStyle: {
           fontWeight: '700',
           fontSize: 18,
+          color: headerTint,
         },
         tabBarActiveTintColor: themeColors.primary,
         tabBarInactiveTintColor: themeColors.textSecondary,
         tabBarStyle: {
-          backgroundColor: themeColors.cardBg,
-          borderTopColor: themeColors.border,
-          borderTopWidth: 1,
-          paddingBottom: Platform.OS === 'ios' ? 20 : 5,
-          paddingTop: 5,
-          height: Platform.OS === 'ios' ? 85 : 60,
-          elevation: 8,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: 0.15,
-          shadowRadius: 4,
+          position: 'absolute',
+          left: 18,
+          right: 18,
+          bottom: Platform.OS === 'ios' ? 24 : 18,
+          height: 64,
+          paddingTop: 8,
+          paddingBottom: 8,
+          backgroundColor: isDark ? 'rgba(15,23,42,0.94)' : 'rgba(255,255,255,0.96)',
+          borderTopWidth: 0,
+          borderRadius: 24,
+          elevation: 18,
+          shadowColor: USER_NAVY,
+          shadowOffset: { width: 0, height: 10 },
+          shadowOpacity: isDark ? 0.35 : 0.16,
+          shadowRadius: 20,
         },
+        tabBarItemStyle: {
+          height: 48,
+        },
+        tabBarHideOnKeyboard: true,
         tabBarShowLabel: false,
-        headerRight: () => <NotificationBell color="#fff" />,
-        tabBarIcon: ({ color, size }) => {
+        headerRight: () => <NotificationBell color={headerTint} />,
+        tabBarIcon: ({ color, size, focused }) => {
           let iconName = 'home';
           if (route.name === 'Home') iconName = 'home';
           else if (route.name === 'Booking') iconName = 'event-note';
           else if (route.name === 'Profile') iconName = 'account-circle';
           else if (route.name === 'Events') iconName = 'event';
           else if (route.name === 'Settings') iconName = 'settings';
-          return <MaterialIcons name={iconName} size={size} color={color} />;
+          return (
+            <AnimatedTabBarIcon
+              iconName={iconName}
+              focused={focused}
+              color={color}
+              activeColor={themeColors.primary}
+              size={size}
+              activeBg={`${themeColors.primary}18`}
+            />
+          );
         },
         animationEnabled: true,
-      })}
+        };
+      }}
     >
       <Tab.Screen name="Home"     component={HomeTab}     options={{ title: 'Главная' }} />
       <Tab.Screen name="Booking"  component={BookingTab}  options={{ title: 'Забронировать' }} />
@@ -162,8 +261,31 @@ function UserTabs() {
 
 // User Stack with Checkout
 function UserStack() {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const themeColors = theme.colors;
+  const userStackHeaderColor = getUserHeaderColor(isDark);
+  const userStackHeaderTint = getUserHeaderTint(isDark);
+  const userStackHeaderOptions = {
+    headerTitleAlign: 'center',
+    headerStyle: {
+      backgroundColor: 'transparent',
+      elevation: 0,
+      shadowOpacity: 0,
+    },
+    headerBackground: () => (
+      <RoundedHeaderBackground
+        color={userStackHeaderColor}
+        underlayColor={themeColors.background}
+      />
+    ),
+    headerShadowVisible: false,
+    headerTintColor: userStackHeaderTint,
+    headerTitleStyle: {
+      fontWeight: '700',
+      fontSize: 16,
+      color: userStackHeaderTint,
+    },
+  };
   
   return (
     <Stack.Navigator
@@ -180,40 +302,25 @@ function UserStack() {
         name="Checkout"
         component={CheckoutScreen}
         options={{
+          ...userStackHeaderOptions,
           headerShown: true,
           headerTitle: 'Оформление покупки',
-          headerTitleAlign: 'center',
-          headerStyle: {
-            backgroundColor: themeColors.primary,
-          },
-          headerTintColor: '#fff',
-          headerTitleStyle: {
-            fontWeight: '700',
-            fontSize: 16,
-          },
         }}
       />
       <Stack.Screen
         name="CardTopUp"
         component={CardTopUpScreen}
         options={{
+          ...userStackHeaderOptions,
           headerShown: true,
           headerTitle: 'Пополнить баланс',
-          headerTitleAlign: 'center',
-          headerStyle: {
-            backgroundColor: themeColors.primary,
-          },
-          headerTintColor: '#fff',
-          headerTitleStyle: {
-            fontWeight: '700',
-            fontSize: 16,
-          },
         }}
       />
       <Stack.Screen
         name="Profile"
         component={ProfileScreen}
         options={{
+          ...userStackHeaderOptions,
           headerShown: true,
           headerTitle: 'Профиль',
           headerTitleAlign: 'center',
@@ -223,6 +330,7 @@ function UserStack() {
         name="Shop"
         component={ShopScreen}
         options={{
+          ...userStackHeaderOptions,
           headerShown: true,
           headerTitle: 'Магазин',
           headerTitleAlign: 'center',
@@ -350,23 +458,6 @@ function RootNavigator() {
               animation: 'fade',
             }}
           />
-          <Stack.Screen 
-            name="Register" 
-            component={RegisterScreen}
-            options={{
-              animationEnabled: true,
-              headerShown: true,
-              headerTitle: 'Регистрация',
-              headerStyle: {
-                backgroundColor: colors.primary,
-              },
-              headerTintColor: '#fff',
-              headerTitleStyle: {
-                fontWeight: '700',
-                fontSize: 18,
-              },
-            }}
-          />
         </>
       ) : isAdmin ? (
         <Stack.Screen name="AdminHome" component={AdminStack} />
@@ -379,29 +470,9 @@ function RootNavigator() {
 
 function App() {
   return (
-    <ErrorBoundary>
-      <SafeAreaProvider>
-        <ThemeProvider>
-          <AuthProvider>
-            <UserDataProvider>
-              <EventProvider>
-                <NotificationProvider>
-                  <AnalyticsProvider>
-                    <BookingProvider>
-                      <ReferralProvider>
-                        <PaymentProvider>
-                          <NavigationContainerWrapper />
-                        </PaymentProvider>
-                      </ReferralProvider>
-                    </BookingProvider>
-                  </AnalyticsProvider>
-                </NotificationProvider>
-              </EventProvider>
-            </UserDataProvider>
-          </AuthProvider>
-        </ThemeProvider>
-      </SafeAreaProvider>
-    </ErrorBoundary>
+    <AppProviders>
+      <NavigationContainerWrapper />
+    </AppProviders>
   );
 }
 
@@ -416,7 +487,12 @@ function NavigationContainerWrapper() {
   const prevIsLoggedIn = useRef(false);
 
   useEffect(() => {
+    if (!isLoading && isLoggedIn) {
+      preloadBookingImages();
+    }
+
     if (!isLoading && isLoggedIn && !prevIsLoggedIn.current) {
+      Keyboard.dismiss();
       setTransitionType(isAdmin ? 'admin' : 'user');
       setShowTransition(true);
     }
@@ -443,17 +519,21 @@ function NavigationContainerWrapper() {
       notification: theme.colors.accent,
     },
   };
+  const statusBarColor = isLoggedIn && !isAdmin
+    ? getUserHeaderColor(isDark)
+    : (isDark ? theme.colors.background : theme.colors.primary);
 
   return (
     <>
       <StatusBar
         barStyle={isDark ? 'light-content' : 'dark-content'}
-        backgroundColor={isDark ? theme.colors.background : theme.colors.primary}
+        backgroundColor={statusBarColor}
         translucent={Platform.OS === 'android'}
       />
       <NavigationContainer theme={navigationTheme}>
         <RootNavigator />
       </NavigationContainer>
+      <OfflineBanner />
       {showTransition && (
         <LoginTransitionOverlay
           type={transitionType}

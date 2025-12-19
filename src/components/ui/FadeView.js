@@ -1,5 +1,5 @@
 import React from 'react';
-import { Animated, View, StyleSheet } from 'react-native';
+import { Animated } from 'react-native';
 
 export default class FadeView extends React.Component {
   state = {

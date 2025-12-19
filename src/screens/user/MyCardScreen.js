@@ -7,7 +7,6 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
-import { spacing, borderRadius } from '../../constants/theme';
 import { GradientView } from '../../components/ui/GradientView';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -21,13 +20,71 @@ const API_BASE_URL = getApiUrl();
 const useNative = Platform.OS !== 'web';
 
 const LEVEL_GRADIENT = {
-  Platinum: ['#7B2FF7', '#5C16C5', '#3D0085'],
-  Gold:     ['#CC8800', '#B07500', '#8A5C00'],
-  Silver:   ['#707070', '#505050', '#303030'],
-  Bronze:   ['#7A5030', '#5A3818', '#3A2008'],
+  Bronze:   ['#082C3A', '#10313B', '#4B3322', '#B06A2F'],
+  Silver:   ['#17212C', '#596672', '#B8C2CC', '#313B47'],
+  Gold:     ['#24180B', '#634215', '#B78325', '#F2C96D'],
+  Platinum: ['#090D20', '#241B4D', '#6650B8', '#B9A8FF'],
 };
 const LEVEL_BORDER = {
-  Platinum: '#B366FF', Gold: '#F59E0B', Silver: '#A9A9A9', Bronze: '#CD7F32',
+  Bronze: '#C7772C', Silver: '#D6DEE7', Gold: '#F2C96D', Platinum: '#B9A8FF',
+};
+const LEVEL_CARD_THEME = {
+  Bronze: {
+    accent: '#E08B32',
+    border: '#C7772C',
+    chip: '#D29A3A',
+    rail: 'rgba(224,139,50,0.82)',
+    textSoft: 'rgba(255,246,234,0.76)',
+    watermark: 'rgba(255,246,234,0.052)',
+    plate: 'rgba(255,255,255,0.075)',
+    plateBorder: 'rgba(255,255,255,0.10)',
+    badgeBg: 'rgba(8,24,31,0.62)',
+    stripe: 'rgba(255,255,255,0.048)',
+    glow: 'rgba(224,139,50,0.18)',
+    shadow: '#3B210F',
+  },
+  Silver: {
+    accent: '#E6EEF7',
+    border: '#D6DEE7',
+    chip: '#C9D1D9',
+    rail: 'rgba(214,222,231,0.86)',
+    textSoft: 'rgba(247,250,252,0.78)',
+    watermark: 'rgba(255,255,255,0.065)',
+    plate: 'rgba(255,255,255,0.13)',
+    plateBorder: 'rgba(255,255,255,0.18)',
+    badgeBg: 'rgba(23,33,44,0.58)',
+    stripe: 'rgba(255,255,255,0.06)',
+    glow: 'rgba(230,238,247,0.16)',
+    shadow: '#16202B',
+  },
+  Gold: {
+    accent: '#F8D67A',
+    border: '#F2C96D',
+    chip: '#F6C453',
+    rail: 'rgba(248,214,122,0.88)',
+    textSoft: 'rgba(255,249,226,0.78)',
+    watermark: 'rgba(255,249,226,0.07)',
+    plate: 'rgba(255,255,255,0.12)',
+    plateBorder: 'rgba(255,255,255,0.16)',
+    badgeBg: 'rgba(36,24,11,0.56)',
+    stripe: 'rgba(255,255,255,0.052)',
+    glow: 'rgba(248,214,122,0.20)',
+    shadow: '#3A2509',
+  },
+  Platinum: {
+    accent: '#D9CEFF',
+    border: '#B9A8FF',
+    chip: '#C4B5FD',
+    rail: 'rgba(185,168,255,0.88)',
+    textSoft: 'rgba(245,243,255,0.80)',
+    watermark: 'rgba(245,243,255,0.072)',
+    plate: 'rgba(255,255,255,0.12)',
+    plateBorder: 'rgba(255,255,255,0.17)',
+    badgeBg: 'rgba(9,13,32,0.58)',
+    stripe: 'rgba(255,255,255,0.058)',
+    glow: 'rgba(185,168,255,0.20)',
+    shadow: '#171033',
+  },
 };
 
 const LEVEL_BENEFITS = {
@@ -64,9 +121,11 @@ export default function ProfileScreen({ navigation }) {
 
   // Card flip animation
   const flipAnim   = useRef(new Animated.Value(0)).current;
+  const cardPressAnim = useRef(new Animated.Value(1)).current;
 
   // Progress bar animation
   const progressAnim = useRef(new Animated.Value(0)).current;
+  const loadingCardRef = useRef(false);
 
   // Stable card number (avoid Math.random() on every render)
   const cardSuffix = useMemo(() => String(Math.floor(Math.random() * 10000)).padStart(4, '0'), []);
@@ -89,25 +148,29 @@ export default function ProfileScreen({ navigation }) {
     }, 500);
   };
 
-  useEffect(() => { loadCardData(); loadUserStats(); }, [user?.id]);
-
   useFocusEffect(React.useCallback(() => {
     loadCardData();
     loadUserStats();
-  }, []));
+  }, [user?.id]));
 
-  useEffect(() => { runEntrance(); }, [loading]);
+  useEffect(() => {
+    if (!loading) runEntrance();
+  }, [loading]);
 
   const loadCardData = async () => {
     if (!user?.id) { setLoading(false); return; }
+    if (loadingCardRef.current) return;
     try {
+      loadingCardRef.current = true;
       setLoading(true);
       const card = await LoyaltyCardService.getCard(user.id);
-      setBalance(card.balance);
+      setBalance(card.balance || 0);
       setAccrued(parseFloat(card.totalEarned) || 0);
     } catch (e) {
-      Alert.alert('Ошибка', 'Не удалось загрузить данные карты');
+      setBalance(user?.loyaltyBalance || user?.balance || 0);
+      setAccrued(user?.totalEarned || 0);
     } finally {
+      loadingCardRef.current = false;
       setLoading(false);
     }
   };
@@ -131,13 +194,30 @@ export default function ProfileScreen({ navigation }) {
   };
 
   const handleFlip = () => {
-    const toValue = cardFlipped ? 0 : 180;
-    Animated.spring(flipAnim, { toValue, friction: 8, tension: 10, useNativeDriver: useNative }).start();
+    const next = cardFlipped ? 0 : 1;
     setCardFlipped(!cardFlipped);
+    flipAnim.stopAnimation();
+    Animated.spring(flipAnim, {
+      toValue: next,
+      damping: 18,
+      stiffness: 140,
+      mass: 0.9,
+      useNativeDriver: useNative,
+    }).start();
   };
 
-  const frontInterpolate = flipAnim.interpolate({ inputRange: [0, 180], outputRange: ['0deg', '180deg'] });
-  const backInterpolate  = flipAnim.interpolate({ inputRange: [0, 180], outputRange: ['180deg', '360deg'] });
+  const handleCardPressIn = () => {
+    Animated.spring(cardPressAnim, { toValue: 0.985, damping: 18, stiffness: 260, useNativeDriver: useNative }).start();
+  };
+
+  const handleCardPressOut = () => {
+    Animated.spring(cardPressAnim, { toValue: 1, damping: 16, stiffness: 220, useNativeDriver: useNative }).start();
+  };
+
+  const frontInterpolate = flipAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '180deg'] });
+  const backInterpolate  = flipAnim.interpolate({ inputRange: [0, 1], outputRange: ['-180deg', '0deg'] });
+  const frontOpacity = flipAnim.interpolate({ inputRange: [0, 0.49, 0.5, 1], outputRange: [1, 1, 0, 0] });
+  const backOpacity = flipAnim.interpolate({ inputRange: [0, 0.49, 0.5, 1], outputRange: [0, 0, 1, 1] });
 
   const paymentMethods = [
     { id: '1', name: 'Кредитная карта',   desc: 'Visa, MasterCard, Maestro', icon: 'credit-card' },
@@ -149,7 +229,10 @@ export default function ProfileScreen({ navigation }) {
   const isAdmin     = user?.role === 'admin';
   const level       = user?.membershipLevel || 'Bronze';
   const levelColor  = LEVEL_BORDER[level] || LEVEL_BORDER.Bronze;
+  const cardTheme   = LEVEL_CARD_THEME[level] || LEVEL_CARD_THEME.Bronze;
+  const cardGradient = LEVEL_GRADIENT[level] || LEVEL_GRADIENT.Bronze;
   const progressPct = Math.min((stats.totalSpent || 0) / 200000, 1);
+  const maskedCardGroups = useMemo(() => ['\u2022\u2022\u2022\u2022', '\u2022\u2022\u2022\u2022', '\u2022\u2022\u2022\u2022', cardSuffix], [cardSuffix]);
 
   const processTopUp = async (amount) => {
     if (!user?.id) return;
@@ -204,87 +287,89 @@ export default function ProfileScreen({ navigation }) {
 
         {/* ── LOYALTY CARD ── */}
         <Animated.View style={[S.cardWrap, animStyle(cardAnim)]}>
-          <TouchableOpacity onPress={handleFlip} activeOpacity={0.9} style={{ height: 220, outlineWidth: 0 }}>
-            {/* FRONT */}
-            <Animated.View style={[S.card, { transform: [{ perspective: 1000 }, { rotateY: frontInterpolate }], borderColor: levelColor }]}>
-              {/* Base gradient */}
-              <GradientView colors={LEVEL_GRADIENT[level] || LEVEL_GRADIENT.Bronze} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+          <TouchableOpacity
+            onPress={handleFlip}
+            onPressIn={handleCardPressIn}
+            onPressOut={handleCardPressOut}
+            activeOpacity={1}
+            style={{ height: 214, outlineWidth: 0 }}
+          >
+            <Animated.View style={[S.cardPressLayer, { transform: [{ scale: cardPressAnim }] }]}>
+              <Animated.View style={[S.card, { opacity: frontOpacity, transform: [{ perspective: 1000 }, { rotateY: frontInterpolate }], borderColor: cardTheme.border }]}>
+                <View style={[StyleSheet.absoluteFill, { backgroundColor: cardGradient[0] }]} />
+                <View style={[S.cardToneLayer, { backgroundColor: cardGradient[1] }]} pointerEvents="none" />
+                <View style={[S.cardDepthLayer, { backgroundColor: cardGradient[2] }]} pointerEvents="none" />
+                <View style={[S.cardMaterialSheen, { backgroundColor: cardTheme.accent }]} pointerEvents="none" />
+                <View style={[S.cardRail, { backgroundColor: cardTheme.rail }]} />
 
-              {/* Diagonal stripe texture */}
-              <View style={S.stripeContainer} pointerEvents="none">
-                {Array.from({ length: 36 }, (_, i) => (
-                  <View key={i} style={S.stripeLine} />
-                ))}
-              </View>
-
-              {/* Top-left light bloom */}
-              <GradientView
-                colors={['rgba(255,255,255,0.28)', 'rgba(255,255,255,0.06)', 'rgba(255,255,255,0)']}
-                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                style={S.cardBloom}
-              />
-              {/* Bottom-right vignette */}
-              <GradientView
-                colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.28)']}
-                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                style={StyleSheet.absoluteFill}
-              />
-              {/* Watermark level text */}
-              <Text style={S.cardWatermark}>{level.toUpperCase()}</Text>
-
-              {/* Top row */}
-              <View style={S.cardTop}>
-                <View>
-                  <Text style={S.cardBrandSub}>КАРТА ЛОЯЛЬНОСТИ</Text>
-                  <Text style={S.cardBrand}>PRIVILEGE</Text>
+                <View style={S.stripeContainer} pointerEvents="none">
+                  {Array.from({ length: 36 }, (_, i) => (
+                    <View key={i} style={[S.stripeLine, { backgroundColor: cardTheme.stripe }]} />
+                  ))}
                 </View>
-                <MaterialCommunityIcons name="contactless-payment" size={30} color="rgba(255,255,255,0.9)" />
-              </View>
 
-              {/* EMV Chip */}
-              <View style={S.chipRow}>
-                <View style={S.chip}>
-                  <View style={S.chipLineH} />
-                  <View style={S.chipLineV} />
-                  <View style={S.chipCenter} />
+                <View style={[S.cardBloom, { backgroundColor: cardTheme.glow }]} pointerEvents="none" />
+                <Text style={[S.cardWatermark, { color: cardTheme.watermark }]}>{level.toUpperCase()}</Text>
+                <View style={S.cardTop}>
+                  <View>
+                    <Text style={[S.cardBrandSub, { color: cardTheme.textSoft }]}>VILLA JACONDA</Text>
+                    <Text style={S.cardBrand}>PRIVILEGE</Text>
+                  </View>
+                  <View style={[S.contactlessBadge, { borderColor: cardTheme.accent + '66', backgroundColor: cardTheme.badgeBg }]}>
+                    <MaterialCommunityIcons name="contactless-payment" size={26} color={cardTheme.accent} />
+                  </View>
                 </View>
-              </View>
 
-              {/* Card number */}
-              <Text style={S.cardNumber}>•••• •••• •••• {cardSuffix}</Text>
+                <View style={S.cardMiddle}>
+                  <View style={[S.chip, { backgroundColor: cardTheme.chip }]}>
+                    <View style={S.chipLineH} />
+                    <View style={S.chipLineV} />
+                    <View style={S.chipCenter} />
+                  </View>
+                  <Text style={[S.cardProgramLabel, { color: cardTheme.textSoft }]}>LOYALTY CARD</Text>
+                </View>
 
-              {/* Bottom */}
-              <View style={S.cardBottom}>
-                <View style={{ flex: 1 }}>
-                  <Text style={S.cardSmallLabel}>ДЕРЖАТЕЛЬ</Text>
-                  <Text style={S.cardHolderName} numberOfLines={1}>{(user?.displayName || user?.name || 'Пользователь').toUpperCase()}</Text>
+                <View style={S.cardNumberRow}>
+                  {maskedCardGroups.map((group, index) => (
+                    <Text key={`${group}-${index}`} style={S.cardNumberGroup} numberOfLines={1} allowFontScaling={false}>
+                      {group}
+                    </Text>
+                  ))}
                 </View>
-                <View style={[S.cardLevelBadge, { borderColor: `${levelColor}80` }]}>
-                  <Text style={[S.cardLevelName, { color: levelColor }]}>{level.toUpperCase()}</Text>
-                </View>
-              </View>
-            </Animated.View>
 
-            {/* BACK */}
-            <Animated.View style={[S.card, S.cardBack, { transform: [{ perspective: 1000 }, { rotateY: backInterpolate }], borderColor: levelColor }]}>
-              <GradientView colors={LEVEL_GRADIENT[level] || LEVEL_GRADIENT.Bronze} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} style={StyleSheet.absoluteFill} />
-              <View style={S.stripeContainer} pointerEvents="none">
-                {Array.from({ length: 36 }, (_, i) => (
-                  <View key={i} style={S.stripeLine} />
-                ))}
-              </View>
-              <GradientView colors={['rgba(255,255,255,0.22)', 'rgba(255,255,255,0.04)', 'rgba(255,255,255,0)']} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} style={S.cardBloom} />
-              <GradientView colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.25)']} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} style={StyleSheet.absoluteFill} />
-              <Text style={S.cardWatermark}>PRB</Text>
-              <Text style={S.cardLabel}>БАЛАНС СЧЁТА</Text>
-              <View style={S.balanceCenter}>
-                <Text style={S.balanceAmount}>{(balance || 0).toLocaleString('ru-RU')}</Text>
-                <View style={S.balancePill}>
-                  <Text style={S.balanceCurrency}>PRB</Text>
+                <View style={S.cardBottom}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[S.cardSmallLabel, { color: cardTheme.textSoft }]}>{'\u0414\u0415\u0420\u0416\u0410\u0422\u0415\u041b\u042c'}</Text>
+                    <Text style={S.cardHolderName} numberOfLines={1}>{(user?.displayName || user?.name || '\u041f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u044c').toUpperCase()}</Text>
+                  </View>
+                  <View style={[S.cardLevelBadge, { borderColor: cardTheme.accent + '88', backgroundColor: cardTheme.badgeBg }]}>
+                    <Text style={[S.cardLevelName, { color: cardTheme.accent }]}>{level.toUpperCase()}</Text>
+                  </View>
                 </View>
-                <Text style={S.balanceSub}>Доступно для использования</Text>
-              </View>
-              <Text style={S.cardFlipHint}>← Нажмите чтобы вернуться</Text>
+              </Animated.View>
+
+              <Animated.View style={[S.card, S.cardBack, { opacity: backOpacity, transform: [{ perspective: 1000 }, { rotateY: backInterpolate }], borderColor: cardTheme.border }]}>
+                <View style={[StyleSheet.absoluteFill, { backgroundColor: cardGradient[0] }]} />
+                <Text style={[S.backBrand, { color: cardTheme.textSoft }]}>VILLA JACONDA</Text>
+                <View style={S.backStripeContainer} pointerEvents="none">
+                  {Array.from({ length: 36 }, (_, i) => (
+                    <View key={i} style={[S.backStripeLine, { backgroundColor: cardTheme.stripe }]} />
+                  ))}
+                </View>
+                <View style={S.backMagStripe}>
+                  <View style={S.backMagStripeShade} />
+                  <View style={S.backMagStripeHighlight} />
+                  <View style={S.backMagStripeBottom} />
+                </View>
+                <View style={[S.cardRailRight, { backgroundColor: cardTheme.rail }]} />
+
+                <View style={S.backBalanceCenter}>
+                  <View style={S.balanceRow}>
+                    <Text style={S.balanceAmount}>{(balance || 0).toLocaleString('ru-RU')}</Text>
+                    <Text style={[S.balanceCurrencyInline, { color: cardTheme.accent }]}>PRB</Text>
+                  </View>
+                </View>
+              </Animated.View>
             </Animated.View>
           </TouchableOpacity>
           <Text style={[S.flipHint, { color: colors.textSecondary }]}>
@@ -405,10 +490,10 @@ export default function ProfileScreen({ navigation }) {
           </Animated.View>
         )}
 
-        <View style={{ height: 90 }} />
+        <View style={{ height: 92 }} />
       </ScrollView>
 
-      {/* ── FLOATING BUTTON ── */}
+
       <TouchableOpacity
         style={[S.floatBtn, { backgroundColor: '#063B5C' }]}
         onPress={() => navigation.navigate('CardTopUp')}
@@ -546,56 +631,162 @@ export default function ProfileScreen({ navigation }) {
 }
 
 const S = StyleSheet.create({
-  scroll: { padding: 16, paddingBottom: 24 },
+  scroll: { padding: 16, paddingBottom: 92 },
 
   // Card
   cardWrap: { marginBottom: 20 },
+  cardPressLayer: { height: 214 },
   card: {
-    position: 'absolute', top: 0, left: 0, right: 0, height: 220,
-    borderRadius: 22, padding: 20, borderWidth: 1.5,
+    position: 'absolute', top: 0, left: 0, right: 0, height: 214,
+    borderRadius: 22, padding: 18, borderWidth: 1.3,
     backfaceVisibility: 'hidden', overflow: 'hidden',
     justifyContent: 'space-between',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.5, shadowRadius: 20, elevation: 14,
   },
   cardBack: { backfaceVisibility: 'hidden' },
+  cardToneLayer: {
+    position: 'absolute',
+    top: -34,
+    bottom: -34,
+    right: 36,
+    width: 128,
+    opacity: 0.20,
+    transform: [{ rotate: '-12deg' }],
+  },
+  cardToneLayerBack: {
+    left: 24,
+    right: undefined,
+    width: 150,
+    opacity: 0.18,
+  },
+  cardDepthLayer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 64,
+    opacity: 0.10,
+  },
+  cardMaterialSheen: {
+    position: 'absolute',
+    right: 22,
+    top: -42,
+    width: 128,
+    height: 260,
+    opacity: 0.06,
+    transform: [{ rotate: '18deg' }],
+  },
+  cardRail: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4 },
+  cardRailRight: { position: 'absolute', right: 0, top: 0, bottom: 0, width: 4 },
   stripeContainer: {
     position: 'absolute', top: -120, left: -80, right: -80, bottom: -120,
     transform: [{ rotate: '38deg' }],
-    gap: 13,
+    gap: 16,
   },
   stripeLine: {
     height: 1,
-    backgroundColor: 'rgba(255,255,255,0.07)',
+    backgroundColor: 'rgba(255,255,255,0.045)',
   },
   cardBloom: {
-    position: 'absolute', top: 0, left: 0,
-    width: 220, height: 180, borderRadius: 0,
+    position: 'absolute',
+    top: -34,
+    left: -30,
+    width: 170,
+    height: 86,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.13)',
+    transform: [{ rotate: '-16deg' }],
   },
-  cardWatermark: { position: 'absolute', bottom: 10, right: 16, fontSize: 68, fontWeight: '900', color: 'rgba(255,255,255,0.06)', letterSpacing: 2 },
+  cardWatermark: { position: 'absolute', bottom: 18, right: 18, fontSize: 72, fontWeight: '900', color: 'rgba(255,255,255,0.05)', letterSpacing: 1.5 },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  cardBrandSub: { color: 'rgba(255,255,255,0.65)', fontSize: 9, fontWeight: '700', letterSpacing: 1.8, marginBottom: 2 },
-  cardBrand: { color: '#fff', fontSize: 16, fontWeight: '900', letterSpacing: 2.5 },
+  cardBrandSub: { color: 'rgba(255,255,255,0.65)', fontSize: 9, fontWeight: '800', letterSpacing: 1.7, marginBottom: 2 },
+  cardBrand: { color: '#fff', fontSize: 18, fontWeight: '900', letterSpacing: 2.4 },
   cardLabel: { color: '#fff', fontSize: 11, fontWeight: '800', letterSpacing: 1.5, opacity: 0.85 },
+  contactlessBadge: { width: 42, height: 42, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   // Chip
-  chipRow: { marginTop: -4 },
+  cardMiddle: { marginTop: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   chip: { width: 42, height: 32, backgroundColor: '#D4A843', borderRadius: 5, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
   chipLineH: { position: 'absolute', width: '100%', height: 1.5, backgroundColor: 'rgba(120,80,0,0.45)' },
   chipLineV: { position: 'absolute', width: 1.5, height: '100%', backgroundColor: 'rgba(120,80,0,0.45)' },
   chipCenter: { width: 18, height: 14, borderRadius: 2, backgroundColor: 'rgba(180,130,20,0.7)', borderWidth: 1, borderColor: 'rgba(120,80,0,0.3)' },
   // Card number + bottom
-  cardNumber: { color: '#fff', fontSize: 18, fontWeight: '600', letterSpacing: 4, marginTop: 2 },
-  cardBottom: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(255,255,255,0.3)' },
+  cardNumberRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, paddingRight: 4 },
+  cardNumberGroup: { color: '#fff', fontSize: 17, fontWeight: '700', letterSpacing: 2.1, lineHeight: 24 },
+  cardBottom: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(255,255,255,0.18)' },
   cardSmallLabel: { color: 'rgba(255,255,255,0.6)', fontSize: 9, fontWeight: '700', letterSpacing: 1, marginBottom: 3 },
   cardHolderName: { color: '#fff', fontSize: 12, fontWeight: '800', letterSpacing: 0.5 },
-  cardLevelBadge: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5, alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.25)' },
+  cardLevelBadge: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5, alignItems: 'center' },
   cardLevelIcon: { fontSize: 16, lineHeight: 18 },
   cardLevelName: { fontSize: 9, fontWeight: '900', letterSpacing: 1.5, marginTop: 1 },
+  cardProgramLabel: { fontSize: 9, fontWeight: '900', letterSpacing: 1.4 },
   // Back
-  balanceCenter: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  balanceAmount: { color: '#fff', fontSize: 44, fontWeight: '900', letterSpacing: 1 },
-  balancePill: { backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 3, marginTop: 2 },
-  balanceCurrency: { color: '#fff', fontSize: 13, fontWeight: '800', letterSpacing: 1 },
-  balanceSub: { color: 'rgba(255,255,255,0.6)', fontSize: 11, marginTop: 8 },
+  backMagStripe: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 52,
+    height: 28,
+    justifyContent: 'center',
+  },
+  backMagStripeShade: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 5,
+    bottom: 5,
+    backgroundColor: 'rgba(0,0,0,0.30)',
+  },
+  backMagStripeHighlight: {
+    position: 'absolute',
+    left: 22,
+    right: 22,
+    top: 4,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+  },
+  backMagStripeBottom: {
+    position: 'absolute',
+    left: 22,
+    right: 22,
+    bottom: 4,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(0,0,0,0.26)',
+  },
+  backStripeContainer: {
+    position: 'absolute',
+    top: -130,
+    left: -86,
+    right: -86,
+    bottom: -130,
+    transform: [{ rotate: '38deg' }],
+    gap: 17,
+    opacity: 0.72,
+  },
+  backStripeLine: {
+    height: 1,
+  },
+  backBalanceCenter: {
+    position: 'absolute',
+    left: 18,
+    right: 18,
+    top: 88,
+    bottom: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backBrand: {
+    position: 'absolute',
+    top: 22,
+    left: 0,
+    right: 0,
+    textAlign: 'center',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 2.6,
+  },
+  balanceRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, marginTop: 4 },
+  balanceAmount: { color: '#fff', fontSize: 48, fontWeight: '900', letterSpacing: 0.4, lineHeight: 54 },
+  balanceCurrencyInline: { fontSize: 15, fontWeight: '900', letterSpacing: 1, marginBottom: 10 },
+  balanceSub: { color: 'rgba(255,255,255,0.6)', fontSize: 10, fontWeight: '800', letterSpacing: 1 },
   cardFlipHint: { color: 'rgba(255,255,255,0.5)', fontSize: 10, textAlign: 'center', fontWeight: '500' },
   flipHint: { textAlign: 'center', fontSize: 11, marginTop: 12, marginBottom: 12 },
   qrBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 13, borderRadius: 14, marginTop: 4, borderWidth: 1 },
@@ -646,7 +837,7 @@ const S = StyleSheet.create({
   cashFooterDivider: { width: 1, marginVertical: 4 },
 
   // Float button
-  floatBtn: { position: 'absolute', bottom: 20, left: 16, right: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 16, borderRadius: 16, gap: 10, shadowColor: '#063B5C', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.35, shadowRadius: 12, elevation: 8, zIndex: 99 },
+  floatBtn: { position: 'absolute', left: 16, right: 16, bottom: Platform.OS === 'ios' ? 110 : 102, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 16, borderRadius: 16, gap: 10, shadowColor: '#063B5C', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.32, shadowRadius: 12, elevation: 8, zIndex: 99 },
   floatBtnText: { color: '#fff', fontSize: 16, fontWeight: '800' },
 
   // Modal

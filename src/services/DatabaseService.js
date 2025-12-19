@@ -850,7 +850,7 @@ export const listenToEvents = (callback) => {
     failureCount++;
   });
 
-  let interval = setInterval(() => {
+  const interval = setInterval(() => {
     if (failureCount >= MAX_FAILURES) {
       console.warn('⚠️ DatabaseService: прекращаю попытки подключения к серверу после', MAX_FAILURES, 'ошибок');
       clearInterval(interval);

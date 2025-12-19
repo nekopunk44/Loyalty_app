@@ -5,7 +5,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   Dimensions,
-  Image,
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { colors, spacing, borderRadius } from '../../constants/theme';

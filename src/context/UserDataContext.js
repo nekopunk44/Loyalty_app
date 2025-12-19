@@ -33,7 +33,7 @@ export const UserDataProvider = ({ children }) => {
   }, [user?.id]);
 
   // Добавить средства на баланс
-  const addBalance = useCallback(async (amount, description = '') => {
+  const addBalance = useCallback(async (amount, _description = '') => {
     if (!user?.id || amount <= 0) return false;
     
     try {
@@ -52,7 +52,7 @@ export const UserDataProvider = ({ children }) => {
   }, [user?.id]);
 
   // Вычесть средства с баланса
-  const deductBalance = useCallback(async (amount, description = '') => {
+  const deductBalance = useCallback(async (amount, _description = '') => {
     if (!user?.id || amount <= 0) return false;
     
     try {

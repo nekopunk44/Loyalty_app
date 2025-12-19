@@ -8,42 +8,112 @@ import {
   Modal,
   ActivityIndicator,
   Animated,
+  Dimensions,
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-import { colors, spacing, borderRadius } from '../../constants/theme';
 import { useTheme } from '../../context/ThemeContext';
 
+const NAVY = '#063B5C';
+const TEAL = '#14B8A6';
+const CORAL = '#FF6B35';
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const CALENDAR_SHEET_HEIGHT = Math.round(SCREEN_HEIGHT * 0.78);
+const DAY_GAP = 6;
+const DAY_SIZE = Math.floor((SCREEN_WIDTH - 72 - DAY_GAP * 6) / 7);
+const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
+
 export const BookingCalendar = ({
-  propertyId,
+  propertyId: _propertyId,
   selectedCheckIn,
   selectedCheckOut,
   onDateSelect,
   bookedDates = [],
   visible,
+  selectionMode = 'checkIn',
   onClose,
 }) => {
   const { theme } = useTheme();
   const themeColors = theme.colors;
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [loading, setLoading] = useState(false);
+  const [loading] = useState(false);
   const [selectingCheckOut, setSelectingCheckOut] = useState(false);
-  const slideAnim = useRef(new Animated.Value(1000)).current;
+  const [shouldRender, setShouldRender] = useState(visible);
+  const slideAnim = useRef(new Animated.Value(CALENDAR_SHEET_HEIGHT + 40)).current;
+  const backdropAnim = useRef(new Animated.Value(0)).current;
+  const selectedPulse = useRef(new Animated.Value(1)).current;
+  const checkInPillAnim = useRef(new Animated.Value(selectedCheckIn ? 1 : 0)).current;
+  const checkOutPillAnim = useRef(new Animated.Value(selectedCheckOut ? 1 : 0)).current;
 
   useEffect(() => {
+    slideAnim.stopAnimation();
+    backdropAnim.stopAnimation();
+
     if (visible) {
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 400,
-        useNativeDriver: false,
-      }).start();
-    } else {
-      Animated.timing(slideAnim, {
-        toValue: 1000,
-        duration: 300,
-        useNativeDriver: false,
-      }).start();
+      setSelectingCheckOut(selectionMode === 'checkOut');
+      setShouldRender(true);
+      slideAnim.setValue(CALENDAR_SHEET_HEIGHT + 48);
+      backdropAnim.setValue(0);
+      requestAnimationFrame(() => {
+        Animated.parallel([
+          Animated.timing(backdropAnim, {
+            toValue: 1,
+            duration: 220,
+            useNativeDriver: true,
+          }),
+          Animated.spring(slideAnim, {
+            toValue: 0,
+            damping: 24,
+            stiffness: 190,
+            mass: 0.9,
+            useNativeDriver: true,
+          }),
+        ]).start();
+      });
+    } else if (shouldRender) {
+      Animated.parallel([
+        Animated.timing(backdropAnim, {
+          toValue: 0,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: CALENDAR_SHEET_HEIGHT + 48,
+          duration: 260,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        setShouldRender(false);
+      });
     }
-  }, [visible, slideAnim]);
+  }, [visible, selectionMode, slideAnim, backdropAnim]);
+
+  useEffect(() => {
+    Animated.timing(checkInPillAnim, {
+      toValue: selectedCheckIn ? 1 : 0,
+      duration: selectedCheckIn ? 420 : 200,
+      useNativeDriver: true,
+    }).start();
+  }, [selectedCheckIn, checkInPillAnim]);
+
+  useEffect(() => {
+    Animated.timing(checkOutPillAnim, {
+      toValue: selectedCheckOut ? 1 : 0,
+      duration: selectedCheckOut ? 420 : 200,
+      useNativeDriver: true,
+    }).start();
+  }, [selectedCheckOut, checkOutPillAnim]);
+
+  useEffect(() => {
+    if (!visible || (!selectedCheckIn && !selectedCheckOut)) return;
+
+    selectedPulse.setValue(0.82);
+    Animated.spring(selectedPulse, {
+      toValue: 1,
+      friction: 6,
+      tension: 110,
+      useNativeDriver: true,
+    }).start();
+  }, [selectedCheckIn, selectedCheckOut, visible, selectedPulse]);
 
   const getDaysInMonth = (date) => {
     return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
@@ -75,11 +145,7 @@ export const BookingCalendar = ({
 
   const isDateSelected = (day) => {
     const dateStr = formatDate(day, currentDate.getMonth() + 1, currentDate.getFullYear());
-    const checkInDate = parseDate(selectedCheckIn);
-    const checkOutDate = parseDate(selectedCheckOut);
-    const currentDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
 
-    // Проверяем, является ли это дата check-in или check-out
     if (dateStr === selectedCheckIn || dateStr === selectedCheckOut) {
       return true;
     }
@@ -139,7 +205,7 @@ export const BookingCalendar = ({
     const daysInMonth = getDaysInMonth(currentDate);
     const firstDay = getFirstDayOfMonth(currentDate);
     const days = [];
-    const weekDays = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+    const weekDays = ['\u041f\u043d', '\u0412\u0442', '\u0421\u0440', '\u0427\u0442', '\u041f\u0442', '\u0421\u0431', '\u0412\u0441'];
 
     // Пустые клетки до первого дня месяца
     for (let i = 0; i < firstDay; i++) {
@@ -151,18 +217,21 @@ export const BookingCalendar = ({
       const isBooked = isDateBooked(day);
       const isSelected = isDateSelected(day);
       const isRange = isDateInRange(day);
-      const isFuture = new Date(currentDate.getFullYear(), currentDate.getMonth(), day) >= new Date();
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const isFuture = new Date(currentDate.getFullYear(), currentDate.getMonth(), day) >= today;
 
       days.push(
-        <TouchableOpacity
+        <AnimatedTouchableOpacity
           key={day}
           style={[
             styles.day,
-            { backgroundColor: themeColors.background },
-            isBooked && [styles.dayBooked, { backgroundColor: 'rgba(0, 0, 0, 0.2)' }],
-            isSelected && [styles.daySelected, { backgroundColor: themeColors.primary }],
-            isRange && !isSelected && { opacity: 0.4 },
+            { backgroundColor: themeColors.cardBg },
+            isRange && !isSelected && styles.dayRange,
+            isBooked && styles.dayBooked,
+            isSelected && styles.daySelected,
             !isFuture && styles.dayPast,
+            isSelected && { transform: [{ scale: selectedPulse }] },
           ]}
           onPress={() => handleDatePress(day)}
           disabled={isBooked || !isFuture}
@@ -171,13 +240,15 @@ export const BookingCalendar = ({
             style={[
               styles.dayText,
               { color: themeColors.text },
-              isBooked && { color: themeColors.textSecondary },
+              isRange && !isSelected && styles.dayRangeText,
+              isBooked && styles.dayBookedText,
+              !isFuture && styles.dayPastText,
               isSelected && styles.daySelectedText,
             ]}
           >
             {day}
           </Text>
-        </TouchableOpacity>
+        </AnimatedTouchableOpacity>
       );
     }
 
@@ -200,7 +271,7 @@ export const BookingCalendar = ({
       <View>
         <View style={styles.weekDaysRow}>
           {weekDays.map((day) => (
-            <Text key={day} style={[styles.weekDayText, { color: themeColors.primary }]}>
+            <Text key={day} style={styles.weekDayText}>
               {day}
             </Text>
           ))}
@@ -212,20 +283,26 @@ export const BookingCalendar = ({
     );
   };
 
+  if (!shouldRender) return null;
+
   return (
     <Modal
-      visible={visible}
+      visible={shouldRender}
       animationType="none"
       transparent={true}
       onRequestClose={onClose}
       presentationStyle="overFullScreen"
+      statusBarTranslucent
     >
       <View style={styles.backdrop}>
+        <Animated.View
+          pointerEvents="none"
+          style={[styles.backdropScrim, { opacity: backdropAnim }]}
+        />
         <Animated.View 
           style={[
             styles.container,
             {
-              backgroundColor: themeColors.background,
               transform: [
                 {
                   translateY: slideAnim,
@@ -234,14 +311,61 @@ export const BookingCalendar = ({
             },
           ]}
         >
-          <View style={[styles.header, { backgroundColor: themeColors.primary }]}>
-            <TouchableOpacity onPress={onClose}>
-              <MaterialIcons name="close" size={28} color="#fff" />
+          <View style={styles.handle} />
+          <View style={styles.header}>
+            <View style={styles.titleBlock}>
+              <Text style={styles.eyebrow}>
+                {selectingCheckOut ? '\u0428\u0430\u0433 2 \u0438\u0437 2' : '\u0428\u0430\u0433 1 \u0438\u0437 2'}
+              </Text>
+              <Text style={styles.title}>
+                {selectingCheckOut ? '\u0414\u0430\u0442\u0430 \u0432\u044b\u0435\u0437\u0434\u0430' : '\u0414\u0430\u0442\u0430 \u0437\u0430\u0435\u0437\u0434\u0430'}
+              </Text>
+            </View>
+            <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+              <MaterialIcons name="close" size={22} color={NAVY} />
             </TouchableOpacity>
-            <Text style={styles.title}>
-              {selectingCheckOut ? 'Выберите дату выезда' : 'Выберите дату заезда'}
-            </Text>
-            <View style={{ width: 28 }} />
+          </View>
+          <View style={styles.selectionStrip}>
+            <View style={[styles.selectionPill, selectedCheckIn && styles.selectionPillActive]}>
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.selectionPillFill,
+                  {
+                    opacity: checkInPillAnim,
+                  },
+                ]}
+              />
+              <MaterialIcons
+                name="login"
+                size={16}
+                color={selectedCheckIn ? '#fff' : NAVY}
+                style={styles.selectionPillIcon}
+              />
+              <Text style={[styles.selectionText, selectedCheckIn && styles.selectionTextActive]}>
+                {selectedCheckIn || '\u0417\u0430\u0435\u0437\u0434'}
+              </Text>
+            </View>
+            <View style={[styles.selectionPill, selectedCheckOut && styles.selectionPillActive]}>
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.selectionPillFill,
+                  {
+                    opacity: checkOutPillAnim,
+                  },
+                ]}
+              />
+              <MaterialIcons
+                name="logout"
+                size={16}
+                color={selectedCheckOut ? '#fff' : NAVY}
+                style={styles.selectionPillIcon}
+              />
+              <Text style={[styles.selectionText, selectedCheckOut && styles.selectionTextActive]}>
+                {selectedCheckOut || '\u0412\u044b\u0435\u0437\u0434'}
+              </Text>
+            </View>
           </View>
 
           {loading ? (
@@ -249,51 +373,44 @@ export const BookingCalendar = ({
               <ActivityIndicator size="large" color={themeColors.primary} />
             </View>
           ) : (
-            <ScrollView style={[styles.content, { backgroundColor: themeColors.background }]}>
+            <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
               <View style={styles.monthSelector}>
-                <TouchableOpacity onPress={goToPreviousMonth}>
-                  <MaterialIcons name="chevron-left" size={24} color={themeColors.primary} />
+                <TouchableOpacity style={styles.monthButton} onPress={goToPreviousMonth}>
+                  <MaterialIcons name="chevron-left" size={24} color={CORAL} />
                 </TouchableOpacity>
-                <Text style={[styles.monthText, { color: themeColors.text }]}>
+                <Text style={styles.monthText}>
                   {currentDate.toLocaleString('ru-RU', { month: 'long', year: 'numeric' })}
                 </Text>
-                <TouchableOpacity onPress={goToNextMonth}>
-                  <MaterialIcons name="chevron-right" size={24} color={themeColors.primary} />
+                <TouchableOpacity style={styles.monthButton} onPress={goToNextMonth}>
+                  <MaterialIcons name="chevron-right" size={24} color={CORAL} />
                 </TouchableOpacity>
               </View>
 
-              <View style={[styles.calendarContainer, { backgroundColor: themeColors.cardBg }]}>
+              <View style={styles.calendarContainer}>
                 {renderCalendar()}
               </View>
 
-              <View style={[styles.legend, { backgroundColor: themeColors.cardBg }]}>
+              <View style={styles.legend}>
                 <View style={styles.legendItem}>
-                  <View style={[styles.legendColor, { backgroundColor: themeColors.primary }]} />
-                  <Text style={[styles.legendText, { color: themeColors.text }]}>Выбранная дата</Text>
+                  <View style={[styles.legendColor, { backgroundColor: CORAL }]} />
+                  <Text style={styles.legendText}>{'\u0412\u044b\u0431\u0440\u0430\u043d\u043e'}</Text>
                 </View>
                 <View style={styles.legendItem}>
-                  <View
-                    style={[
-                      styles.legendColor,
-                      { backgroundColor: themeColors.primary + '40' },
-                    ]}
-                  />
-                  <Text style={[styles.legendText, { color: themeColors.text }]}>В диапазоне</Text>
+                  <View style={[styles.legendColor, { backgroundColor: `${TEAL}28` }]} />
+                  <Text style={styles.legendText}>{'\u0414\u0438\u0430\u043f\u0430\u0437\u043e\u043d'}</Text>
                 </View>
                 <View style={styles.legendItem}>
-                  <View
-                    style={[styles.legendColor, { backgroundColor: themeColors.textSecondary }]}
-                  />
-                  <Text style={[styles.legendText, { color: themeColors.text }]}>Зарезервировано</Text>
+                  <View style={[styles.legendColor, { backgroundColor: '#6B7280' }]} />
+                  <Text style={styles.legendText}>{'\u0417\u0430\u043d\u044f\u0442\u043e'}</Text>
                 </View>
               </View>
 
               {selectedCheckIn && (
-                <View style={[styles.selectedDates, { backgroundColor: themeColors.cardBg, borderLeftColor: themeColors.primary }]}>
-                  <Text style={[styles.selectedDatesLabel, { color: themeColors.textSecondary }]}>Выбранные даты:</Text>
-                  <Text style={[styles.selectedDatesValue, { color: themeColors.primary }]}>
+                <View style={styles.selectedDates}>
+                  <Text style={styles.selectedDatesLabel}>{'\u0412\u044b\u0431\u0440\u0430\u043d\u043d\u044b\u0435 \u0434\u0430\u0442\u044b'}</Text>
+                  <Text style={styles.selectedDatesValue}>
                     {selectedCheckIn}
-                    {selectedCheckOut && ` — ${selectedCheckOut}`}
+                    {selectedCheckOut && ` \u2014 ${selectedCheckOut}`}
                   </Text>
                 </View>
               )}
@@ -306,168 +423,48 @@ export const BookingCalendar = ({
 };
 
 const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
-    justifyContent: 'flex-end',
-  },
-  container: {
-    maxHeight: '90%',
-    flex: 1,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    overflow: 'hidden',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.lg,
-    borderBottomWidth: 0,
-    borderBottomColor: 'transparent',
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#fff',
-  },
-  loading: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  content: {
-    flex: 1,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.lg,
-  },
-  monthSelector: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.xl,
-    paddingHorizontal: spacing.sm,
-  },
-  monthText: {
-    fontSize: 20,
-    fontWeight: '700',
-    textTransform: 'capitalize',
-  },
-  calendarContainer: {
-    borderRadius: borderRadius.xl,
-    padding: spacing.lg,
-    marginBottom: spacing.lg,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  weekDaysRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-start',
-    marginBottom: spacing.md,
-    gap: spacing.xs,
-  },
-  weekDayText: {
-    fontSize: 12,
-    fontWeight: '700',
-    width: '14.28%', // 100% / 7 дней = 14.28%
-    textAlign: 'center',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-  },
-  weekRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-start',
-    marginBottom: spacing.md,
-    gap: spacing.xs,
-  },
-  day: {
-    flex: 1,
-    aspectRatio: 45.11 / 41.71,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: borderRadius.md,
-  },
-  dayEmpty: {
-    flex: 1,
-    backgroundColor: 'transparent',
-  },
-  dayPast: {
-    opacity: 0.3,
-  },
-  dayBooked: {
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
-  },
-  daySelected: {
-    shadowColor: '#FF6B35',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  dayRange: {
-    opacity: 0.4,
-  },
-  dayText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  dayBookedText: {
-    fontWeight: '600',
-  },
-  daySelectedText: {
-    color: '#fff',
-    fontWeight: '700',
-  },
-  legend: {
-    borderRadius: borderRadius.xl,
-    padding: spacing.lg,
-    marginBottom: spacing.lg,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.xs,
-  },
-  legendColor: {
-    width: 12,
-    height: 12,
-    borderRadius: 3,
-    marginRight: spacing.md,
-  },
-  legendText: {
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  selectedDates: {
-    borderRadius: borderRadius.xl,
-    padding: spacing.lg,
-    marginBottom: spacing.lg,
-    borderLeftWidth: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  selectedDatesLabel: {
-    fontSize: 12,
-    marginBottom: spacing.xs,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  selectedDatesValue: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
+  backdrop: { flex: 1, justifyContent: 'flex-end' },
+  backdropScrim: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(6, 18, 30, 0.44)' },
+  container: { height: CALENDAR_SHEET_HEIGHT, backgroundColor: '#F6F8FA', borderTopLeftRadius: 30, borderTopRightRadius: 30, overflow: 'hidden', shadowColor: NAVY, shadowOffset: { width: 0, height: -10 }, shadowOpacity: 0.18, shadowRadius: 22, elevation: 16 },
+  handle: { width: 46, height: 5, borderRadius: 3, backgroundColor: '#DDE3EA', alignSelf: 'center', marginTop: 10, marginBottom: 4 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 22, paddingTop: 8, paddingBottom: 14 },
+  titleBlock: { flex: 1, paddingRight: 14 },
+  eyebrow: { fontSize: 11, fontWeight: '900', color: CORAL, textTransform: 'uppercase', marginBottom: 4 },
+  title: { fontSize: 23, fontWeight: '900', color: NAVY },
+  closeButton: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E5EAF0' },
+  selectionStrip: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 22, marginBottom: 16, gap: 10 },
+  selectionPill: { flex: 1, minHeight: 46, borderRadius: 23, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#fff', borderWidth: 1, borderColor: '#E5EAF0', overflow: 'hidden' },
+  selectionPillFill: { ...StyleSheet.absoluteFillObject, backgroundColor: NAVY, borderRadius: 23 },
+  selectionPillIcon: { position: 'relative', zIndex: 2 },
+  selectionPillActive: { borderColor: NAVY, shadowColor: NAVY, shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.18, shadowRadius: 10, elevation: 4 },
+  selectionText: { position: 'relative', zIndex: 2, fontSize: 13, color: NAVY, fontWeight: '800' },
+  selectionTextActive: { color: '#fff' },
+  loading: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  content: { flex: 1 },
+  contentInner: { paddingHorizontal: 22, paddingBottom: 26 },
+  monthSelector: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, paddingHorizontal: 2 },
+  monthButton: { width: 42, height: 42, borderRadius: 16, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E5EAF0' },
+  monthText: { fontSize: 21, fontWeight: '900', color: '#1F2937', textTransform: 'capitalize' },
+  calendarContainer: { borderRadius: 24, padding: 12, marginBottom: 14, backgroundColor: '#fff', borderWidth: 1, borderColor: '#E5EAF0' },
+  weekDaysRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 9, gap: DAY_GAP },
+  weekDayText: { fontSize: 11, fontWeight: '900', width: DAY_SIZE, textAlign: 'center', textTransform: 'uppercase', color: CORAL },
+  weekRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 7, gap: DAY_GAP },
+  day: { width: DAY_SIZE, height: DAY_SIZE, justifyContent: 'center', alignItems: 'center', borderRadius: DAY_SIZE / 2, borderWidth: 1, borderColor: '#EEF2F6' },
+  dayEmpty: { width: DAY_SIZE, height: DAY_SIZE, backgroundColor: 'transparent', borderWidth: 0 },
+  dayPast: { backgroundColor: '#FAFBFC', borderColor: '#F3F4F6' },
+  dayBooked: { backgroundColor: '#6B7280', borderColor: '#6B7280' },
+  daySelected: { backgroundColor: CORAL, borderColor: CORAL, borderRadius: DAY_SIZE / 2, shadowColor: CORAL, shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.28, shadowRadius: 10, elevation: 5 },
+  dayRange: { backgroundColor: TEAL + '18', borderColor: TEAL + '34' },
+  dayText: { fontSize: 14, fontWeight: '800' },
+  dayBookedText: { color: '#fff', fontWeight: '900' },
+  dayPastText: { color: '#B8C0CA' },
+  dayRangeText: { color: TEAL },
+  daySelectedText: { color: '#fff', fontWeight: '900' },
+  legend: { flexDirection: 'row', justifyContent: 'space-between', gap: 8, marginBottom: 14 },
+  legendItem: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff', borderWidth: 1, borderColor: '#E5EAF0', borderRadius: 14, paddingVertical: 10, paddingHorizontal: 6 },
+  legendColor: { width: 9, height: 9, borderRadius: 3, marginRight: 6 },
+  legendText: { fontSize: 11, color: '#4B5563', fontWeight: '800' },
+  selectedDates: { borderRadius: 18, padding: 16, marginBottom: 14, backgroundColor: NAVY },
+  selectedDatesLabel: { fontSize: 11, color: 'rgba(255,255,255,0.66)', marginBottom: 5, fontWeight: '900', textTransform: 'uppercase' },
+  selectedDatesValue: { fontSize: 16, color: '#fff', fontWeight: '900' },
 });

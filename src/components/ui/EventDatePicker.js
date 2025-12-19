@@ -8,7 +8,6 @@ import {
   Modal,
   ActivityIndicator,
   Animated,
-  Dimensions,
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { colors, spacing, borderRadius } from '../../constants/theme';
@@ -24,7 +23,7 @@ export const EventDatePicker = ({
   onClose,
 }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [loading, setLoading] = useState(false);
+  const [loading] = useState(false);
   const slideAnim = useRef(new Animated.Value(1000)).current;
 
   useEffect(() => {
@@ -47,7 +46,7 @@ export const EventDatePicker = ({
     return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
   };
 
-  const getFirstDayOfMonth = (date) => {
+  const _getFirstDayOfMonth = (date) => {
     const day = new Date(date.getFullYear(), date.getMonth(), 1).getDay();
     return day === 0 ? 6 : day - 1;
   };
@@ -80,7 +79,7 @@ export const EventDatePicker = ({
     )}.${year}`;
   };
 
-  const parseDate = (dateString) => {
+  const _parseDate = (dateString) => {
     if (!dateString) return null;
     const [day, month, year] = dateString.split('.');
     return new Date(year, month - 1, day);

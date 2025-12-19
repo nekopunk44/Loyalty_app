@@ -6,7 +6,6 @@ import {
   FlatList,
   TouchableOpacity,
   ScrollView,
-  Platform,
   Modal,
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';

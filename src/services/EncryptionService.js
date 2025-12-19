@@ -1,30 +1,41 @@
 /**
  * Encryption Service
- * Шифрование чувствительных данных (пароли, платежи, токены и т.д.)
+ * Шифрование чувствительных данных для локального хранения на устройстве.
+ *
+ * ВАЖНО: Этот модуль предназначен только для защиты данных на устройстве
+ * (AsyncStorage, SecureStore). Пароли пользователей никогда не хешируются
+ * на клиенте — они передаются по HTTPS и хешируются bcrypt на сервере.
  */
 
 import CryptoJS from 'crypto-js';
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Генерируем или берем из environment переменных
 const SECRET_KEY = process.env.EXPO_PUBLIC_ENCRYPTION_KEY;
 
 if (!SECRET_KEY) {
-  console.warn('⚠️  EXPO_PUBLIC_ENCRYPTION_KEY переменная окружения не установлена. Используйте .env файл для безопасности!');
+  console.warn('⚠️  EXPO_PUBLIC_ENCRYPTION_KEY не установлена — локальное шифрование отключено');
 }
 
+// Генерирует криптографически случайный WordArray через crypto.getRandomValues()
+const _randomWordArray = (nBytes) => {
+  const buf = new Uint8Array(nBytes);
+  crypto.getRandomValues(buf);
+  return CryptoJS.lib.WordArray.create(buf);
+};
+
 /**
- * Симметричное шифрование (AES)
+ * Симметричное шифрование (AES-CBC с уникальным IV на каждый вызов).
+ * Формат хранения: "<iv_hex>:<ciphertext_base64>"
  */
 
 // Шифровать строку
 export const encryptString = (text) => {
   try {
     if (!text) return null;
-
-    const encrypted = CryptoJS.AES.encrypt(text.toString(), SECRET_KEY).toString();
-    return encrypted;
+    const iv = _randomWordArray(16); // 128-bit IV
+    const encrypted = CryptoJS.AES.encrypt(text.toString(), SECRET_KEY, { iv });
+    return `${iv.toString(CryptoJS.enc.Hex)}:${encrypted.toString()}`;
   } catch (error) {
     console.error('❌ Ошибка шифрования:', error);
     return null;
@@ -35,9 +46,11 @@ export const encryptString = (text) => {
 export const decryptString = (encryptedText) => {
   try {
     if (!encryptedText) return null;
-
-    const decrypted = CryptoJS.AES.decrypt(encryptedText, SECRET_KEY).toString(CryptoJS.enc.Utf8);
-    return decrypted;
+    const [ivHex, ciphertext] = encryptedText.split(':');
+    if (!ivHex || !ciphertext) return null;
+    const iv = CryptoJS.enc.Hex.parse(ivHex);
+    const decrypted = CryptoJS.AES.decrypt(ciphertext, SECRET_KEY, { iv });
+    return decrypted.toString(CryptoJS.enc.Utf8);
   } catch (error) {
     console.error('❌ Ошибка расшифровки:', error);
     return null;
@@ -68,31 +81,12 @@ export const decryptObject = (encryptedText) => {
 };
 
 /**
- * Хеширование (однонаправленное)
+ * Хеширование (однонаправленное).
+ * Пароли хешируются ТОЛЬКО на сервере через bcrypt — не используйте
+ * hashPassword/verifyPassword для аутентификации.
  */
 
-// Хешировать пароль
-export const hashPassword = (password) => {
-  try {
-    const hash = CryptoJS.SHA256(password).toString();
-    return hash;
-  } catch (error) {
-    console.error('❌ Ошибка хеширования пароля:', error);
-    return null;
-  }
-};
-
-// Проверить пароль
-export const verifyPassword = (password, hash) => {
-  try {
-    return hashPassword(password) === hash;
-  } catch (error) {
-    console.error('❌ Ошибка проверки пароля:', error);
-    return false;
-  }
-};
-
-// Хешировать данные (например, для идентификаторов)
+// SHA-256 хеш произвольной строки (для идентификаторов, не для паролей)
 export const hashData = (data, iterations = 1) => {
   try {
     let hash = data.toString();
@@ -105,6 +99,10 @@ export const hashData = (data, iterations = 1) => {
     return null;
   }
 };
+
+// Алиасы для обратной совместимости (не использовать для паролей пользователей)
+export const hashPassword = hashData;
+export const verifyPassword = (password, hash) => hashData(password) === hash;
 
 /**
  * Безопасное хранилище (SecureStore)
@@ -262,45 +260,42 @@ export const getPaymentDataSecurely = async (key) => {
 };
 
 /**
- * Генерация токенов и ключей
+ * Генерация токенов и ключей (криптографически стойкий PRNG).
  */
 
-// Генерировать случайный токен
+// Генерировать случайный токен (crypto.getRandomValues, не Math.random)
 export const generateToken = (length = 32) => {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let token = '';
-  for (let i = 0; i < length; i++) {
-    token += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return token;
+  const bytes = new Uint8Array(length);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => chars[b % chars.length]).join('');
 };
 
-// Генерировать UUID
+// Генерировать UUID v4
 export const generateUUID = () => {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-    const r = (Math.random() * 16) | 0,
-      v = c === 'x' ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
 };
 
 // Генерировать OTP (одноразовый пароль)
 export const generateOTP = (length = 6) => {
-  let otp = '';
-  for (let i = 0; i < length; i++) {
-    otp += Math.floor(Math.random() * 10).toString();
-  }
-  return otp;
+  const bytes = new Uint8Array(length);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => (b % 10).toString()).join('');
 };
 
 /**
  * Проверка целостности данных
  */
 
-// Генерировать контрольную сумму
+// Генерировать контрольную сумму (SHA-256 вместо MD5)
 export const generateChecksum = (data) => {
   try {
-    return CryptoJS.MD5(JSON.stringify(data)).toString();
+    return CryptoJS.SHA256(JSON.stringify(data)).toString();
   } catch (error) {
     console.error('❌ Ошибка генерации контрольной суммы:', error);
     return null;

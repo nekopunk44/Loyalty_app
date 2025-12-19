@@ -9,18 +9,33 @@ import {
   Modal,
   Animated,
   KeyboardAvoidingView,
+  Keyboard,
   Platform,
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
+import Svg, { Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { spacing, borderRadius } from '../../constants/theme';
+import { AMBER, LOGIN_THEME, NAVY, TEAL } from '../../constants/loginPalette';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
+import VJMonogram from '../../components/auth/VJMonogram';
 
-const NAVY = '#063B5C';
-const TEAL = '#14B8A6';
-const AMBER = '#F59E0B';
+function HeroGradientBackdrop({ palette, id }) {
+  return (
+    <Svg width="100%" height="100%" style={StyleSheet.absoluteFill} pointerEvents="none">
+      <Defs>
+        <LinearGradient id={`heroBase${id}`} x1="0" y1="0" x2="1" y2="1">
+          <Stop offset="0" stopColor={palette.gradient[0]} />
+          <Stop offset="0.58" stopColor={palette.gradient[1]} />
+          <Stop offset="1" stopColor={palette.gradient[2]} />
+        </LinearGradient>
+      </Defs>
+      <Rect x="0" y="0" width="100%" height="100%" fill={`url(#heroBase${id})`} />
+    </Svg>
+  );
+}
 
 export default function LoginScreen() {
   const [username, setUsername] = useState('');
@@ -42,16 +57,30 @@ export default function LoginScreen() {
   const topScale    = useRef(new Animated.Value(0.92)).current;
   const formY       = useRef(new Animated.Value(80)).current;
   const formOpacity = useRef(new Animated.Value(0)).current;
-
-  // Hero background pulse animations
-  const blob1 = useRef(new Animated.Value(1)).current;
-  const blob2 = useRef(new Animated.Value(1)).current;
-  const blob3 = useRef(new Animated.Value(1)).current;
+  const gradientShift = useRef(new Animated.Value(0)).current;
+  const usernameInputRef = useRef(null);
+  const passwordInputRef = useRef(null);
 
   const { login, error, requestPasswordReset, setNewPassword } = useAuth();
-  const { theme } = useTheme();
+  const { theme, isDark, toggleTheme } = useTheme();
   const colors = theme.colors;
-  const useNative = Platform.OS !== 'web';
+  const useNative = false;
+  const themePalette = isDark ? LOGIN_THEME.dark : LOGIN_THEME.light;
+  const themeAnim = useRef(new Animated.Value(isDark ? 1 : 0)).current;
+
+  const lightGradientOpacity = themeAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 0],
+  });
+  const darkGradientOpacity = themeAnim;
+  const gradientX = gradientShift.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-28, 28],
+  });
+  const gradientY = gradientShift.interpolate({
+    inputRange: [0, 1],
+    outputRange: [18, -18],
+  });
 
   useEffect(() => {
     // Entrance
@@ -67,19 +96,29 @@ export default function LoginScreen() {
       ]),
     ]).start();
 
-    // Background blob pulses
-    const pulse = (val, toVal, dur, delay = 0) =>
-      Animated.loop(
-        Animated.sequence([
-          Animated.delay(delay),
-          Animated.timing(val, { toValue: toVal, duration: dur, useNativeDriver: useNative }),
-          Animated.timing(val, { toValue: 1,     duration: dur, useNativeDriver: useNative }),
-        ])
-      );
-    pulse(blob1, 1.35, 3400).start();
-    pulse(blob2, 1.20, 2800, 1200).start();
-    pulse(blob3, 1.28, 3800, 2400).start();
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(gradientShift, {
+          toValue: 1,
+          duration: 9000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(gradientShift, {
+          toValue: 0,
+          duration: 9000,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
   }, []);
+
+  useEffect(() => {
+    Animated.timing(themeAnim, {
+      toValue: isDark ? 1 : 0,
+      duration: 320,
+      useNativeDriver: true,
+    }).start();
+  }, [isDark, themeAnim]);
 
   const handleForgotPassword = () => {
     setResetEmail(username);
@@ -138,6 +177,10 @@ export default function LoginScreen() {
   };
 
   const handleLogin = async () => {
+    usernameInputRef.current?.blur();
+    passwordInputRef.current?.blur();
+    Keyboard.dismiss();
+
     if (!username.trim()) {
       Alert.alert('Ошибка', 'Пожалуйста, введите email');
       return;
@@ -146,89 +189,106 @@ export default function LoginScreen() {
       Alert.alert('Ошибка', 'Пожалуйста, введите пароль');
       return;
     }
-    if (password.length < 6) {
-      Alert.alert('Ошибка', 'Пароль должен быть минимум 6 символов');
-      return;
-    }
-    if (username.includes('@') && !username.includes('.')) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(username.trim())) {
       Alert.alert('Ошибка', 'Введите корректный email');
       return;
     }
 
     setLoading(true);
-    const success = await login(username, password);
+    const result = await login(username, password);
     setLoading(false);
 
-    if (!success) {
+    if (!result?.success) {
       Alert.alert('Ошибка входа', error || 'Неверные учётные данные. Попробуйте ещё раз');
     }
   };
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { backgroundColor: themePalette.rootBg }]}>
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.gradientPlane,
+          {
+            opacity: lightGradientOpacity,
+            transform: [{ translateX: gradientX }, { translateY: gradientY }],
+          },
+        ]}
+      >
+        <HeroGradientBackdrop palette={LOGIN_THEME.light} id="Light" />
+      </Animated.View>
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.gradientPlane,
+          {
+            opacity: darkGradientOpacity,
+            transform: [{ translateX: gradientX }, { translateY: gradientY }],
+          },
+        ]}
+      >
+        <HeroGradientBackdrop palette={LOGIN_THEME.dark} id="Dark" />
+      </Animated.View>
+
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.flex}
       >
         {/* ── Top navy hero ── */}
         <Animated.View style={[
           styles.topSection,
+          { backgroundColor: 'transparent' },
           { opacity: topOpacity, transform: [{ scale: topScale }] },
         ]}>
-          {/* Animated background blobs */}
-          <Animated.View style={[styles.blob1, { transform: [{ scale: blob1 }] }]} />
-          <Animated.View style={[styles.blob2, { transform: [{ scale: blob2 }] }]} />
-          <Animated.View style={[styles.blob3, { transform: [{ scale: blob3 }] }]} />
-
-          {/* Decorative arcs */}
-          <View style={styles.decArc1} />
-          <View style={styles.decArc2} />
-          <View style={styles.decArc3} />
-
           {/* Logo */}
-          <View style={styles.logoWrap}>
-            <View style={styles.logoFrame}>
-              <View style={styles.logoBox}>
-                <Text style={styles.logoMonogram}>VJ</Text>
-                <View style={styles.logoLine} />
-              </View>
-            </View>
-            <View style={styles.logoBadge} />
-          </View>
+          <TouchableOpacity style={styles.logoWrap} onPress={toggleTheme} activeOpacity={0.82}>
+            <VJMonogram
+              size={128}
+              mainColor={isDark ? '#FFFFFF' : NAVY}
+              accentColor={AMBER}
+              animate
+            />
+          </TouchableOpacity>
 
           {/* App name */}
-          <Text style={styles.appName}>Villa Jaconda</Text>
+          <Text style={[styles.appName, { color: themePalette.brandText }]}>Villa Jaconda</Text>
           <View style={styles.pillRow}>
-            <View style={styles.pill} />
-            <Text style={styles.appSubtitle}>Программа лояльности</Text>
-            <View style={styles.pill} />
+            <View style={[styles.pill, { backgroundColor: themePalette.line }]} />
+            <Text style={[styles.appSubtitle, { color: themePalette.secondaryText }]}>Программа лояльности</Text>
+            <View style={[styles.pill, { backgroundColor: themePalette.line }]} />
           </View>
         </Animated.View>
 
         {/* ── Form card ── */}
         <Animated.View style={[
           styles.formCard,
-          { backgroundColor: colors.cardBg, opacity: formOpacity, transform: [{ translateY: formY }] },
+          { backgroundColor: themePalette.cardBg },
+          { opacity: formOpacity, transform: [{ translateY: formY }] },
         ]}>
+          <View
+            pointerEvents="none"
+            style={[styles.formBottomFill, { backgroundColor: themePalette.cardBg }]}
+          />
           <ScrollView
             bounces={false}
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={styles.formContent}
             showsVerticalScrollIndicator={false}
           >
-            <Text style={[styles.welcomeTitle, { color: NAVY }]}>Добро пожаловать</Text>
-            <Text style={[styles.welcomeSub, { color: colors.textSecondary }]}>
+            <Text style={[styles.welcomeTitle, { color: themePalette.brandText }]}>Добро пожаловать</Text>
+            <Text style={[styles.welcomeSub, { color: themePalette.secondaryText }]}>
               Войдите в аккаунт, чтобы продолжить
             </Text>
 
             {/* Email */}
             <View style={styles.fieldGroup}>
-              <Text style={[styles.fieldLabel, { color: colors.text }]}>Email</Text>
-              <View style={[styles.inputRow, { borderColor: colors.border, backgroundColor: colors.background }]}>
+              <Text style={[styles.fieldLabel, { color: themePalette.text }]}>Email</Text>
+              <View style={[styles.inputRow, { backgroundColor: themePalette.inputBg, borderColor: themePalette.inputBorder }]}>
                 <View style={[styles.inputIconBox, { backgroundColor: `${NAVY}12` }]}>
                   <MaterialIcons name="email" size={18} color={NAVY} />
                 </View>
                 <TextInput
+                  ref={usernameInputRef}
                   style={[styles.input, { color: colors.text }]}
                   placeholder="Введите email"
                   placeholderTextColor={colors.textSecondary}
@@ -238,18 +298,20 @@ export default function LoginScreen() {
                   autoCapitalize="none"
                   keyboardType="email-address"
                   returnKeyType="next"
+                  onSubmitEditing={() => passwordInputRef.current?.focus()}
                 />
               </View>
             </View>
 
             {/* Password */}
             <View style={styles.fieldGroup}>
-              <Text style={[styles.fieldLabel, { color: colors.text }]}>Пароль</Text>
-              <View style={[styles.inputRow, { borderColor: colors.border, backgroundColor: colors.background }]}>
+              <Text style={[styles.fieldLabel, { color: themePalette.text }]}>Пароль</Text>
+              <View style={[styles.inputRow, { backgroundColor: themePalette.inputBg, borderColor: themePalette.inputBorder }]}>
                 <View style={[styles.inputIconBox, { backgroundColor: `${NAVY}12` }]}>
                   <MaterialIcons name="lock" size={18} color={NAVY} />
                 </View>
                 <TextInput
+                  ref={passwordInputRef}
                   style={[styles.input, { color: colors.text }]}
                   placeholder="Введите пароль"
                   placeholderTextColor={colors.textSecondary}
@@ -297,7 +359,7 @@ export default function LoginScreen() {
               onPress={handleForgotPassword}
               activeOpacity={0.7}
             >
-              <Text style={[styles.forgotText, { color: NAVY }]}>Забыли пароль?</Text>
+              <Text style={[styles.forgotText, { color: themePalette.linkText }]}>Забыли пароль?</Text>
             </TouchableOpacity>
 
             {loading && (
@@ -312,7 +374,7 @@ export default function LoginScreen() {
             {/* Bottom label */}
             <View style={styles.footerHint}>
               <MaterialIcons name="lock" size={13} color={colors.textSecondary} />
-              <Text style={[styles.footerHintText, { color: colors.textSecondary }]}>
+              <Text style={[styles.footerHintText, { color: themePalette.secondaryText }]}>
                 Доступ только для зарегистрированных участников
               </Text>
             </View>
@@ -466,6 +528,14 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: NAVY,
+    overflow: 'hidden',
+  },
+  gradientPlane: {
+    position: 'absolute',
+    top: '-12%',
+    left: '-12%',
+    width: '124%',
+    height: '124%',
   },
   flex: {
     flex: 1,
@@ -480,106 +550,10 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     paddingBottom: 16,
   },
-  blob1: {
-    position: 'absolute',
-    width: 180,
-    height: 180,
-    borderRadius: 90,
-    backgroundColor: `${TEAL}1A`,
-    top: -50,
-    left: -40,
-  },
-  blob2: {
-    position: 'absolute',
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    backgroundColor: `${AMBER}14`,
-    bottom: 0,
-    right: -30,
-  },
-  blob3: {
-    position: 'absolute',
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: 'rgba(255,107,53,0.10)',
-    top: '30%',
-    right: '20%',
-  },
-  decArc1: {
-    position: 'absolute',
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    borderWidth: 1,
-    borderColor: `${TEAL}30`,
-    top: -80,
-    left: -60,
-  },
-  decArc2: {
-    position: 'absolute',
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    borderWidth: 1,
-    borderColor: `${AMBER}25`,
-    bottom: -30,
-    right: -40,
-  },
-  decArc3: {
-    position: 'absolute',
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    backgroundColor: `${TEAL}12`,
-    top: 20,
-    right: 30,
-  },
-
   // Logo
   logoWrap: {
     position: 'relative',
     marginBottom: spacing.lg,
-  },
-  logoFrame: {
-    width: 96,
-    height: 96,
-    borderRadius: 24,
-    borderWidth: 1.5,
-    borderColor: `${TEAL}55`,
-    padding: 6,
-  },
-  logoBox: {
-    flex: 1,
-    borderRadius: 18,
-    backgroundColor: `${TEAL}18`,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoMonogram: {
-    fontSize: 34,
-    fontWeight: '900',
-    color: '#fff',
-    letterSpacing: 4,
-  },
-  logoLine: {
-    width: 36,
-    height: 3,
-    borderRadius: 2,
-    backgroundColor: AMBER,
-    marginTop: 5,
-  },
-  logoBadge: {
-    position: 'absolute',
-    bottom: -1,
-    right: -1,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: AMBER,
-    borderWidth: 2,
-    borderColor: NAVY,
   },
 
   appName: {
@@ -617,6 +591,13 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.12,
     shadowRadius: 12,
     elevation: 12,
+  },
+  formBottomFill: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: -160,
+    height: 160,
   },
   formContent: {
     paddingHorizontal: 28,

@@ -5,7 +5,6 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-import { spacing, borderRadius } from '../../constants/theme';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import NotificationCenter from './NotificationCenter';
@@ -21,10 +20,10 @@ const CONTACT_KEY  = '@loyalty_contact_v1';
 
 const DEFAULT_RULES = {
   levels: [
-    { name: 'Bronze',   range: '0 – 10 000 PRB',       bonus: '+0% кешбек',   color: '#CD7F32', icon: 'military-tech' },
-    { name: 'Silver',   range: '10 000 – 50 000 PRB',  bonus: '+0.5% кешбек', color: '#94A3B8', icon: 'workspace-premium' },
-    { name: 'Gold',     range: '50 000 – 200 000 PRB', bonus: '+1% кешбек',   color: '#F59E0B', icon: 'star' },
-    { name: 'Platinum', range: '200 000+ PRB',          bonus: '+2% кешбек',   color: '#8B5CF6', icon: 'diamond' },
+    { name: 'Bronze',   range: '0 – 10 000 PRB',       bonus: '10% кешбек', color: '#CD7F32', icon: 'military-tech' },
+    { name: 'Silver',   range: '10 000 – 50 000 PRB',  bonus: '20% кешбек', color: '#94A3B8', icon: 'workspace-premium' },
+    { name: 'Gold',     range: '50 000 – 200 000 PRB', bonus: '30% кешбек', color: '#F59E0B', icon: 'star' },
+    { name: 'Platinum', range: '200 000+ PRB',          bonus: '40% кешбек', color: '#8B5CF6', icon: 'diamond' },
   ],
   rules: [
     { text: 'Каждая покупка даёт 1% кешбека',                             icon: 'percent',        color: '#10B981' },
@@ -40,7 +39,7 @@ const DEFAULT_RULES = {
 const DEFAULT_CONTACT = {
   instagram: 'villajaconda',
   email:     'support@villajaconda.ru',
-  phone:     '+7 000 000-00-00',
+  phone:     null, // задаётся администратором через интерфейс настроек
 };
 
 const LEVELS = {
@@ -48,6 +47,35 @@ const LEVELS = {
   silver:   { label: 'Silver',   color: '#A0A0A0', next: 50000  },
   gold:     { label: 'Gold',     color: '#F59E0B', next: 200000 },
   platinum: { label: 'Platinum', color: '#8B5CF6', next: null   },
+};
+
+const SETTINGS_THEME = {
+  light: {
+    screenBg: '#F3F6F5',
+    heroBg: '#FFFFFF',
+    heroText: NAVY,
+    heroSub: 'rgba(6,59,92,0.62)',
+    heroTrack: 'rgba(6,59,92,0.14)',
+    avatarBg: '#E9F6F3',
+    badgeBg: 'rgba(255,107,53,0.12)',
+    camBorder: '#FFFFFF',
+    cardBg: '#FFFFFF',
+    border: '#E2E8F0',
+    surfaceTint: '#F8FAFC',
+  },
+  dark: {
+    screenBg: '#07111F',
+    heroBg: '#0B1F33',
+    heroText: '#FFFFFF',
+    heroSub: 'rgba(255,255,255,0.58)',
+    heroTrack: 'rgba(255,255,255,0.15)',
+    avatarBg: 'rgba(20,184,166,0.14)',
+    badgeBg: 'rgba(255,107,53,0.18)',
+    camBorder: '#0B1F33',
+    cardBg: '#111C2D',
+    border: '#23344C',
+    surfaceTint: '#0F172A',
+  },
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -117,13 +145,13 @@ function SectionLabel({ label, colors }) {
   return <Text style={[styles.sectionLabel, { color: colors?.textSecondary || '#94A3B8' }]}>{label}</Text>;
 }
 
-function SettingCard({ animVal, children, cardBg }) {
+function SettingCard({ animVal, children, cardBg, borderColor }) {
   const slideStyle = {
     opacity: animVal,
     transform: [{ translateY: animVal.interpolate({ inputRange: [0, 1], outputRange: [28, 0] }) }],
   };
   return (
-    <Animated.View style={[styles.card, { backgroundColor: cardBg || '#fff' }, slideStyle]}>
+    <Animated.View style={[styles.card, { backgroundColor: cardBg || '#fff', borderColor: borderColor || 'rgba(148,163,184,0.18)' }, slideStyle]}>
       {children}
     </Animated.View>
   );
@@ -156,6 +184,7 @@ export default function SettingsScreen() {
   const { isDark, toggleTheme, theme } = useTheme();
   const colors = theme.colors;
   const useNative = Platform.OS !== 'web';
+  const settingsPalette = isDark ? SETTINGS_THEME.dark : SETTINGS_THEME.light;
 
   // Entrance animations
   const heroAnim    = useRef(new Animated.Value(0)).current;
@@ -166,8 +195,6 @@ export default function SettingsScreen() {
   const sec4Anim    = useRef(new Animated.Value(0)).current;
   const sec5Anim    = useRef(new Animated.Value(0)).current;
   const btnAnim     = useRef(new Animated.Value(0)).current;
-  const blob1       = useRef(new Animated.Value(1)).current;
-  const blob2       = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     AsyncStorage.getItem(AVATAR_KEY)
@@ -193,15 +220,6 @@ export default function SettingsScreen() {
       Animated.spring(sec5Anim, { toValue: 1, tension: 65, friction: 9, useNativeDriver: useNative }),
       Animated.spring(btnAnim,  { toValue: 1, tension: 65, friction: 9, useNativeDriver: useNative }),
     ]).start();
-
-    const pulse = (val, to, dur, delay = 0) =>
-      Animated.loop(Animated.sequence([
-        Animated.delay(delay),
-        Animated.timing(val, { toValue: to, duration: dur, useNativeDriver: useNative }),
-        Animated.timing(val, { toValue: 1,  duration: dur, useNativeDriver: useNative }),
-      ]));
-    pulse(blob1, 1.4, 3200).start();
-    pulse(blob2, 1.25, 2700, 1400).start();
   }, []);
 
   const accentColor = isAdmin ? TEAL : CORAL;
@@ -306,32 +324,105 @@ export default function SettingsScreen() {
   };
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+    <View style={[styles.root, { backgroundColor: settingsPalette.screenBg }]}>
+      <ScrollView
+        contentContainerStyle={[styles.scroll, { backgroundColor: settingsPalette.screenBg }]}
+        showsVerticalScrollIndicator={false}
+      >
+        <Animated.View style={[styles.profilePanel, { opacity: heroAnim, backgroundColor: settingsPalette.heroBg, borderColor: settingsPalette.border }]}>
+          <View style={[styles.profileAccentBar, { backgroundColor: accentColor }]} />
+          <View style={styles.profileHead}>
+            <Animated.View style={[styles.profileAvatarOuter, { transform: [{ scale: avatarScale }] }]}>
+              <TouchableOpacity
+                style={[styles.profileAvatar, { borderColor: isDark ? `${TEAL}55` : 'rgba(6,59,92,0.16)' }]}
+                onPress={handlePickAvatar}
+                activeOpacity={0.85}
+              >
+                {avatarUri
+                  ? <Image source={{ uri: avatarUri }} style={styles.profileAvatarImage} />
+                  : (
+                    <View style={[styles.profileAvatarInner, { backgroundColor: settingsPalette.avatarBg }]}>
+                      <Text style={[styles.profileInitials, { color: settingsPalette.heroText }]}>{userInitials}</Text>
+                    </View>
+                  )
+                }
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.profileCamera, { backgroundColor: accentColor, borderColor: settingsPalette.camBorder }]}
+                onPress={handlePickAvatar}
+                activeOpacity={0.85}
+              >
+                <MaterialIcons name={avatarLoading ? 'hourglass-top' : 'photo-camera'} size={12} color="#fff" />
+              </TouchableOpacity>
+            </Animated.View>
+
+            <View style={styles.profileTextBlock}>
+              <Text style={[styles.profileEyebrow, { color: settingsPalette.heroSub }]}>VILLA JACONDA</Text>
+              <Text style={[styles.profileName, { color: settingsPalette.heroText }]} numberOfLines={1}>
+                {user?.name || user?.displayName || 'Пользователь'}
+              </Text>
+              <Text style={[styles.profileEmail, { color: settingsPalette.heroSub }]} numberOfLines={1}>
+                {user?.email || ''}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.profileChipsRow}>
+            <View style={[styles.profileStatusChip, { backgroundColor: isAdmin ? `${TEAL}16` : `${levelInfo.color}16`, borderColor: `${isAdmin ? TEAL : levelInfo.color}3D` }]}>
+              <MaterialIcons name={isAdmin ? 'admin-panel-settings' : 'workspace-premium'} size={15} color={isAdmin ? TEAL : levelInfo.color} />
+              <Text style={[styles.profileStatusText, { color: isAdmin ? TEAL : levelInfo.color }]}>
+                {isAdmin ? 'Администратор' : `${levelInfo.label} участник`}
+              </Text>
+            </View>
+
+            {!isAdmin && (
+              <View style={[styles.profileBalanceChip, { backgroundColor: settingsPalette.surfaceTint, borderColor: settingsPalette.border }]}>
+                <Text style={[styles.profileBalanceLabel, { color: settingsPalette.heroSub }]}>Баланс</Text>
+                <Text style={[styles.profileBalanceValue, { color: settingsPalette.heroText }]}>
+                  {balance.toLocaleString('ru-RU')} PRB
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {!isAdmin && (
+            <View style={[styles.profileProgressBox, { backgroundColor: settingsPalette.surfaceTint, borderColor: settingsPalette.border }]}>
+              <View style={styles.profileProgressTop}>
+                <Text style={[styles.profileProgressTitle, { color: settingsPalette.heroText }]}>Прогресс уровня</Text>
+                <Text style={[styles.profileProgressPercent, { color: levelInfo.color }]}>{levelProgress}%</Text>
+              </View>
+              <View style={[styles.profileProgressTrack, { backgroundColor: settingsPalette.heroTrack }]}>
+                <View style={[styles.profileProgressFill, { width: `${levelProgress}%`, backgroundColor: levelInfo.color }]} />
+              </View>
+              {nextLevelName && levelInfo.next && (
+                <Text style={[styles.profileProgressNext, { color: settingsPalette.heroSub }]}>
+                  до {nextLevelName}: {(levelInfo.next - balance).toLocaleString('ru-RU')} PRB
+                </Text>
+              )}
+            </View>
+          )}
+        </Animated.View>
 
         {/* ── Hero ── */}
-        <Animated.View style={[styles.hero, { opacity: heroAnim }]}>
-          <Animated.View style={[styles.blob1, { transform: [{ scale: blob1 }] }]} />
-          <Animated.View style={[styles.blob2, { transform: [{ scale: blob2 }] }]} />
-          <View style={styles.decArc} />
+        <Animated.View style={[styles.hero, { opacity: heroAnim, backgroundColor: settingsPalette.heroBg, borderColor: settingsPalette.border }]}>
 
           <Animated.View style={[styles.avatarOuter, { transform: [{ scale: avatarScale }] }]}>
             <TouchableOpacity
-              style={[styles.avatarRing, { borderColor: `${TEAL}60` }]}
+              style={[styles.avatarRing, { borderColor: isDark ? `${TEAL}60` : 'rgba(6,59,92,0.28)' }]}
               onPress={handlePickAvatar}
               activeOpacity={0.85}
             >
               {avatarUri
                 ? <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
                 : (
-                  <View style={[styles.avatarInner, { backgroundColor: `${TEAL}22` }]}>
-                    <Text style={styles.avatarInitials}>{userInitials}</Text>
+                  <View style={[styles.avatarInner, { backgroundColor: settingsPalette.avatarBg }]}>
+                    <Text style={[styles.avatarInitials, { color: settingsPalette.heroText }]}>{userInitials}</Text>
                   </View>
                 )
               }
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.avatarCamBtn, { backgroundColor: accentColor }]}
+              style={[styles.avatarCamBtn, { backgroundColor: accentColor, borderColor: settingsPalette.camBorder }]}
               onPress={handlePickAvatar}
             >
               <MaterialIcons
@@ -342,10 +433,10 @@ export default function SettingsScreen() {
             </TouchableOpacity>
           </Animated.View>
 
-          <Text style={styles.heroName}>{user?.name || user?.displayName || 'Пользователь'}</Text>
+          <Text style={[styles.heroName, { color: settingsPalette.heroText }]}>{user?.name || user?.displayName || 'Пользователь'}</Text>
 
           <View style={[styles.heroBadge, {
-            backgroundColor: `${isAdmin ? NAVY : CORAL}22`,
+            backgroundColor: isAdmin ? `${NAVY}22` : settingsPalette.badgeBg,
             borderColor: `${isAdmin ? NAVY : CORAL}55`,
           }]}>
             <MaterialIcons
@@ -358,20 +449,20 @@ export default function SettingsScreen() {
             </Text>
           </View>
 
-          <Text style={styles.heroEmail}>{user?.email || ''}</Text>
+          <Text style={[styles.heroEmail, { color: settingsPalette.heroSub }]}>{user?.email || ''}</Text>
 
           {!isAdmin && (
-            <View style={styles.levelMini}>
+            <View style={[styles.levelMini, { backgroundColor: settingsPalette.surfaceTint, borderColor: settingsPalette.border }]}>
               <View style={styles.levelMiniRow}>
                 <View style={[styles.levelDot, { backgroundColor: levelInfo.color }]} />
-                <Text style={styles.levelMiniLabel}>{levelInfo.label}</Text>
-                <Text style={styles.levelMiniBalance}>{balance.toLocaleString('ru-RU')} PRB</Text>
+                <Text style={[styles.levelMiniLabel, { color: settingsPalette.heroText }]}>{levelInfo.label}</Text>
+                <Text style={[styles.levelMiniBalance, { color: settingsPalette.heroSub }]}>{balance.toLocaleString('ru-RU')} PRB</Text>
               </View>
-              <View style={styles.levelTrack}>
+              <View style={[styles.levelTrack, { backgroundColor: settingsPalette.heroTrack }]}>
                 <View style={[styles.levelFill, { width: `${levelProgress}%`, backgroundColor: levelInfo.color }]} />
               </View>
               {nextLevelName && levelInfo.next && (
-                <Text style={styles.levelMiniNext}>
+                <Text style={[styles.levelMiniNext, { color: settingsPalette.heroSub }]}>
                   до {nextLevelName}: {(levelInfo.next - balance).toLocaleString('ru-RU')} PRB
                 </Text>
               )}
@@ -381,7 +472,7 @@ export default function SettingsScreen() {
 
         {/* ── Notifications ── */}
         <SectionLabel label="УВЕДОМЛЕНИЯ" colors={colors} />
-        <SettingCard animVal={sec1Anim} cardBg={colors.cardBg}>
+        <SettingCard animVal={sec1Anim} cardBg={settingsPalette.cardBg} borderColor={settingsPalette.border}>
           <SettingRow
             icon="notifications-active"
             iconBg={AMBER}
@@ -411,7 +502,7 @@ export default function SettingsScreen() {
 
         {/* ── Appearance ── */}
         <SectionLabel label="ОФОРМЛЕНИЕ" colors={colors} />
-        <SettingCard animVal={sec2Anim} cardBg={colors.cardBg}>
+        <SettingCard animVal={sec2Anim} cardBg={settingsPalette.cardBg} borderColor={settingsPalette.border}>
           <SettingRow
             icon={isDark ? 'brightness-4' : 'brightness-7'}
             iconBg="#6366F1"
@@ -434,7 +525,7 @@ export default function SettingsScreen() {
         {!isAdmin && (
           <>
             <SectionLabel label="ПРОГРАММА ЛОЯЛЬНОСТИ" colors={colors} />
-            <SettingCard animVal={sec3Anim} cardBg={colors.cardBg}>
+            <SettingCard animVal={sec3Anim} cardBg={settingsPalette.cardBg} borderColor={settingsPalette.border}>
               <SettingRow
                 icon="book"
                 iconBg="#10B981"
@@ -465,7 +556,7 @@ export default function SettingsScreen() {
         {isAdmin && (
           <>
             <SectionLabel label="ПЛАТФОРМА" colors={colors} />
-            <SettingCard animVal={sec3Anim} cardBg={colors.cardBg}>
+            <SettingCard animVal={sec3Anim} cardBg={settingsPalette.cardBg} borderColor={settingsPalette.border}>
               <SettingRow
                 icon="info"
                 iconBg="#3B82F6"
@@ -491,7 +582,7 @@ export default function SettingsScreen() {
 
         {/* ── Account ── */}
         <SectionLabel label="АККАУНТ" colors={colors} />
-        <SettingCard animVal={sec4Anim} cardBg={colors.cardBg}>
+        <SettingCard animVal={sec4Anim} cardBg={settingsPalette.cardBg} borderColor={settingsPalette.border}>
           <SettingRow
             icon="person"
             iconBg={NAVY}
@@ -515,7 +606,7 @@ export default function SettingsScreen() {
 
         {/* ── Help ── */}
         <SectionLabel label="ПОМОЩЬ" colors={colors} />
-        <SettingCard animVal={sec5Anim} cardBg={colors.cardBg}>
+        <SettingCard animVal={sec5Anim} cardBg={settingsPalette.cardBg} borderColor={settingsPalette.border}>
           <SettingRow
             icon="help"
             iconBg="#8B5CF6"
@@ -886,7 +977,7 @@ function ContactSheet({ colors, data, isEditing, onSave, onCancel }) {
       value: data.email,
       onPress: () => open(`mailto:${data.email}`),
     },
-    {
+    data.phone && {
       key: 'phone',
       label: data.phone,
       icon: 'phone',
@@ -894,7 +985,7 @@ function ContactSheet({ colors, data, isEditing, onSave, onCancel }) {
       value: data.phone,
       onPress: () => open(`tel:${data.phone.replace(/\s|-/g, '')}`),
     },
-  ];
+  ].filter(Boolean);
 
   if (isEditing) {
     return (
@@ -959,55 +1050,166 @@ function ContactSheet({ colors, data, isEditing, onSave, onCancel }) {
 
 const styles = StyleSheet.create({
   root:   { flex: 1 },
-  scroll: { paddingBottom: 40 },
+  scroll: { paddingTop: 14, paddingBottom: 118 },
+
+  // Profile card
+  profilePanel: {
+    marginHorizontal: 16,
+    marginTop: 4,
+    borderRadius: 26,
+    borderWidth: 1,
+    padding: 18,
+    shadowColor: NAVY,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.08,
+    shadowRadius: 20,
+    elevation: 4,
+    overflow: 'hidden',
+  },
+  profileAccentBar: {
+    position: 'absolute',
+    left: 0,
+    top: 18,
+    bottom: 18,
+    width: 4,
+    borderTopRightRadius: 4,
+    borderBottomRightRadius: 4,
+  },
+  profileHead: { flexDirection: 'row', alignItems: 'center' },
+  profileAvatarOuter: { position: 'relative', flexShrink: 0 },
+  profileAvatar: { width: 68, height: 68, borderRadius: 22, borderWidth: 1, padding: 4, overflow: 'hidden' },
+  profileAvatarInner: { flex: 1, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  profileAvatarImage: { width: '100%', height: '100%', borderRadius: 18 },
+  profileInitials: { fontSize: 24, fontWeight: '900', letterSpacing: 1 },
+  profileCamera: {
+    position: 'absolute',
+    right: -4,
+    bottom: -4,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: CORAL,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.22,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  profileTextBlock: { flex: 1, minWidth: 0, marginLeft: 14 },
+  profileEyebrow: { fontSize: 10, fontWeight: '900', letterSpacing: 1.8, marginBottom: 5 },
+  profileName: { fontSize: 22, fontWeight: '900', marginBottom: 4 },
+  profileEmail: { fontSize: 13, fontWeight: '600' },
+  profileChipsRow: { flexDirection: 'row', alignItems: 'stretch', gap: 10, marginTop: 16 },
+  profileStatusChip: {
+    flex: 1,
+    minHeight: 50,
+    borderRadius: 16,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  profileStatusText: { flex: 1, fontSize: 12, fontWeight: '900' },
+  profileBalanceChip: {
+    minWidth: 112,
+    borderRadius: 16,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    justifyContent: 'center',
+  },
+  profileBalanceLabel: { fontSize: 10, fontWeight: '800', marginBottom: 2 },
+  profileBalanceValue: { fontSize: 13, fontWeight: '900' },
+  profileProgressBox: {
+    marginTop: 12,
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 13,
+  },
+  profileProgressTop: { flexDirection: 'row', alignItems: 'center', marginBottom: 9 },
+  profileProgressTitle: { flex: 1, fontSize: 13, fontWeight: '900' },
+  profileProgressPercent: { fontSize: 13, fontWeight: '900' },
+  profileProgressTrack: { height: 7, borderRadius: 999, overflow: 'hidden' },
+  profileProgressFill: { height: '100%', borderRadius: 999 },
+  profileProgressNext: { marginTop: 8, fontSize: 11, fontWeight: '700', textAlign: 'right' },
 
   // Hero
-  hero: { backgroundColor: NAVY, alignItems: 'center', paddingTop: 28, paddingBottom: 28, overflow: 'hidden' },
-  blob1: { position: 'absolute', width: 200, height: 200, borderRadius: 100, backgroundColor: `${TEAL}18`, top: -60, left: -60 },
-  blob2: { position: 'absolute', width: 160, height: 160, borderRadius: 80,  backgroundColor: `${AMBER}12`, bottom: -40, right: -40 },
-  decArc: { position: 'absolute', width: 260, height: 260, borderRadius: 130, borderWidth: 1, borderColor: `${TEAL}25`, top: -100, right: -80 },
-
-  // Avatar
-  avatarOuter: { position: 'relative', marginBottom: 12 },
-  avatarRing: { width: 90, height: 90, borderRadius: 45, borderWidth: 2, padding: 4, overflow: 'hidden' },
-  avatarInner: { flex: 1, borderRadius: 40, alignItems: 'center', justifyContent: 'center' },
-  avatarImage: { width: '100%', height: '100%', borderRadius: 40 },
-  avatarInitials: { fontSize: 28, fontWeight: '900', color: '#fff', letterSpacing: 2 },
-  avatarCamBtn: {
-    position: 'absolute', bottom: 0, right: 0,
-    width: 26, height: 26, borderRadius: 13,
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 2, borderColor: NAVY,
+  hero: {
+    display: 'none',
+    marginHorizontal: 16,
+    marginTop: 4,
+    borderRadius: 26,
+    borderWidth: 1,
+    alignItems: 'center',
+    paddingTop: 22,
+    paddingBottom: 20,
+    paddingHorizontal: 18,
+    shadowColor: NAVY,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.08,
+    shadowRadius: 18,
+    elevation: 4,
   },
 
-  heroName:      { fontSize: 20, fontWeight: '900', color: '#fff', marginBottom: 6 },
-  heroBadge:     { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12, borderWidth: 1, marginBottom: 5 },
-  heroBadgeText: { fontSize: 11, fontWeight: '700' },
-  heroEmail:     { fontSize: 12, color: 'rgba(255,255,255,0.55)', fontWeight: '500', marginBottom: 12 },
+  // Avatar
+  avatarOuter: { position: 'relative', marginBottom: 14 },
+  avatarRing: { width: 78, height: 78, borderRadius: 24, borderWidth: 1, padding: 4, overflow: 'hidden' },
+  avatarInner: { flex: 1, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  avatarImage: { width: '100%', height: '100%', borderRadius: 20 },
+  avatarInitials: { fontSize: 25, fontWeight: '900', color: '#fff', letterSpacing: 1 },
+  avatarCamBtn: {
+    position: 'absolute', bottom: -3, right: -3,
+    width: 28, height: 28, borderRadius: 14,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 2, borderColor: NAVY,
+    shadowColor: CORAL,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.22,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+
+  heroName:      { fontSize: 22, fontWeight: '900', color: '#fff', marginBottom: 8 },
+  heroBadge:     { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 13, paddingVertical: 7, borderRadius: 999, borderWidth: 1, marginBottom: 8 },
+  heroBadgeText: { fontSize: 12, fontWeight: '800' },
+  heroEmail:     { fontSize: 13, color: 'rgba(255,255,255,0.55)', fontWeight: '600', marginBottom: 14 },
 
   // Level mini-bar
-  levelMini:        { width: '80%', marginTop: 4 },
-  levelMiniRow:     { flexDirection: 'row', alignItems: 'center', marginBottom: 6, gap: 6 },
+  levelMini:        { width: '100%', marginTop: 4, borderRadius: 18, padding: 13, borderWidth: 1, borderColor: 'rgba(148,163,184,0.18)', backgroundColor: 'rgba(148,163,184,0.07)' },
+  levelMiniRow:     { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 7 },
   levelDot:         { width: 8, height: 8, borderRadius: 4 },
-  levelMiniLabel:   { fontSize: 11, fontWeight: '800', color: '#fff', flex: 1 },
-  levelMiniBalance: { fontSize: 11, color: 'rgba(255,255,255,0.7)', fontWeight: '600' },
-  levelTrack:       { height: 4, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 2, overflow: 'hidden' },
-  levelFill:        { height: '100%', borderRadius: 2 },
-  levelMiniNext:    { fontSize: 10, color: 'rgba(255,255,255,0.45)', marginTop: 4, textAlign: 'right' },
+  levelMiniLabel:   { fontSize: 12, fontWeight: '900', color: '#fff', flex: 1 },
+  levelMiniBalance: { fontSize: 12, color: 'rgba(255,255,255,0.7)', fontWeight: '800' },
+  levelTrack:       { height: 6, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 999, overflow: 'hidden' },
+  levelFill:        { height: '100%', borderRadius: 999 },
+  levelMiniNext:    { fontSize: 11, color: 'rgba(255,255,255,0.45)', marginTop: 8, textAlign: 'right', fontWeight: '700' },
 
   // Section labels
-  sectionLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1.2, marginHorizontal: 18, marginTop: 18, marginBottom: 6 },
+  sectionLabel: { fontSize: 10, fontWeight: '900', letterSpacing: 1.4, marginHorizontal: 20, marginTop: 24, marginBottom: 8 },
 
   // Cards
-  card: { marginHorizontal: 16, borderRadius: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 6, elevation: 3, overflow: 'hidden' },
+  card: {
+    marginHorizontal: 16,
+    borderRadius: 22,
+    borderWidth: 1,
+    shadowColor: NAVY,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.06,
+    shadowRadius: 16,
+    elevation: 3,
+    overflow: 'hidden',
+  },
 
   // Rows
-  row:        { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 13, borderBottomWidth: StyleSheet.hairlineWidth },
+  row:        { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 15, borderBottomWidth: StyleSheet.hairlineWidth },
   rowLast:    { borderBottomWidth: 0 },
-  rowIconBox: { width: 38, height: 38, borderRadius: 11, alignItems: 'center', justifyContent: 'center', marginRight: 14 },
+  rowIconBox: { width: 44, height: 44, borderRadius: 15, alignItems: 'center', justifyContent: 'center', marginRight: 14 },
   rowText:    { flex: 1 },
-  rowTitle:   { fontSize: 15, fontWeight: '600' },
-  rowDesc:    { fontSize: 12, marginTop: 1 },
+  rowTitle:   { fontSize: 15, fontWeight: '800' },
+  rowDesc:    { fontSize: 12, marginTop: 3, lineHeight: 17 },
 
   // Toggle
   toggleTrack: { width: 50, height: 28, borderRadius: 14, padding: 2 },
@@ -1019,11 +1221,11 @@ const styles = StyleSheet.create({
   },
 
   // Logout
-  logoutWrap: { marginHorizontal: 16, marginTop: 24, alignItems: 'center' },
+  logoutWrap: { marginHorizontal: 16, marginTop: 26, marginBottom: 12, alignItems: 'center' },
   logoutBtn:  {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    backgroundColor: '#EF4444', paddingVertical: 15, borderRadius: 16, width: '100%',
-    shadowColor: '#EF4444', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 5,
+    backgroundColor: '#EF4444', paddingVertical: 15, borderRadius: 18, width: '100%',
+    shadowColor: '#EF4444', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.24, shadowRadius: 12, elevation: 4,
   },
   logoutText:  { color: '#fff', fontSize: 16, fontWeight: '800' },
   versionText: { fontSize: 11, marginTop: 14 },

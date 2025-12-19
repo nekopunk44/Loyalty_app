@@ -1,11 +1,11 @@
 import React from 'react';
-import { View, StyleSheet, Platform } from 'react-native';
+import { View, Platform } from 'react-native';
 
 /**
  * Cross-platform LinearGradient wrapper
  * Uses CSS gradients on web, solid color fallback on native
  */
-export const GradientView = ({ colors, start, end, style, children }) => {
+export const GradientView = ({ colors, start: _start, end: _end, style, children }) => {
   // For web, convert gradient colors to CSS gradient
   const gradientString = `linear-gradient(135deg, ${colors.join(', ')})`;
   

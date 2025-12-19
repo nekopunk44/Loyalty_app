@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_ENDPOINTS, apiCall } from '../utils/api';
 import { useAuth } from './AuthContext';
 

@@ -27,7 +27,7 @@ export default function PropertyReviewsScreen({ route, navigation }) {
   const { propertyId, propertyName } = route.params;
   const { theme } = useTheme();
   const colors = theme.colors;
-  const { reviews, loading, getPropertyReviews, createReview, updateReview, deleteReview, markAsHelpful, getReviewStats } = useReview();
+  const { reviews, loading, getPropertyReviews, createReview: _createReview, updateReview, deleteReview, markAsHelpful, getReviewStats: _getReviewStats } = useReview();
   const { user } = useAuth();
 
   const [refreshing, setRefreshing] = useState(false);

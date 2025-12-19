@@ -1,5 +1,5 @@
 // Утилита для получения стиля события по его типу
-export const getEventStyleByType = (eventType, colors) => {
+export const getEventStyleByType = (eventType, _colors) => {
   const eventStyles = {
     auction: {
       icon: 'gavel',
