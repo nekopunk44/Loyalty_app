@@ -294,25 +294,21 @@ const connectDB = async () => {
 // ==================== Routes ====================
 
 app.get('/health', async (req, res) => {
+  let dbStatus = 'disconnected';
   try {
     await sequelize.authenticate();
-    res.status(200).json({
-      status:    'ok',
-      ready:     true,
-      uptime:    Math.floor(process.uptime()),
-      database:  'connected',
-      env:       NODE_ENV,
-      timestamp: new Date().toISOString(),
-    });
+    dbStatus = 'connected';
   } catch {
-    res.status(503).json({
-      status:    'error',
-      ready:     false,
-      database:  'disconnected',
-      env:       NODE_ENV,
-      timestamp: new Date().toISOString(),
-    });
+    // DB not ready yet — server still alive
   }
+  res.status(200).json({
+    status:    dbStatus === 'connected' ? 'ok' : 'starting',
+    ready:     dbStatus === 'connected',
+    uptime:    Math.floor(process.uptime()),
+    database:  dbStatus,
+    env:       NODE_ENV,
+    timestamp: new Date().toISOString(),
+  });
 });
 
 app.use('/api/auth',          require('./routes/auth')({ authLimiter, authSlowDown, sendPasswordResetEmail, isDbConnected: () => dbConnected }));
