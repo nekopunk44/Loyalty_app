@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import * as Notifications from 'expo-notifications';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
+import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from './AuthContext';
 import { apiCall } from '../utils/api';
@@ -7,35 +7,99 @@ import { getApiUrl } from '../utils/apiUrl';
 
 const NotificationContext = createContext();
 
-// Настройка уведомлений
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
+// expo-notifications крашит Expo Go в SDK 53+ при самом импорте,
+// поэтому загружаем модуль только в development build / production
+const IS_EXPO_GO = Constants.appOwnership === 'expo';
+const Notifications = IS_EXPO_GO ? null : require('expo-notifications');
+
+if (Notifications) {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+    }),
+  });
+}
 
 export const NotificationProvider = ({ children }) => {
-  const { user } = useAuth();
+  const { user, authToken } = useAuth();
   const [notifications, setNotifications] = useState([]);
   const [isEnabled, setIsEnabled] = useState(true);
   const [expoPushToken, setExpoPushToken] = useState(null);
   const notificationListener = useRef();
   const responseListener = useRef();
+  const sseRef = useRef(null);
+  const sseReconnectTimer = useRef(null);
+
+  // SSE-соединение для получения уведомлений в реальном времени
+  const connectSSE = useCallback((userId, token) => {
+    if (!userId || !token) return;
+
+    // XMLHttpRequest доступен нативно в React Native
+    const xhr = new XMLHttpRequest();
+    sseRef.current = xhr;
+    let processed = 0;
+
+    xhr.open('GET', `${getApiUrl()}/notifications/${userId}/stream`, true);
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    xhr.setRequestHeader('Accept', 'text/event-stream');
+
+    xhr.onreadystatechange = () => {
+      if (xhr.readyState < 3) return;
+
+      const chunk = xhr.responseText.slice(processed);
+      processed = xhr.responseText.length;
+
+      const blocks = chunk.split('\n\n');
+      for (const block of blocks) {
+        const lines = block.trim().split('\n');
+        const eventLine = lines.find(l => l.startsWith('event:'));
+        const dataLine  = lines.find(l => l.startsWith('data:'));
+        if (!dataLine) continue;
+        const eventType = eventLine ? eventLine.slice(6).trim() : 'message';
+        if (eventType !== 'notification') continue;
+        try {
+          const notification = JSON.parse(dataLine.slice(5).trim());
+          setNotifications(prev => [notification, ...prev]);
+        } catch (_) { /* ignore malformed event */ }
+      }
+
+      // Автопереподключение при закрытии
+      if (xhr.readyState === 4 && sseRef.current === xhr) {
+        sseReconnectTimer.current = setTimeout(() => connectSSE(userId, token), 5000);
+      }
+    };
+
+    xhr.onerror = () => {
+      if (sseRef.current === xhr) {
+        sseReconnectTimer.current = setTimeout(() => connectSSE(userId, token), 5000);
+      }
+    };
+
+    xhr.send();
+  }, []);
 
   // Инициализация уведомлений
   useEffect(() => {
     setupNotifications();
 
     return () => {
-      if (notificationListener.current) {
+      // Отключаем SSE при размонтировании / смене пользователя
+      if (sseRef.current) {
+        sseRef.current.abort();
+        sseRef.current = null;
+      }
+      clearTimeout(sseReconnectTimer.current);
+
+      if (Notifications && notificationListener.current) {
         Notifications.removeNotificationSubscription(notificationListener.current);
       }
-      if (responseListener.current) {
+      if (Notifications && responseListener.current) {
         Notifications.removeNotificationSubscription(responseListener.current);
       }
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
   const setupNotifications = async () => {
@@ -60,8 +124,11 @@ export const NotificationProvider = ({ children }) => {
         }
       }
 
-      // На web push notifications требует VAPID key, поэтому пропускаем
-      if (typeof window !== 'undefined') return;
+      // Подключаем SSE для получения уведомлений в реальном времени
+      connectSSE(user.id, authToken);
+
+      // На web и Expo Go push notifications недоступны
+      if (typeof window !== 'undefined' || IS_EXPO_GO) return;
 
       // Запрос разрешения на уведомления
       try {
@@ -75,27 +142,29 @@ export const NotificationProvider = ({ children }) => {
         // Push permission is optional
       }
 
-      // Слушать входящие уведомления
-      notificationListener.current = Notifications.addNotificationReceivedListener(
-        notification => {
-          const newNotification = {
-            id: notification.request.identifier,
-            title: notification.request.content.title,
-            body: notification.request.content.body,
-            data: notification.request.content.data,
-            timestamp: new Date().toISOString(),
-            read: false,
-          };
-          setNotifications(prev => [newNotification, ...prev]);
-        }
-      );
+      {
+        // Слушать входящие уведомления
+        notificationListener.current = Notifications.addNotificationReceivedListener(
+          notification => {
+            const newNotification = {
+              id: notification.request.identifier,
+              title: notification.request.content.title,
+              body: notification.request.content.body,
+              data: notification.request.content.data,
+              timestamp: new Date().toISOString(),
+              read: false,
+            };
+            setNotifications(prev => [newNotification, ...prev]);
+          }
+        );
 
-      // Слушать нажатия на уведомления
-      responseListener.current = Notifications.addNotificationResponseReceivedListener(
-        _response => {
-          // Здесь можно добавить навигацию
-        }
-      );
+        // Слушать нажатия на уведомления
+        responseListener.current = Notifications.addNotificationResponseReceivedListener(
+          _response => {
+            // Здесь можно добавить навигацию
+          }
+        );
+      }
     } catch (error) {
       console.error('Ошибка инициализации уведомлений:', error);
     }
@@ -103,6 +172,7 @@ export const NotificationProvider = ({ children }) => {
 
   // Отправить уведомление
   const sendNotification = async (title, body, data = {}) => {
+    if (!Notifications) return;
     try {
       await Notifications.scheduleNotificationAsync({
         content: {
@@ -121,6 +191,7 @@ export const NotificationProvider = ({ children }) => {
 
   // Запланировать уведомление
   const scheduleNotification = async (title, body, seconds = 60, data = {}) => {
+    if (!Notifications) return;
     try {
       const notificationId = await Notifications.scheduleNotificationAsync({
         content: {
