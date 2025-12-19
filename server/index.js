@@ -379,7 +379,7 @@ app.use((err, req, res, next) => {
 
 const listenWithRetry = (retries = 10) => {
   return new Promise((resolve, reject) => {
-    const server = app.listen(PORT, '0.0.0.0', () => {
+    const server = app.listen(PORT, () => {
       // Protect against Slowloris: close idle keep-alive connections after 65s,
       // and abort headers-only connections (no body yet) after 10s.
       server.keepAliveTimeout = 65_000;
