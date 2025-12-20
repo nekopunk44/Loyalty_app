@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, TextInput, Alert, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, TextInput, Alert, Image, ActivityIndicator } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { spacing, borderRadius } from '../../constants/theme';
@@ -26,7 +27,7 @@ export default function ProfileScreen() {
   const { trackEvent } = useAnalytics();
 
   const [avatarModalVisible, setAvatarModalVisible] = useState(false);
-  const [newAvatarUrl, setNewAvatarUrl] = useState('');
+  const [avatarUploading, setAvatarUploading] = useState(false);
 
   // Load balance
   useEffect(() => {
@@ -93,18 +94,41 @@ export default function ProfileScreen() {
     }
   };
 
-  const handleSaveAvatar = async () => {
-    const url = newAvatarUrl.trim();
-    if (!url) {
-      Alert.alert('Ошибка', 'Введите URL изображения');
-      return;
-    }
+  const pickAvatarFromSource = async (useCamera) => {
     try {
-      await updateProfile({ avatar: url });
-      setAvatarModalVisible(false);
-      setNewAvatarUrl('');
+      const permResult = useCamera
+        ? await ImagePicker.requestCameraPermissionsAsync()
+        : await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+      if (permResult.status !== 'granted') {
+        Alert.alert('Нет доступа', useCamera ? 'Разрешите доступ к камере' : 'Разрешите доступ к галерее');
+        return;
+      }
+
+      const result = useCamera
+        ? await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.5, base64: true })
+        : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [1, 1], quality: 0.5, base64: true });
+
+      if (result.canceled) return;
+
+      const asset = result.assets[0];
+      if (!asset.base64) {
+        Alert.alert('Ошибка', 'Не удалось получить изображение');
+        return;
+      }
+
+      setAvatarUploading(true);
+      try {
+        const dataUrl = `data:image/jpeg;base64,${asset.base64}`;
+        await updateProfile({ avatar: dataUrl });
+        setAvatarModalVisible(false);
+      } catch (e) {
+        Alert.alert('Ошибка', 'Не удалось обновить аватар');
+      } finally {
+        setAvatarUploading(false);
+      }
     } catch (e) {
-      Alert.alert('Ошибка', 'Не удалось обновить аватар');
+      Alert.alert('Ошибка', 'Не удалось открыть выбор изображения');
     }
   };
 
@@ -120,7 +144,7 @@ export default function ProfileScreen() {
       {/* Аватар и данные пользователя */}
       <View style={[styles.userInfoSection, { backgroundColor: theme.colors.cardBg }]}>
         <View style={styles.avatarRow}>
-          <TouchableOpacity onPress={() => { setNewAvatarUrl(user?.avatar || ''); setAvatarModalVisible(true); }} activeOpacity={0.8}>
+          <TouchableOpacity onPress={() => setAvatarModalVisible(true)} activeOpacity={0.8}>
             <View style={styles.avatarWrapper}>
               {user?.avatar ? (
                 <Image source={{ uri: user.avatar }} style={styles.avatarImage} />
@@ -359,30 +383,32 @@ export default function ProfileScreen() {
         <View style={styles.avatarModalOverlay}>
           <View style={[styles.modalContainer, { backgroundColor: theme.colors.cardBg }]}>
             <Text style={[styles.avatarModalTitle, { color: theme.colors.text }]}>Изменить фото профиля</Text>
-            <Text style={[styles.modalSubtitle, { color: theme.colors.textSecondary }]}>Введите URL изображения</Text>
-            <TextInput
-              style={[styles.modalInput, { borderColor: theme.colors.border, color: theme.colors.text, backgroundColor: theme.colors.background }]}
-              placeholder="https://example.com/photo.jpg"
-              placeholderTextColor={theme.colors.textSecondary}
-              value={newAvatarUrl}
-              onChangeText={setNewAvatarUrl}
-              autoCapitalize="none"
-              keyboardType="url"
-            />
-            <View style={styles.avatarModalButtons}>
-              <TouchableOpacity
-                style={[styles.modalCancelBtn, { borderColor: theme.colors.border }]}
-                onPress={() => setAvatarModalVisible(false)}
-              >
-                <Text style={[styles.modalCancelText, { color: theme.colors.textSecondary }]}>Отмена</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalSaveBtn, { backgroundColor: theme.colors.primary }]}
-                onPress={handleSaveAvatar}
-              >
-                <Text style={styles.modalSaveText}>Сохранить</Text>
-              </TouchableOpacity>
-            </View>
+            {avatarUploading ? (
+              <ActivityIndicator size="large" color={theme.colors.primary} style={{ marginVertical: 24 }} />
+            ) : (
+              <View style={styles.avatarPickerButtons}>
+                <TouchableOpacity
+                  style={[styles.avatarPickerBtn, { backgroundColor: theme.colors.primary }]}
+                  onPress={() => pickAvatarFromSource(false)}
+                >
+                  <MaterialIcons name="photo-library" size={24} color="#fff" />
+                  <Text style={styles.avatarPickerBtnText}>Галерея</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.avatarPickerBtn, { backgroundColor: theme.colors.accent || '#10B981' }]}
+                  onPress={() => pickAvatarFromSource(true)}
+                >
+                  <MaterialIcons name="camera-alt" size={24} color="#fff" />
+                  <Text style={styles.avatarPickerBtnText}>Камера</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+            <TouchableOpacity
+              style={[styles.modalCancelBtn, { borderColor: theme.colors.border, marginTop: 8 }]}
+              onPress={() => setAvatarModalVisible(false)}
+            >
+              <Text style={[styles.modalCancelText, { color: theme.colors.textSecondary }]}>Отмена</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -785,20 +811,24 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: spacing.xs,
   },
-  modalSubtitle: {
-    fontSize: 13,
-    marginBottom: spacing.md,
-  },
-  modalInput: {
-    borderWidth: 1,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    fontSize: 14,
-    marginBottom: spacing.lg,
-  },
-  avatarModalButtons: {
+  avatarPickerButtons: {
     flexDirection: 'row',
+    gap: spacing.md,
+    marginVertical: spacing.lg,
+  },
+  avatarPickerBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: spacing.sm,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+  },
+  avatarPickerBtnText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
   modalCancelBtn: {
     flex: 1,
