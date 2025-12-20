@@ -14,7 +14,8 @@
 const express = require('express');
 
 const logger = require('../logger');
-const { Notification } = require('../models');
+const { Notification, User } = require('../models');
+const { sendExpoPush } = require('../utils/expoPush');
 const { verifyToken, requireOwnerOrAdmin } = require('../middleware/auth');
 const { parsePagination } = require('../utils/pagination');
 
@@ -102,6 +103,30 @@ module.exports = function createNotificationsRouter({ isDbConnected }) {
   });
 
   /**
+   * POST /:userId/push-token — сохранить Expo Push Token пользователя.
+   */
+  router.post('/:userId/push-token', verifyToken, requireOwnerOrAdmin, async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const { pushToken } = req.body;
+
+      if (!pushToken) {
+        return res.status(400).json({ success: false, error: 'pushToken is required' });
+      }
+
+      if (!isDbConnected()) {
+        return res.status(503).json({ success: false, error: 'База данных не подключена' });
+      }
+
+      await User.update({ pushToken }, { where: { id: userId } });
+      return res.status(200).json({ success: true });
+    } catch (error) {
+      logger.error('push-token save error', { error: error.message });
+      return res.status(500).json({ success: false, error: 'Ошибка при сохранении push-токена' });
+    }
+  });
+
+  /**
    * POST /:userId — создать уведомление.
    */
   router.post('/:userId', verifyToken, requireOwnerOrAdmin, async (req, res) => {
@@ -123,8 +148,14 @@ module.exports = function createNotificationsRouter({ isDbConnected }) {
         read: false,
       });
 
-      // Пушим в открытые SSE-соединения этого пользователя
+      // SSE для онлайн-клиентов
       pushNotificationToUser(userId, notification);
+
+      // Expo Push для офлайн-устройств
+      const user = await User.findByPk(userId, { attributes: ['pushToken'] });
+      if (user?.pushToken) {
+        sendExpoPush(user.pushToken, title, message, data || {}).catch(() => {});
+      }
 
       return res.status(201).json({ success: true, notification });
     } catch (error) {
