@@ -20,6 +20,10 @@ jest.mock('../models', () => ({
     create:   jest.fn(),
     destroy:  jest.fn(),
   },
+  User: {
+    findByPk: jest.fn().mockResolvedValue(null),
+    update:   jest.fn().mockResolvedValue([1]),
+  },
 }));
 
 jest.mock('../models/User', () => ({ findOne: jest.fn() }));
