@@ -7,7 +7,6 @@ import { GradientView } from '../../components/ui/GradientView';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useBookings } from '../../context/BookingContext';
-import { useReferral } from '../../context/ReferralContext';
 import { useAnalytics } from '../../context/AnalyticsContext';
 
 const BALANCE_KEY = '@loyalty_balance';
@@ -15,18 +14,15 @@ const BALANCE_KEY = '@loyalty_balance';
 export default function ProfileScreen() {
   const [balance, setBalance] = useState(0);
   const [tier, setTier] = useState('Bronze');
-  const [activeTab, setActiveTab] = useState('profile'); // profile, bookings, referral
+  const [activeTab, setActiveTab] = useState('profile');
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [rating, setRating] = useState(0);
   const [reviewText, setReviewText] = useState('');
-  const [showReferralModal, setShowReferralModal] = useState(false);
-  const [friendName, setFriendName] = useState('');
 
   const { theme } = useTheme();
   const { user, updateProfile } = useAuth();
   const { bookings, addBooking: _addBooking, updateBookingReview } = useBookings();
-  const { referralCode, referredFriends, bonusEarned, addReferredFriend, completeFriendReferral: _completeFriendReferral } = useReferral();
   const { trackEvent } = useAnalytics();
 
   const [avatarModalVisible, setAvatarModalVisible] = useState(false);
@@ -115,21 +111,6 @@ export default function ProfileScreen() {
   const getInitials = () => {
     const name = user?.displayName || user?.name || '';
     return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || '?';
-  };
-
-  const addFriend = async () => {
-    if (!friendName.trim()) {
-      Alert.alert('Ошибка', 'Введите имя друга');
-      return;
-    }
-    try {
-      await addReferredFriend(friendName);
-      setFriendName('');
-      setShowReferralModal(false);
-      Alert.alert('Успешно', `${friendName} приглашена! Вы получите 500 бонусов, когда она совершит первое бронирование.`);
-    } catch (e) {
-      Alert.alert('Ошибка', 'Не удалось добавить друга');
-    }
   };
 
   // Profile Tab Content
@@ -296,69 +277,6 @@ export default function ProfileScreen() {
     </ScrollView>
   );
 
-  // Referral Tab Content
-  const ReferralContent = () => (
-    <ScrollView contentContainerStyle={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Реферальная программа</Text>
-      
-      {/* Referral Code Card */}
-      <View style={[styles.referralCard, { backgroundColor: theme.colors.cardBg }]}>
-        <Text style={[styles.referralCardTitle, { color: theme.colors.text }]}>Ваш код приглашения</Text>
-        <View style={[styles.codeBox, { backgroundColor: theme.colors.background }]}>
-          <Text style={[styles.codeText, { color: theme.colors.primary }]}>{referralCode}</Text>
-          <TouchableOpacity
-            onPress={() => {
-              Alert.alert('Скопировано', 'Код скопирован в буфер обмена');
-            }}
-          >
-            <MaterialIcons name="content-copy" size={20} color={theme.colors.primary} />
-          </TouchableOpacity>
-        </View>
-        <Text style={[styles.referralInfo, { color: theme.colors.textSecondary }]}>
-          Поделитесь этим кодом с друзьями и получите 500 бонусов за каждого приглашённого гостя!
-        </Text>
-      </View>
-
-      {/* Bonus Info */}
-      <View style={[styles.bonusCard, { backgroundColor: theme.colors.primary }]}>
-        <MaterialIcons name="card-giftcard" size={28} color="#fff" />
-        <View style={{ marginLeft: spacing.md }}>
-          <Text style={styles.bonusAmount}>{bonusEarned} PRB</Text>
-          <Text style={styles.bonusLabel}>Бонусов заработано</Text>
-        </View>
-      </View>
-
-      {/* Referred Friends */}
-      <Text style={[styles.friendsTitle, { color: theme.colors.text }]}>Приглашённые друзья</Text>
-      {referredFriends.length === 0 ? (
-        <View style={[styles.emptyState, { backgroundColor: theme.colors.cardBg }]}>
-          <MaterialIcons name="people-outline" size={40} color={theme.colors.textSecondary} />
-          <Text style={[styles.emptyStateText, { color: theme.colors.textSecondary }]}>Вы ещё никого не пригласили</Text>
-        </View>
-      ) : (
-        referredFriends.map(friend => (
-          <View key={friend.id} style={[styles.friendCard, { backgroundColor: theme.colors.cardBg, borderColor: theme.colors.border }]}>
-            <View style={styles.friendInfo}>
-              <Text style={[styles.friendName, { color: theme.colors.text }]}>{friend.name}</Text>
-              <Text style={[styles.friendBonus, { color: theme.colors.success }]}>+{friend.bonus} PRB</Text>
-            </View>
-            <View style={[styles.statusBadge, { backgroundColor: friend.status === 'completed' ? theme.colors.success : theme.colors.textSecondary }]}>
-              <Text style={styles.statusText}>{friend.status === 'completed' ? '✓' : 'Ожидание'}</Text>
-            </View>
-          </View>
-        ))
-      )}
-
-      <TouchableOpacity
-        style={[styles.addFriendButton, { backgroundColor: theme.colors.primary }]}
-        onPress={() => setShowReferralModal(true)}
-      >
-        <MaterialIcons name="person-add" size={20} color="#fff" />
-        <Text style={styles.addFriendButtonText}>Добавить друга</Text>
-      </TouchableOpacity>
-    </ScrollView>
-  );
-
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
       {/* Tab Navigation */}
@@ -377,19 +295,11 @@ export default function ProfileScreen() {
           <MaterialIcons name="calendar-today" size={20} color={activeTab === 'bookings' ? theme.colors.primary : theme.colors.textSecondary} />
           <Text style={[styles.tabText, { color: activeTab === 'bookings' ? theme.colors.primary : theme.colors.textSecondary }]}>Бронирования</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'referral' && [styles.activeTab, { borderBottomColor: theme.colors.primary }]]}
-          onPress={() => setActiveTab('referral')}
-        >
-          <MaterialIcons name="people" size={20} color={activeTab === 'referral' ? theme.colors.primary : theme.colors.textSecondary} />
-          <Text style={[styles.tabText, { color: activeTab === 'referral' ? theme.colors.primary : theme.colors.textSecondary }]}>Рефералы</Text>
-        </TouchableOpacity>
       </View>
 
       {/* Content */}
       {activeTab === 'profile' && <ProfileContent />}
       {activeTab === 'bookings' && <BookingsContent />}
-      {activeTab === 'referral' && <ReferralContent />}
 
       {/* Review Modal */}
       <Modal visible={showReviewModal} transparent animationType="slide">
@@ -438,44 +348,6 @@ export default function ProfileScreen() {
                 onPress={submitReview}
               >
                 <Text style={styles.submitButtonText}>Отправить</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Referral Modal */}
-      <Modal visible={showReferralModal} transparent animationType="slide">
-        <View style={[styles.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
-          <View style={[styles.modalContent, { backgroundColor: theme.colors.cardBg }]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Пригласить друга</Text>
-              <TouchableOpacity onPress={() => setShowReferralModal(false)}>
-                <MaterialIcons name="close" size={24} color={theme.colors.text} />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={[styles.referralInputLabel, { color: theme.colors.text }]}>Имя друга</Text>
-            <TextInput
-              style={[styles.referralInput, { backgroundColor: theme.colors.background, color: theme.colors.text, borderColor: theme.colors.border }]}
-              placeholder="Введите имя друга..."
-              placeholderTextColor={theme.colors.textSecondary}
-              value={friendName}
-              onChangeText={setFriendName}
-            />
-
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.cancelButton, { borderColor: theme.colors.border }]}
-                onPress={() => setShowReferralModal(false)}
-              >
-                <Text style={[styles.cancelButtonText, { color: theme.colors.text }]}>Отмена</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.submitButton, { backgroundColor: theme.colors.primary }]}
-                onPress={addFriend}
-              >
-                <Text style={styles.submitButtonText}>Пригласить</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -767,100 +639,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: spacing.md,
   },
-  referralCard: {
-    padding: spacing.lg,
-    borderRadius: borderRadius.lg,
-    marginBottom: spacing.lg,
-  },
-  referralCardTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: spacing.md,
-  },
-  codeBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    marginBottom: spacing.md,
-  },
-  codeText: {
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 2,
-  },
-  referralInfo: {
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  bonusCard: {
-    flexDirection: 'row',
-    padding: spacing.lg,
-    borderRadius: borderRadius.lg,
-    marginBottom: spacing.lg,
-    alignItems: 'center',
-  },
-  bonusAmount: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#fff',
-  },
-  bonusLabel: {
-    fontSize: 12,
-    color: '#fff',
-    marginTop: spacing.xs,
-  },
-  friendsTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: spacing.md,
-  },
-  friendCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: spacing.md,
-    borderRadius: borderRadius.lg,
-    marginBottom: spacing.md,
-    borderWidth: 1,
-  },
-  friendInfo: {
-    flex: 1,
-  },
-  friendName: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  friendBonus: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginTop: spacing.xs,
-  },
-  statusBadge: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
-  },
-  statusText: {
-    color: '#fff',
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  addFriendButton: {
-    flexDirection: 'row',
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.lg,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: spacing.lg,
-    gap: spacing.sm,
-  },
-  addFriendButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '700',
-  },
   modalOverlay: {
     flex: 1,
     justifyContent: 'flex-end',
@@ -904,17 +682,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
     minHeight: 100,
     textAlignVertical: 'top',
-  },
-  referralInputLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: spacing.sm,
-  },
-  referralInput: {
-    borderWidth: 1,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    marginBottom: spacing.lg,
   },
   modalButtons: {
     flexDirection: 'row',

@@ -303,20 +303,6 @@ export const NotificationProvider = ({ children }) => {
     );
   };
 
-  const notifyReferral = async (friendName, bonus) => {
-    const newNotification = {
-      id: Date.now().toString(),
-      type: 'referralBonus',
-      title: 'Вы получили бонус',
-      message: `${friendName} присоединился и вы получили ${bonus} PRB`,
-      data: { friend: friendName, bonus },
-      createdAt: new Date(),
-      read: false,
-    };
-    setNotifications(prev => [newNotification, ...prev]);
-    await AsyncStorage.setItem('@notifications', JSON.stringify([newNotification, ...notifications]));
-  };
-
   const notifyFriendJoined = async (friendName, bonusAmount) => {
     await addNotification({
       type: 'friendJoined',
@@ -518,7 +504,6 @@ export const NotificationProvider = ({ children }) => {
         notifyCashbackReceived,
         notifyTopup,
         notifyEvent,
-        notifyReferral,
         notifyFriendJoined,
         notifyReview,
         notifyNewReviewPosted,

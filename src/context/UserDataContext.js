@@ -131,28 +131,6 @@ export const UserDataProvider = ({ children }) => {
     }
   }, [user?.id]);
 
-  // Добавить заработанную сумму от рефералов
-  const addEarnedFromReferral = useCallback(async (amount) => {
-    if (!user?.id || amount <= 0) return false;
-    
-    try {
-      setLoading(true);
-      await DatabaseService.incrementTotalEarned(user.id, amount);
-      setUserStats((prev) => ({
-        ...prev,
-        totalEarned: (prev.totalEarned || 0) + amount,
-      }));
-      setUserBalance((prev) => prev + amount);
-      return true;
-    } catch (err) {
-      console.error('❌ Ошибка добавления заработанной суммы:', err);
-      setError(err.message);
-      return false;
-    } finally {
-      setLoading(false);
-    }
-  }, [user?.id]);
-
   // Добавить отзыв в статистику
   const addReview = useCallback(async (rating) => {
     if (!user?.id) return false;
@@ -226,7 +204,6 @@ export const UserDataProvider = ({ children }) => {
     updateWallet,
     incrementBookings,
     addSpentAmount,
-    addEarnedFromReferral,
     addReview,
     updateBookingStatus,
   };
