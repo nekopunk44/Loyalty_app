@@ -46,7 +46,10 @@ export default function AdminUsers({ navigation: _navigation }) {
     membership: 'all', // all, platinum, gold, silver, bronze
     status: 'all', // all, online, offline
   });
-  const [openDropdown, setOpenDropdown] = useState(null); // 'role', 'membership', 'status' или null
+  const [openDropdown, setOpenDropdown] = useState(null);
+  const [quickBalanceVisible, setQuickBalanceVisible] = useState(false);
+  const [quickBalanceUser, setQuickBalanceUser] = useState(null);
+  const [quickBalanceAmount, setQuickBalanceAmount] = useState('');
   
   // Состояние для уведомления
   const [notificationVisible, setNotificationVisible] = useState(false);
@@ -286,6 +289,32 @@ export default function AdminUsers({ navigation: _navigation }) {
   const onlineCount = users.filter((u) => u.status === 'online').length;
   const totalRating = (users.reduce((sum, u) => sum + u.rating, 0) / users.length).toFixed(1);
 
+  const handleQuickBalance = (user) => {
+    setQuickBalanceUser(user);
+    setQuickBalanceAmount('');
+    setQuickBalanceVisible(true);
+  };
+
+  const submitQuickBalance = async () => {
+    const amount = parseFloat(quickBalanceAmount);
+    if (!amount || amount <= 0 || !quickBalanceUser) return;
+    setQuickBalanceVisible(false);
+    try {
+      const data = await apiCall(`${API_BASE_URL}/loyalty-card/${quickBalanceUser.userId}/top-up`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount, paymentMethod: 'admin' }),
+      });
+      if (data.success) {
+        const newBalance = data.loyaltyCard?.balance ?? (Number(quickBalanceUser.balance || 0) + amount);
+        setUsers(prev => prev.map(u => u.id === quickBalanceUser.id ? { ...u, balance: newBalance } : u));
+        showNotification(`+${amount} PRB → ${quickBalanceUser.name}`, 'success');
+      }
+    } catch (e) {
+      showNotification('Ошибка пополнения', 'error');
+    }
+  };
+
   // Рендер для администратора - список с подробной информацией
   const renderAdminUserCard = ({ item, index }) => (
     <FadeInCard delay={150 + index * 30}>
@@ -301,6 +330,7 @@ export default function AdminUsers({ navigation: _navigation }) {
           setSelectedUser(item);
           setUserDeleteVisible(true);
         }}
+        onQuickBalance={() => handleQuickBalance(item)}
       />
     </FadeInCard>
   );
@@ -833,6 +863,43 @@ export default function AdminUsers({ navigation: _navigation }) {
           </View>
         </View>
       </Modal>
+
+      {/* Quick Balance Modal */}
+      <Modal visible={quickBalanceVisible} transparent animationType="fade" onRequestClose={() => setQuickBalanceVisible(false)}>
+        <View style={styles.quickBalanceOverlay}>
+          <View style={[styles.quickBalanceContainer, { backgroundColor: theme.colors.cardBg }]}>
+            <Text style={[styles.quickBalanceTitle, { color: theme.colors.text }]}>
+              Пополнить баланс
+            </Text>
+            <Text style={[styles.quickBalanceSubtitle, { color: theme.colors.textSecondary }]}>
+              {quickBalanceUser?.name} · {Number(quickBalanceUser?.balance || 0).toFixed(0)} PRB
+            </Text>
+            <TextInput
+              style={[styles.quickBalanceInput, { borderColor: theme.colors.border, color: theme.colors.text, backgroundColor: theme.colors.background }]}
+              placeholder="Сумма в PRB"
+              placeholderTextColor={theme.colors.textSecondary}
+              keyboardType="numeric"
+              value={quickBalanceAmount}
+              onChangeText={setQuickBalanceAmount}
+              autoFocus
+            />
+            <View style={styles.quickBalanceButtons}>
+              <TouchableOpacity
+                style={[styles.quickBalanceCancelBtn, { borderColor: theme.colors.border }]}
+                onPress={() => setQuickBalanceVisible(false)}
+              >
+                <Text style={[styles.quickBalanceCancelText, { color: theme.colors.textSecondary }]}>Отмена</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.quickBalanceConfirmBtn, { backgroundColor: theme.colors.primary }]}
+                onPress={submitQuickBalance}
+              >
+                <Text style={styles.quickBalanceConfirmText}>Пополнить</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1270,5 +1337,59 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     marginLeft: spacing.sm,
+  },
+  quickBalanceOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.lg,
+  },
+  quickBalanceContainer: {
+    width: '100%',
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+  },
+  quickBalanceTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  quickBalanceSubtitle: {
+    fontSize: 13,
+    marginBottom: spacing.lg,
+  },
+  quickBalanceInput: {
+    borderWidth: 1,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    fontSize: 16,
+    marginBottom: spacing.lg,
+  },
+  quickBalanceButtons: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  quickBalanceCancelBtn: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    alignItems: 'center',
+  },
+  quickBalanceCancelText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  quickBalanceConfirmBtn: {
+    flex: 1,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    alignItems: 'center',
+  },
+  quickBalanceConfirmText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
   },
 });
