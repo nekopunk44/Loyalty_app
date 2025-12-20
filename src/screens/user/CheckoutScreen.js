@@ -455,7 +455,7 @@ export default function CheckoutScreen({ route, navigation }) {
         {insufficientFunds && (
           <View style={[styles.section, { backgroundColor: '#FFF3CD' }]}>
             <Text style={{ color: '#856404', fontSize: 13, lineHeight: 20 }}>
-              ℹ️ Для завершения бронирования пополните баланс карты лояльности. Перейдите на вкладку "Мои карты" и пополните необходимую сумму.
+              {'ℹ️ Для завершения бронирования пополните баланс карты лояльности. Перейдите на вкладку «Мои карты» и пополните необходимую сумму.'}
             </Text>
           </View>
         )}

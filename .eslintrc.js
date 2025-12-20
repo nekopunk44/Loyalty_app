@@ -1,32 +1,41 @@
 module.exports = {
   root: true,
+  parser: '@babel/eslint-parser',
+  parserOptions: {
+    requireConfigFile: false,
+    babelOptions: {
+      presets: ['babel-preset-expo'],
+    },
+    ecmaVersion: 2022,
+    sourceType: 'module',
+    ecmaFeatures: { jsx: true },
+  },
   extends: [
-    'expo',
+    'plugin:react/recommended',
     'plugin:react-hooks/recommended',
   ],
-  plugins: ['react-hooks'],
+  plugins: ['react', 'react-hooks'],
   env: {
-    browser: true,   // setTimeout, clearTimeout, AbortController, crypto, etc.
+    browser: true,
+    es2022: true,
+    node: true,
+  },
+  settings: {
+    react: { version: 'detect' },
   },
   rules: {
-    // Запрет console.log в коде (оставляем только console.error)
-    'no-console': ['warn', { allow: ['error', 'warn'] }],
-
-    // Обязательная проверка зависимостей в useEffect/useCallback/useMemo
+    'no-console':    ['warn', { allow: ['error', 'warn'] }],
     'react-hooks/exhaustive-deps': 'warn',
-
-    // Неиспользуемые переменные — ошибка (кроме переменных с _ prefix)
     'no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
-
-    // Запрет var
-    'no-var': 'error',
-
-    // Предпочитаем const
-    'prefer-const': 'error',
+    'no-var':         'error',
+    'prefer-const':   'error',
+    'react/react-in-jsx-scope': 'off',
+    'react/prop-types': 'off',
+    'react/no-unescaped-entities': 'warn',
   },
   ignorePatterns: [
     'node_modules/',
-    'server/',      // сервер проверяем отдельным конфигом
+    'server/',
     '.expo/',
     'dist/',
     'build/',
