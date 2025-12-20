@@ -13,6 +13,7 @@ import {
   Dimensions,
   ActivityIndicator,
   Animated,
+  TextInput,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
@@ -189,6 +190,8 @@ export default function BookingScreen({ navigation }) {
     activeBookingPrice: { fontSize: 12, fontWeight: '700', color: CORAL },
     activeBookingStatus: { paddingHorizontal: spacing.md, paddingVertical: 6, borderRadius: borderRadius.md, marginLeft: spacing.md },
     activeBookingStatusText: { fontSize: 11, fontWeight: '600' },
+    searchRow: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 16, marginTop: 4, marginBottom: 12, backgroundColor: colors.cardBg, borderRadius: 14, borderWidth: 1, borderColor: colors.border },
+    searchInput: { flex: 1, paddingVertical: 10, paddingHorizontal: 8, fontSize: 14, color: colors.text },
     emptyState: { alignItems: 'center', paddingVertical: 40, paddingHorizontal: 32 },
     emptyIcon: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
     emptyStateText: { fontSize: 15, fontWeight: '800', color: colors.text, marginBottom: 6, textAlign: 'center' },
@@ -239,6 +242,7 @@ export default function BookingScreen({ navigation }) {
 
   const [bookings, setBookings] = useState([]);
   const [isBookingsLoading, setIsBookingsLoading] = useState(true);
+  const [propertySearch, setPropertySearch] = useState('');
   const [selectedProperty, setSelectedProperty] = useState(null);
   const [bookingModalVisible, setBookingModalVisible] = useState(false);
   const [calendarVisible, setCalendarVisible] = useState(false);
@@ -653,6 +657,16 @@ export default function BookingScreen({ navigation }) {
     }
   };
 
+  const filteredProperties = useMemo(() => {
+    const q = propertySearch.trim().toLowerCase();
+    if (!q) return mockProperties;
+    return mockProperties.filter(p =>
+      (p.name || '').toLowerCase().includes(q) ||
+      (p.description || '').toLowerCase().includes(q) ||
+      (p.amenities || []).some(a => a.toLowerCase().includes(q))
+    );
+  }, [propertySearch]);
+
   const renderProperty = ({ item }) => (
     <PropertyCard item={item} onSelect={handleSelectProperty} />
   );
@@ -690,12 +704,36 @@ export default function BookingScreen({ navigation }) {
         {/* ========== AVAILABLE PROPERTIES ========== */}
         {activeFilter === 'available' && (
           <Animated.View style={{ opacity: contentAnim }}>
+            <View style={styles.searchRow}>
+              <MaterialIcons name="search" size={20} color={colors.textSecondary} style={{ marginLeft: 12 }} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Поиск объектов..."
+                placeholderTextColor={colors.textSecondary}
+                value={propertySearch}
+                onChangeText={setPropertySearch}
+                returnKeyType="search"
+                clearButtonMode="while-editing"
+              />
+              {propertySearch.length > 0 && (
+                <TouchableOpacity onPress={() => setPropertySearch('')} style={{ paddingRight: 10 }}>
+                  <MaterialIcons name="close" size={18} color={colors.textSecondary} />
+                </TouchableOpacity>
+              )}
+            </View>
             <FlatList
-              data={mockProperties}
+              data={filteredProperties}
               renderItem={renderProperty}
               keyExtractor={(item) => item.id}
               scrollEnabled={false}
               contentContainerStyle={{ paddingBottom: spacing.lg }}
+              ListEmptyComponent={
+                <View style={styles.emptyState}>
+                  <MaterialIcons name="search-off" size={36} color={colors.textSecondary} />
+                  <Text style={[styles.emptyStateText, { marginTop: 12 }]}>Ничего не найдено</Text>
+                  <Text style={styles.emptyStateSubtext}>Попробуйте другой запрос</Text>
+                </View>
+              }
             />
           </Animated.View>
         )}

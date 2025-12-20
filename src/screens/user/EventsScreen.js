@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ScrollView, Modal, Animated, Platform, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ScrollView, Modal, Animated, Platform, RefreshControl, TextInput } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { spacing, borderRadius } from '../../constants/theme';
@@ -22,6 +22,7 @@ export default function EventsScreen() {
   const { user } = useAuth(); // ← Получаем данные пользователя
   
   const [filter, setFilter] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [eventDetailModalVisible, setEventDetailModalVisible] = useState(false);
   const [removingEventIds, setRemovingEventIds] = useState(new Set()); // Отслеживаем удаляемые события
@@ -56,6 +57,7 @@ export default function EventsScreen() {
 
   // filteredEvents declared early so useEffect below can safely depend on it
   const filteredEvents = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
     return events.filter(event => {
       if (filter === 'all') {
         // show all
@@ -66,6 +68,12 @@ export default function EventsScreen() {
       } else if (filter === 'joined') {
         return event.id === '1' || event.id === '3';
       }
+
+      if (q && !(
+        (event.title || '').toLowerCase().includes(q) ||
+        (event.description || '').toLowerCase().includes(q) ||
+        (event.location || '').toLowerCase().includes(q)
+      )) return false;
 
       const allowedUsers = event.allowedUsers || 'all';
       if (allowedUsers === 'all') return true;
@@ -79,7 +87,7 @@ export default function EventsScreen() {
 
       return false;
     });
-  }, [filter, events, user]);
+  }, [filter, searchQuery, events, user]);
 
   // Функция для показа уведомления
   const showNotification = (message, type = 'info', duration = 3000) => {
@@ -367,7 +375,9 @@ export default function EventsScreen() {
   hBlob2: { position: 'absolute', width: 140, height: 140, borderRadius: 70, backgroundColor: `${AMBER}12`, bottom: -50, left: -20 },
   hArc: { position: 'absolute', width: 220, height: 220, borderRadius: 110, borderWidth: 1, borderColor: `${TEAL}28`, top: -90, left: -60 },
   // ── Filters ──
-  filterRow: { flexDirection: 'row', paddingHorizontal: 16, paddingTop: 14, paddingBottom: 4, gap: 8 },
+  searchRow: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 16, marginTop: 14, marginBottom: 2, backgroundColor: colors.cardBg, borderRadius: 14, borderWidth: 1, borderColor: colors.border },
+  searchInput: { flex: 1, paddingVertical: 10, paddingHorizontal: 8, fontSize: 14, color: colors.text },
+  filterRow: { flexDirection: 'row', paddingHorizontal: 16, paddingTop: 10, paddingBottom: 4, gap: 8 },
   filterPill: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.cardBg },
   filterPillActive: { borderColor: TEAL, backgroundColor: `${TEAL}14` },
   filterPillText: { fontSize: 12, fontWeight: '700', color: colors.textSecondary },
@@ -710,23 +720,42 @@ export default function EventsScreen() {
 
       <FlatList
         ListHeaderComponent={
-          <View style={styles.filterRow}>
-            {filterTabs.map((tab) => (
-              <TouchableOpacity
-                key={tab.id}
-                style={[styles.filterPill, filter === tab.id && styles.filterPillActive]}
-                onPress={() => setFilter(tab.id)}
-              >
-                <MaterialIcons
-                  name={tab.icon}
-                  size={14}
-                  color={filter === tab.id ? TEAL : colors.textSecondary}
-                />
-                <Text style={[styles.filterPillText, filter === tab.id && styles.filterPillTextActive]}>
-                  {tab.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
+          <View>
+            <View style={styles.searchRow}>
+              <MaterialIcons name="search" size={20} color={colors.textSecondary} style={{ marginLeft: 12 }} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Поиск событий..."
+                placeholderTextColor={colors.textSecondary}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                returnKeyType="search"
+                clearButtonMode="while-editing"
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setSearchQuery('')} style={{ paddingRight: 10 }}>
+                  <MaterialIcons name="close" size={18} color={colors.textSecondary} />
+                </TouchableOpacity>
+              )}
+            </View>
+            <View style={styles.filterRow}>
+              {filterTabs.map((tab) => (
+                <TouchableOpacity
+                  key={tab.id}
+                  style={[styles.filterPill, filter === tab.id && styles.filterPillActive]}
+                  onPress={() => setFilter(tab.id)}
+                >
+                  <MaterialIcons
+                    name={tab.icon}
+                    size={14}
+                    color={filter === tab.id ? TEAL : colors.textSecondary}
+                  />
+                  <Text style={[styles.filterPillText, filter === tab.id && styles.filterPillTextActive]}>
+                    {tab.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
         }
         data={filteredEvents}
@@ -756,10 +785,16 @@ export default function EventsScreen() {
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <View style={[styles.emptyIcon, { backgroundColor: `${NAVY}10` }]}>
-              <MaterialIcons name="event-busy" size={30} color={NAVY} />
+              <MaterialIcons name={searchQuery ? 'search-off' : 'event-busy'} size={30} color={NAVY} />
             </View>
-            <Text style={styles.emptyStateText}>Нет событий</Text>
-            <Text style={styles.emptyStateSubtext}>Скоро появятся новые акции и предложения</Text>
+            <Text style={styles.emptyStateText}>
+              {searchQuery ? 'Ничего не найдено' : 'Нет событий'}
+            </Text>
+            <Text style={styles.emptyStateSubtext}>
+              {searchQuery
+                ? `По запросу «${searchQuery}» событий не найдено`
+                : 'Скоро появятся новые акции и предложения'}
+            </Text>
           </View>
         }
       />
