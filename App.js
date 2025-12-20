@@ -29,7 +29,6 @@ import CardTopUpScreen from './src/screens/user/CardTopUpScreen';
 import EventsScreen from './src/screens/user/EventsScreen';
 import SettingsScreen from './src/screens/user/SettingsScreen';
 import ProfileScreen from './src/screens/user/ProfileScreen';
-import ShopScreen from './src/screens/user/ShopScreen';
 
 // Admin screens
 import AdminDashboard from './src/screens/admin/AdminDashboard';
@@ -322,16 +321,6 @@ function UserStack() {
           ...userStackHeaderOptions,
           headerShown: true,
           headerTitle: 'Профиль',
-          headerTitleAlign: 'center',
-        }}
-      />
-      <Stack.Screen
-        name="Shop"
-        component={ShopScreen}
-        options={{
-          ...userStackHeaderOptions,
-          headerShown: true,
-          headerTitle: 'Магазин',
           headerTitleAlign: 'center',
         }}
       />

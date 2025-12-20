@@ -27,13 +27,11 @@ import { apiCall } from '../../utils/api';
 
 const API_BASE_URL = getApiUrl();
 
-const mockUsers = [];
-
 export default function AdminUsers({ navigation: _navigation }) {
   const { theme, isDark } = useTheme();
   const { user: currentUser } = useAuth();
   const { notifyUserAdded, notifyUserDeleted, notifyUserUpdated } = useNotification();
-  const [users, setUsers] = useState(mockUsers);
+  const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedUser, setSelectedUser] = useState(null);
   const [profileVisible, setProfileVisible] = useState(false);
@@ -117,12 +115,11 @@ export default function AdminUsers({ navigation: _navigation }) {
       if (data.success && data.users) {
         setUsers(data.users);
       } else {
-        setUsers(mockUsers);
+        setUsers([]);
       }
     } catch (error) {
-      console.error('❌ Ошибка при загрузке пользователей:', error);
-      console.error('❌ Stack:', error.stack);
-      setUsers(mockUsers);
+      console.error('Ошибка при загрузке пользователей:', error.message);
+      setUsers([]);
     } finally {
       setLoading(false);
     }

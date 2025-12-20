@@ -315,7 +315,6 @@ app.use('/api/auth',          require('./routes/auth')({ authLimiter, authSlowDo
 app.use('/api/users',         require('./routes/users')({ isDbConnected: () => dbConnected }));
 app.use('/api/events',        require('./routes/events')({ isDbConnected: () => dbConnected }));
 app.use('/api/notifications', require('./routes/notifications')({ isDbConnected: () => dbConnected }));
-app.use('/api/referrals',     require('./routes/referrals')({ isDbConnected: () => dbConnected }));
 app.use('/api/bookings',      require('./routes/bookings')({ isDbConnected: () => dbConnected }));
 app.use('/api/properties',    require('./routes/properties')({ isDbConnected: () => dbConnected }));
 app.use('/api/loyalty-card',  require('./routes/loyalty')({ isDbConnected: () => dbConnected }));
