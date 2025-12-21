@@ -8,6 +8,7 @@ import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import NotificationCenter from './NotificationCenter';
+import LoyaltyCardService from '../../services/LoyaltyCardService';
 import * as ImagePicker from 'expo-image-picker';
 
 const NAVY  = '#063B5C';
@@ -163,6 +164,7 @@ function SettingCard({ animVal, children, cardBg, borderColor }) {
 
 export default function SettingsScreen() {
   const [notifications, setNotifications]           = useState(true);
+  const [cardBalance, setCardBalance]               = useState(0);
   const [rulesModalVisible, setRulesModalVisible]   = useState(false);
   const [notifCenterVisible, setNotifCenterVisible] = useState(false);
   const [platformInfo, setPlatformInfo]             = useState(
@@ -208,6 +210,14 @@ export default function SettingsScreen() {
       .catch(() => {});
   }, []);
 
+  // Загружаем баланс карты лояльности для обычных пользователей
+  useEffect(() => {
+    if (!user?.id || isAdmin) return;
+    LoyaltyCardService.getBalance(user.id)
+      .then(b => setCardBalance(parseFloat(b) || 0))
+      .catch(() => {});
+  }, [user?.id, isAdmin]);
+
   useEffect(() => {
     Animated.timing(heroAnim, { toValue: 1, duration: 500, useNativeDriver: useNative }).start();
     Animated.spring(avatarScale, { toValue: 1, tension: 55, friction: 7, useNativeDriver: useNative }).start();
@@ -231,7 +241,7 @@ export default function SettingsScreen() {
 
   const levelKey  = (user?.membershipLevel || 'bronze').toLowerCase();
   const levelInfo = LEVELS[levelKey] || LEVELS.bronze;
-  const balance   = user?.loyaltyBalance || 0;
+  const balance   = cardBalance;
   const levelProgress = levelInfo.next
     ? Math.min(100, Math.round((balance / levelInfo.next) * 100))
     : 100;
@@ -403,73 +413,6 @@ export default function SettingsScreen() {
           )}
         </Animated.View>
 
-        {/* ── Hero ── */}
-        <Animated.View style={[styles.hero, { opacity: heroAnim, backgroundColor: settingsPalette.heroBg, borderColor: settingsPalette.border }]}>
-
-          <Animated.View style={[styles.avatarOuter, { transform: [{ scale: avatarScale }] }]}>
-            <TouchableOpacity
-              style={[styles.avatarRing, { borderColor: isDark ? `${TEAL}60` : 'rgba(6,59,92,0.28)' }]}
-              onPress={handlePickAvatar}
-              activeOpacity={0.85}
-            >
-              {avatarUri
-                ? <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
-                : (
-                  <View style={[styles.avatarInner, { backgroundColor: settingsPalette.avatarBg }]}>
-                    <Text style={[styles.avatarInitials, { color: settingsPalette.heroText }]}>{userInitials}</Text>
-                  </View>
-                )
-              }
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.avatarCamBtn, { backgroundColor: accentColor, borderColor: settingsPalette.camBorder }]}
-              onPress={handlePickAvatar}
-            >
-              <MaterialIcons
-                name={avatarLoading ? 'hourglass-top' : 'photo-camera'}
-                size={12}
-                color="#fff"
-              />
-            </TouchableOpacity>
-          </Animated.View>
-
-          <Text style={[styles.heroName, { color: settingsPalette.heroText }]}>{user?.name || user?.displayName || 'Пользователь'}</Text>
-
-          <View style={[styles.heroBadge, {
-            backgroundColor: isAdmin ? `${NAVY}22` : settingsPalette.badgeBg,
-            borderColor: `${isAdmin ? NAVY : CORAL}55`,
-          }]}>
-            <MaterialIcons
-              name={isAdmin ? 'admin-panel-settings' : 'star'}
-              size={12}
-              color={isAdmin ? TEAL : AMBER}
-            />
-            <Text style={[styles.heroBadgeText, { color: isAdmin ? TEAL : AMBER }]}>
-              {isAdmin ? 'Администратор' : `${levelInfo.label} участник`}
-            </Text>
-          </View>
-
-          <Text style={[styles.heroEmail, { color: settingsPalette.heroSub }]}>{user?.email || ''}</Text>
-
-          {!isAdmin && (
-            <View style={[styles.levelMini, { backgroundColor: settingsPalette.surfaceTint, borderColor: settingsPalette.border }]}>
-              <View style={styles.levelMiniRow}>
-                <View style={[styles.levelDot, { backgroundColor: levelInfo.color }]} />
-                <Text style={[styles.levelMiniLabel, { color: settingsPalette.heroText }]}>{levelInfo.label}</Text>
-                <Text style={[styles.levelMiniBalance, { color: settingsPalette.heroSub }]}>{balance.toLocaleString('ru-RU')} PRB</Text>
-              </View>
-              <View style={[styles.levelTrack, { backgroundColor: settingsPalette.heroTrack }]}>
-                <View style={[styles.levelFill, { width: `${levelProgress}%`, backgroundColor: levelInfo.color }]} />
-              </View>
-              {nextLevelName && levelInfo.next && (
-                <Text style={[styles.levelMiniNext, { color: settingsPalette.heroSub }]}>
-                  до {nextLevelName}: {(levelInfo.next - balance).toLocaleString('ru-RU')} PRB
-                </Text>
-              )}
-            </View>
-          )}
-        </Animated.View>
-
         {/* ── Notifications ── */}
         <SectionLabel label="УВЕДОМЛЕНИЯ" colors={colors} />
         <SettingCard animVal={sec1Anim} cardBg={settingsPalette.cardBg} borderColor={settingsPalette.border}>
@@ -574,6 +517,15 @@ export default function SettingsScreen() {
                 borderColor={colors.border}
                 colors={colors}
                 onPress={() => setRulesModalVisible(true)}
+              />
+              <SettingRow
+                icon="mail"
+                iconBg="#E67E22"
+                title="Контактная информация"
+                desc="Instagram, email, телефон"
+                borderColor={colors.border}
+                colors={colors}
+                onPress={() => setContactVisible(true)}
                 last
               />
             </SettingCard>
@@ -583,15 +535,17 @@ export default function SettingsScreen() {
         {/* ── Account ── */}
         <SectionLabel label="АККАУНТ" colors={colors} />
         <SettingCard animVal={sec4Anim} cardBg={settingsPalette.cardBg} borderColor={settingsPalette.border}>
-          <SettingRow
-            icon="person"
-            iconBg={NAVY}
-            title="Имя профиля"
-            desc={user?.name || user?.displayName || 'Не указано'}
-            borderColor={colors.border}
-            colors={colors}
-            right={null}
-          />
+          {!isAdmin && (
+            <SettingRow
+              icon="person"
+              iconBg={NAVY}
+              title="Имя профиля"
+              desc={user?.name || user?.displayName || 'Не указано'}
+              borderColor={colors.border}
+              colors={colors}
+              right={null}
+            />
+          )}
           <SettingRow
             icon="photo-camera"
             iconBg={TEAL}
@@ -614,17 +568,20 @@ export default function SettingsScreen() {
             desc="Часто задаваемые вопросы"
             borderColor={colors.border}
             colors={colors}
+            last={isAdmin}
           />
-          <SettingRow
-            icon="mail"
-            iconBg="#E67E22"
-            title="Связаться с нами"
-            desc="Выберите удобный способ"
-            borderColor={colors.border}
-            colors={colors}
-            onPress={() => setContactVisible(true)}
-            last
-          />
+          {!isAdmin && (
+            <SettingRow
+              icon="mail"
+              iconBg="#E67E22"
+              title="Связаться с нами"
+              desc="Выберите удобный способ"
+              borderColor={colors.border}
+              colors={colors}
+              onPress={() => setContactVisible(true)}
+              last
+            />
+          )}
         </SettingCard>
 
         {/* ── Logout ── */}
@@ -1135,57 +1092,6 @@ const styles = StyleSheet.create({
   profileProgressTrack: { height: 7, borderRadius: 999, overflow: 'hidden' },
   profileProgressFill: { height: '100%', borderRadius: 999 },
   profileProgressNext: { marginTop: 8, fontSize: 11, fontWeight: '700', textAlign: 'right' },
-
-  // Hero
-  hero: {
-    display: 'none',
-    marginHorizontal: 16,
-    marginTop: 4,
-    borderRadius: 26,
-    borderWidth: 1,
-    alignItems: 'center',
-    paddingTop: 22,
-    paddingBottom: 20,
-    paddingHorizontal: 18,
-    shadowColor: NAVY,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.08,
-    shadowRadius: 18,
-    elevation: 4,
-  },
-
-  // Avatar
-  avatarOuter: { position: 'relative', marginBottom: 14 },
-  avatarRing: { width: 78, height: 78, borderRadius: 24, borderWidth: 1, padding: 4, overflow: 'hidden' },
-  avatarInner: { flex: 1, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  avatarImage: { width: '100%', height: '100%', borderRadius: 20 },
-  avatarInitials: { fontSize: 25, fontWeight: '900', color: '#fff', letterSpacing: 1 },
-  avatarCamBtn: {
-    position: 'absolute', bottom: -3, right: -3,
-    width: 28, height: 28, borderRadius: 14,
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 2, borderColor: NAVY,
-    shadowColor: CORAL,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.22,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-
-  heroName:      { fontSize: 22, fontWeight: '900', color: '#fff', marginBottom: 8 },
-  heroBadge:     { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 13, paddingVertical: 7, borderRadius: 999, borderWidth: 1, marginBottom: 8 },
-  heroBadgeText: { fontSize: 12, fontWeight: '800' },
-  heroEmail:     { fontSize: 13, color: 'rgba(255,255,255,0.55)', fontWeight: '600', marginBottom: 14 },
-
-  // Level mini-bar
-  levelMini:        { width: '100%', marginTop: 4, borderRadius: 18, padding: 13, borderWidth: 1, borderColor: 'rgba(148,163,184,0.18)', backgroundColor: 'rgba(148,163,184,0.07)' },
-  levelMiniRow:     { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 7 },
-  levelDot:         { width: 8, height: 8, borderRadius: 4 },
-  levelMiniLabel:   { fontSize: 12, fontWeight: '900', color: '#fff', flex: 1 },
-  levelMiniBalance: { fontSize: 12, color: 'rgba(255,255,255,0.7)', fontWeight: '800' },
-  levelTrack:       { height: 6, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 999, overflow: 'hidden' },
-  levelFill:        { height: '100%', borderRadius: 999 },
-  levelMiniNext:    { fontSize: 11, color: 'rgba(255,255,255,0.45)', marginTop: 8, textAlign: 'right', fontWeight: '700' },
 
   // Section labels
   sectionLabel: { fontSize: 10, fontWeight: '900', letterSpacing: 1.4, marginHorizontal: 20, marginTop: 24, marginBottom: 8 },
