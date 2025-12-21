@@ -14,7 +14,6 @@ import * as ImagePicker from 'expo-image-picker';
 const NAVY  = '#063B5C';
 const TEAL  = '#14B8A6';
 const AMBER = '#F59E0B';
-const CORAL = '#FF6B35';
 const AVATAR_KEY   = '@user_avatar_uri';
 const RULES_KEY    = '@loyalty_rules_v2';
 const CONTACT_KEY  = '@loyalty_contact_v1';
@@ -232,8 +231,6 @@ export default function SettingsScreen() {
     ]).start();
   }, []);
 
-  const accentColor = isAdmin ? TEAL : CORAL;
-
   const userInitials = useMemo(() => {
     const name = user?.name || user?.displayName || '';
     return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || 'VJ';
@@ -242,13 +239,6 @@ export default function SettingsScreen() {
   const levelKey  = (user?.membershipLevel || 'bronze').toLowerCase();
   const levelInfo = LEVELS[levelKey] || LEVELS.bronze;
   const balance   = cardBalance;
-  const levelProgress = levelInfo.next
-    ? Math.min(100, Math.round((balance / levelInfo.next) * 100))
-    : 100;
-  const nextLevelName = levelInfo.label === 'Bronze' ? 'Silver'
-    : levelInfo.label === 'Silver' ? 'Gold'
-    : levelInfo.label === 'Gold' ? 'Platinum'
-    : null;
 
   // ── Avatar picker ──
   const pickFromLibrary = async () => {
@@ -339,78 +329,50 @@ export default function SettingsScreen() {
         contentContainerStyle={[styles.scroll, { backgroundColor: settingsPalette.screenBg }]}
         showsVerticalScrollIndicator={false}
       >
-        <Animated.View style={[styles.profilePanel, { opacity: heroAnim, backgroundColor: settingsPalette.heroBg, borderColor: settingsPalette.border }]}>
-          <View style={[styles.profileAccentBar, { backgroundColor: accentColor }]} />
-          <View style={styles.profileHead}>
-            <Animated.View style={[styles.profileAvatarOuter, { transform: [{ scale: avatarScale }] }]}>
-              <TouchableOpacity
-                style={[styles.profileAvatar, { borderColor: isDark ? `${TEAL}55` : 'rgba(6,59,92,0.16)' }]}
-                onPress={handlePickAvatar}
-                activeOpacity={0.85}
-              >
+        <Animated.View style={[styles.profilePanel, {
+          opacity: heroAnim,
+          backgroundColor: isAdmin ? `${TEAL}0D` : `${levelInfo.color}0D`,
+          borderColor: isAdmin ? `${TEAL}28` : `${levelInfo.color}28`,
+        }]}>
+          <TouchableOpacity style={styles.profileRow} onPress={handlePickAvatar} activeOpacity={0.9}>
+            <Animated.View style={[styles.profileAvatarWrap, { transform: [{ scale: avatarScale }] }]}>
+              <View style={[styles.profileAvatarRing, { borderColor: isAdmin ? TEAL : levelInfo.color }]}>
                 {avatarUri
-                  ? <Image source={{ uri: avatarUri }} style={styles.profileAvatarImage} />
-                  : (
-                    <View style={[styles.profileAvatarInner, { backgroundColor: settingsPalette.avatarBg }]}>
-                      <Text style={[styles.profileInitials, { color: settingsPalette.heroText }]}>{userInitials}</Text>
+                  ? <Image source={{ uri: avatarUri }} style={styles.profileAvatarImg} />
+                  : <View style={[styles.profileAvatarFill, { backgroundColor: isAdmin ? `${TEAL}22` : `${levelInfo.color}22` }]}>
+                      <Text style={[styles.profileAvatarInitials, { color: isAdmin ? TEAL : levelInfo.color }]}>{userInitials}</Text>
                     </View>
-                  )
                 }
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.profileCamera, { backgroundColor: accentColor, borderColor: settingsPalette.camBorder }]}
-                onPress={handlePickAvatar}
-                activeOpacity={0.85}
-              >
-                <MaterialIcons name={avatarLoading ? 'hourglass-top' : 'photo-camera'} size={12} color="#fff" />
-              </TouchableOpacity>
+              </View>
+              <View style={[styles.profileCamDot, { backgroundColor: isAdmin ? TEAL : levelInfo.color, borderColor: settingsPalette.heroBg }]}>
+                <MaterialIcons name={avatarLoading ? 'hourglass-top' : 'photo-camera'} size={10} color="#fff" />
+              </View>
             </Animated.View>
 
-            <View style={styles.profileTextBlock}>
-              <Text style={[styles.profileEyebrow, { color: settingsPalette.heroSub }]}>VILLA JACONDA</Text>
+            <View style={styles.profileInfo}>
               <Text style={[styles.profileName, { color: settingsPalette.heroText }]} numberOfLines={1}>
                 {user?.name || user?.displayName || 'Пользователь'}
               </Text>
               <Text style={[styles.profileEmail, { color: settingsPalette.heroSub }]} numberOfLines={1}>
                 {user?.email || ''}
               </Text>
-            </View>
-          </View>
-
-          <View style={styles.profileChipsRow}>
-            <View style={[styles.profileStatusChip, { backgroundColor: isAdmin ? `${TEAL}16` : `${levelInfo.color}16`, borderColor: `${isAdmin ? TEAL : levelInfo.color}3D` }]}>
-              <MaterialIcons name={isAdmin ? 'admin-panel-settings' : 'workspace-premium'} size={15} color={isAdmin ? TEAL : levelInfo.color} />
-              <Text style={[styles.profileStatusText, { color: isAdmin ? TEAL : levelInfo.color }]}>
-                {isAdmin ? 'Администратор' : `${levelInfo.label} участник`}
-              </Text>
+              <View style={[styles.profileLevelBadge, { backgroundColor: isAdmin ? `${TEAL}18` : `${levelInfo.color}18` }]}>
+                <MaterialIcons name={isAdmin ? 'admin-panel-settings' : 'workspace-premium'} size={11} color={isAdmin ? TEAL : levelInfo.color} />
+                <Text style={[styles.profileLevelText, { color: isAdmin ? TEAL : levelInfo.color }]}>
+                  {isAdmin ? 'Администратор' : levelInfo.label}
+                </Text>
+              </View>
             </View>
 
             {!isAdmin && (
-              <View style={[styles.profileBalanceChip, { backgroundColor: settingsPalette.surfaceTint, borderColor: settingsPalette.border }]}>
-                <Text style={[styles.profileBalanceLabel, { color: settingsPalette.heroSub }]}>Баланс</Text>
-                <Text style={[styles.profileBalanceValue, { color: settingsPalette.heroText }]}>
-                  {balance.toLocaleString('ru-RU')} PRB
+              <View style={styles.profileBalanceBlock}>
+                <Text style={[styles.profileBalanceAmt, { color: settingsPalette.heroText }]}>
+                  {balance.toLocaleString('ru-RU')}
                 </Text>
+                <Text style={[styles.profileBalanceCur, { color: settingsPalette.heroSub }]}>PRB</Text>
               </View>
             )}
-          </View>
-
-          {!isAdmin && (
-            <View style={[styles.profileProgressBox, { backgroundColor: settingsPalette.surfaceTint, borderColor: settingsPalette.border }]}>
-              <View style={styles.profileProgressTop}>
-                <Text style={[styles.profileProgressTitle, { color: settingsPalette.heroText }]}>Прогресс уровня</Text>
-                <Text style={[styles.profileProgressPercent, { color: levelInfo.color }]}>{levelProgress}%</Text>
-              </View>
-              <View style={[styles.profileProgressTrack, { backgroundColor: settingsPalette.heroTrack }]}>
-                <View style={[styles.profileProgressFill, { width: `${levelProgress}%`, backgroundColor: levelInfo.color }]} />
-              </View>
-              {nextLevelName && levelInfo.next && (
-                <Text style={[styles.profileProgressNext, { color: settingsPalette.heroSub }]}>
-                  до {nextLevelName}: {(levelInfo.next - balance).toLocaleString('ru-RU')} PRB
-                </Text>
-              )}
-            </View>
-          )}
+          </TouchableOpacity>
         </Animated.View>
 
         {/* ── Notifications ── */}
@@ -1013,85 +975,35 @@ const styles = StyleSheet.create({
   profilePanel: {
     marginHorizontal: 16,
     marginTop: 4,
-    borderRadius: 26,
+    borderRadius: 20,
     borderWidth: 1,
-    padding: 18,
+    padding: 16,
     shadowColor: NAVY,
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.08,
-    shadowRadius: 20,
-    elevation: 4,
-    overflow: 'hidden',
-  },
-  profileAccentBar: {
-    position: 'absolute',
-    left: 0,
-    top: 18,
-    bottom: 18,
-    width: 4,
-    borderTopRightRadius: 4,
-    borderBottomRightRadius: 4,
-  },
-  profileHead: { flexDirection: 'row', alignItems: 'center' },
-  profileAvatarOuter: { position: 'relative', flexShrink: 0 },
-  profileAvatar: { width: 68, height: 68, borderRadius: 22, borderWidth: 1, padding: 4, overflow: 'hidden' },
-  profileAvatarInner: { flex: 1, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  profileAvatarImage: { width: '100%', height: '100%', borderRadius: 18 },
-  profileInitials: { fontSize: 24, fontWeight: '900', letterSpacing: 1 },
-  profileCamera: {
-    position: 'absolute',
-    right: -4,
-    bottom: -4,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    borderWidth: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: CORAL,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.22,
-    shadowRadius: 8,
+    shadowOpacity: 0.07,
+    shadowRadius: 12,
     elevation: 3,
   },
-  profileTextBlock: { flex: 1, minWidth: 0, marginLeft: 14 },
-  profileEyebrow: { fontSize: 10, fontWeight: '900', letterSpacing: 1.8, marginBottom: 5 },
-  profileName: { fontSize: 22, fontWeight: '900', marginBottom: 4 },
-  profileEmail: { fontSize: 13, fontWeight: '600' },
-  profileChipsRow: { flexDirection: 'row', alignItems: 'stretch', gap: 10, marginTop: 16 },
-  profileStatusChip: {
-    flex: 1,
-    minHeight: 50,
-    borderRadius: 16,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  profileRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  profileAvatarWrap: { position: 'relative', flexShrink: 0 },
+  profileAvatarRing: { width: 58, height: 58, borderRadius: 29, borderWidth: 2.5, padding: 3, overflow: 'hidden' },
+  profileAvatarFill: { flex: 1, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
+  profileAvatarImg: { width: '100%', height: '100%', borderRadius: 26 },
+  profileAvatarInitials: { fontSize: 20, fontWeight: '900' },
+  profileCamDot: {
+    position: 'absolute', right: -2, bottom: -2,
+    width: 20, height: 20, borderRadius: 10,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 2,
   },
-  profileStatusText: { flex: 1, fontSize: 12, fontWeight: '900' },
-  profileBalanceChip: {
-    minWidth: 112,
-    borderRadius: 16,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    justifyContent: 'center',
-  },
-  profileBalanceLabel: { fontSize: 10, fontWeight: '800', marginBottom: 2 },
-  profileBalanceValue: { fontSize: 13, fontWeight: '900' },
-  profileProgressBox: {
-    marginTop: 12,
-    borderRadius: 18,
-    borderWidth: 1,
-    padding: 13,
-  },
-  profileProgressTop: { flexDirection: 'row', alignItems: 'center', marginBottom: 9 },
-  profileProgressTitle: { flex: 1, fontSize: 13, fontWeight: '900' },
-  profileProgressPercent: { fontSize: 13, fontWeight: '900' },
-  profileProgressTrack: { height: 7, borderRadius: 999, overflow: 'hidden' },
-  profileProgressFill: { height: '100%', borderRadius: 999 },
-  profileProgressNext: { marginTop: 8, fontSize: 11, fontWeight: '700', textAlign: 'right' },
+  profileInfo: { flex: 1, minWidth: 0 },
+  profileName: { fontSize: 16, fontWeight: '800', marginBottom: 2 },
+  profileEmail: { fontSize: 12, fontWeight: '500', marginBottom: 6 },
+  profileLevelBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  profileLevelText: { fontSize: 11, fontWeight: '800' },
+  profileBalanceBlock: { alignItems: 'flex-end', flexShrink: 0 },
+  profileBalanceAmt: { fontSize: 18, fontWeight: '900' },
+  profileBalanceCur: { fontSize: 11, fontWeight: '700', marginTop: 1 },
 
   // Section labels
   sectionLabel: { fontSize: 10, fontWeight: '900', letterSpacing: 1.4, marginHorizontal: 20, marginTop: 24, marginBottom: 8 },
