@@ -104,6 +104,8 @@ export default function ProfileScreen({ navigation }) {
   const [balance, setBalance]     = useState(0);
   const [loading, setLoading]     = useState(true);
   const [accrued, setAccrued]     = useState(0);
+  const [transactions, setTransactions] = useState([]);
+  const [transLoading, setTransLoading] = useState(false);
   const [cardFlipped, setCardFlipped] = useState(false);
   const [topUpModalVisible, setTopUpModalVisible] = useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(null);
@@ -120,6 +122,7 @@ export default function ProfileScreen({ navigation }) {
   const statsAnim  = useRef(new Animated.Value(0)).current;
   const levelAnim  = useRef(new Animated.Value(0)).current;
   const cashAnim   = useRef(new Animated.Value(0)).current;
+  const txAnim     = useRef(new Animated.Value(0)).current;
 
   // Card flip animation
   const flipAnim   = useRef(new Animated.Value(0)).current;
@@ -134,7 +137,7 @@ export default function ProfileScreen({ navigation }) {
 
   const runEntrance = () => {
     progressAnim.setValue(0);
-    const anims = [cardAnim, infoAnim, statsAnim, levelAnim, cashAnim];
+    const anims = [cardAnim, infoAnim, statsAnim, levelAnim, cashAnim, txAnim];
     anims.forEach(a => a.setValue(0));
     Animated.stagger(90, anims.map(a =>
       Animated.spring(a, { toValue: 1, tension: 60, friction: 8, useNativeDriver: useNative })
@@ -153,6 +156,7 @@ export default function ProfileScreen({ navigation }) {
   useFocusEffect(React.useCallback(() => {
     loadCardData();
     loadUserStats();
+    loadTransactions();
   }, [user?.id]));
 
   useEffect(() => {
@@ -174,6 +178,17 @@ export default function ProfileScreen({ navigation }) {
     } finally {
       loadingCardRef.current = false;
       setLoading(false);
+    }
+  };
+
+  const loadTransactions = async () => {
+    if (!user?.id) return;
+    try {
+      setTransLoading(true);
+      const { transactions: txs } = await LoyaltyCardService.getTransactions(user.id, 10, 0);
+      setTransactions(txs || []);
+    } catch { /* keep empty */ } finally {
+      setTransLoading(false);
     }
   };
 
@@ -286,7 +301,7 @@ export default function ProfileScreen({ navigation }) {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([loadCardData(), loadUserStats()]);
+    await Promise.all([loadCardData(), loadUserStats(), loadTransactions()]);
     setRefreshing(false);
   }, [user?.id]);
 
@@ -513,6 +528,45 @@ export default function ProfileScreen({ navigation }) {
                 <Text style={[S.cashFooterValue, { color: colors.text }]}>{balance} PRB</Text>
               </View>
             </View>
+          </Animated.View>
+        )}
+
+        {/* ── ИСТОРИЯ ТРАНЗАКЦИЙ ── */}
+        {!isAdmin && (
+          <Animated.View style={[S.txCard, { backgroundColor: colors.cardBg }, animStyle(txAnim)]}>
+            <View style={S.txHeader}>
+              <MaterialIcons name="history" size={20} color={colors.text} style={{ marginRight: 8 }} />
+              <Text style={[S.txTitle, { color: colors.text }]}>История транзакций</Text>
+            </View>
+            {transLoading ? (
+              <ActivityIndicator color="#FF6B35" style={{ paddingVertical: 20 }} />
+            ) : transactions.length === 0 ? (
+              <Text style={[S.txEmpty, { color: colors.textSecondary }]}>Нет транзакций</Text>
+            ) : (
+              transactions.map((tx, i) => (
+                <View
+                  key={tx.id || i}
+                  style={[S.txRow, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }]}
+                >
+                  <View style={[S.txIconBox, { backgroundColor: tx.type === 'credit' ? '#10B98118' : '#EF444418' }]}>
+                    <MaterialIcons
+                      name={tx.type === 'credit' ? 'add-circle-outline' : 'remove-circle-outline'}
+                      size={20}
+                      color={tx.type === 'credit' ? '#10B981' : '#EF4444'}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[S.txDesc, { color: colors.text }]} numberOfLines={1}>{tx.description}</Text>
+                    <Text style={[S.txDate, { color: colors.textSecondary }]}>
+                      {new Date(tx.createdAt).toLocaleDateString('ru-RU')}
+                    </Text>
+                  </View>
+                  <Text style={[S.txAmount, { color: tx.type === 'credit' ? '#10B981' : '#EF4444' }]}>
+                    {tx.type === 'credit' ? '+' : '−'}{parseFloat(tx.amount).toLocaleString('ru-RU')} PRB
+                  </Text>
+                </View>
+              ))
+            )}
           </Animated.View>
         )}
 
@@ -897,6 +951,17 @@ const S = StyleSheet.create({
   cashFooterLabel: { fontSize: 11, marginBottom: 4 },
   cashFooterValue: { fontSize: 14, fontWeight: '700' },
   cashFooterDivider: { width: 1, marginVertical: 4 },
+
+  // Transactions
+  txCard: { borderRadius: 18, padding: 16, marginBottom: 14, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 6, elevation: 3 },
+  txHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  txTitle: { fontSize: 15, fontWeight: '800' },
+  txEmpty: { textAlign: 'center', paddingVertical: 20, fontSize: 13 },
+  txRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, gap: 12 },
+  txIconBox: { width: 36, height: 36, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
+  txDesc: { fontSize: 13, fontWeight: '600', marginBottom: 2 },
+  txDate: { fontSize: 11 },
+  txAmount: { fontSize: 14, fontWeight: '800' },
 
   // Float button
   floatBtn: { position: 'absolute', left: 16, right: 16, bottom: Platform.OS === 'ios' ? 110 : 102, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 16, borderRadius: 16, gap: 10, shadowColor: '#063B5C', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.32, shadowRadius: 12, elevation: 8, zIndex: 99 },

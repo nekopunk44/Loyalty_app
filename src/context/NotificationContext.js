@@ -333,15 +333,6 @@ export const NotificationProvider = ({ children }) => {
     );
   };
 
-  const notifyFriendJoined = async (friendName, bonusAmount) => {
-    await addNotification({
-      type: 'friendJoined',
-      title: 'Друг присоединился',
-      message: `${friendName} присоединился по вашей ссылке и вы получили ${bonusAmount} PRB`,
-      data: { friend: friendName, bonus: bonusAmount },
-    });
-  };
-
   const notifyReview = async (propertyName, rating) => {
     await addNotification({
       type: 'newReview',
@@ -534,7 +525,6 @@ export const NotificationProvider = ({ children }) => {
         notifyCashbackReceived,
         notifyTopup,
         notifyEvent,
-        notifyFriendJoined,
         notifyReview,
         notifyNewReviewPosted,
         notifyReviewReply,
