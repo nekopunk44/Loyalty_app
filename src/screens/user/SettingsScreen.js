@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Alert, Modal, TextInput, Animated, Platform, Image, Linking,
+  Alert, Modal, TextInput, Animated, Easing, Platform, Image, Linking, Dimensions,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
@@ -16,11 +16,11 @@ const TEAL  = '#14B8A6';
 const AMBER = '#F59E0B';
 
 const LEVEL_HERO = {
-  bronze:   { bg: '#1C1008', tone: '#3D2010', accent: '#E08B32', glow: 'rgba(224,139,50,0.45)', rail: 'rgba(224,139,50,0.8)'  },
-  silver:   { bg: '#0F1A22', tone: '#243545', accent: '#C9D1D9', glow: 'rgba(200,210,220,0.35)', rail: 'rgba(200,210,220,0.8)' },
-  gold:     { bg: '#1A1005', tone: '#382208', accent: '#F8D67A', glow: 'rgba(248,214,122,0.45)', rail: 'rgba(248,214,122,0.8)' },
-  platinum: { bg: '#080C1C', tone: '#1A134A', accent: '#C4B5FD', glow: 'rgba(185,168,255,0.45)', rail: 'rgba(185,168,255,0.8)' },
-  admin:    { bg: '#071C2C', tone: '#0D3349', accent: '#14B8A6', glow: 'rgba(20,184,166,0.40)',  rail: 'rgba(20,184,166,0.8)'  },
+  bronze:   { bg: '#C47830', accent: '#FFD08A', sub: 'rgba(255,255,255,0.7)' },
+  silver:   { bg: '#4A6E8C', accent: '#D0E4F0', sub: 'rgba(255,255,255,0.7)' },
+  gold:     { bg: '#B8880A', accent: '#FFE47A', sub: 'rgba(255,255,255,0.7)' },
+  platinum: { bg: '#6A48B8', accent: '#DDD0FF', sub: 'rgba(255,255,255,0.7)' },
+  admin:    { bg: '#1A8A78', accent: '#A0F0E4', sub: 'rgba(255,255,255,0.7)' },
 };
 
 const AVATAR_KEY   = '@user_avatar_uri';
@@ -175,6 +175,26 @@ export default function SettingsScreen() {
   const [cardBalance, setCardBalance]               = useState(0);
   const [rulesModalVisible, setRulesModalVisible]   = useState(false);
   const [notifCenterVisible, setNotifCenterVisible] = useState(false);
+  const notifSheetAnim = useRef(new Animated.Value(0)).current;
+  const NOTIF_SHEET_H  = Dimensions.get('window').height * 0.88;
+
+  const openNotifCenter = () => {
+    notifSheetAnim.setValue(0);
+    setNotifCenterVisible(true);
+    Animated.timing(notifSheetAnim, {
+      toValue: 1, duration: 360,
+      easing: Easing.bezier(0.22, 1, 0.36, 1),
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const closeNotifCenter = () => {
+    Animated.timing(notifSheetAnim, {
+      toValue: 0, duration: 280,
+      easing: Easing.bezier(0.4, 0, 0.2, 1),
+      useNativeDriver: true,
+    }).start(({ finished }) => { if (finished) setNotifCenterVisible(false); });
+  };
   const [platformInfo, setPlatformInfo]             = useState(
     'Программа лояльности Villa Jaconda v1.0.0\n\nОригинальное приложение для управления бронированиями и программой лояльности.'
   );
@@ -249,6 +269,9 @@ export default function SettingsScreen() {
   const levelInfo = LEVELS[levelKey] || LEVELS.bronze;
   const balance   = cardBalance;
   const heroTheme = isAdmin ? LEVEL_HERO.admin : (LEVEL_HERO[levelKey] || LEVEL_HERO.bronze);
+  const heroBg   = heroTheme.bg;
+  const heroText = '#FFFFFF';
+  const heroSub  = heroTheme.sub;
 
   // ── Avatar picker ──
   const pickFromLibrary = async () => {
@@ -340,59 +363,63 @@ export default function SettingsScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* ── Profile Hero ── */}
-        <Animated.View style={[styles.heroCard, { opacity: heroAnim, backgroundColor: heroTheme.bg }]}>
-          {/* Background depth layers */}
-          <View style={[styles.heroToneLayer, { backgroundColor: heroTheme.tone }]} pointerEvents="none" />
-          <View style={[styles.heroBlob1, { backgroundColor: heroTheme.glow }]} pointerEvents="none" />
-          <View style={[styles.heroBlob2, { backgroundColor: heroTheme.glow }]} pointerEvents="none" />
-          {/* Diagonal stripe texture */}
-          <View style={styles.heroStripes} pointerEvents="none">
-            {Array.from({ length: 24 }, (_, i) => (
-              <View key={i} style={styles.heroStripeLine} />
-            ))}
-          </View>
-          {/* Left accent rail */}
-          <View style={[styles.heroRail, { backgroundColor: heroTheme.rail }]} pointerEvents="none" />
+        <Animated.View style={[styles.heroCard, {
+          opacity: heroAnim,
+          backgroundColor: heroBg,
+          shadowColor: heroTheme.accent,
+        }]}>
 
-          {/* Avatar */}
-          <Animated.View style={[styles.heroAvatarArea, { transform: [{ scale: avatarScale }] }]}>
-            <TouchableOpacity onPress={handlePickAvatar} activeOpacity={0.85} style={styles.heroAvatarWrap}>
-              <View style={[styles.heroAvatarGlow, { backgroundColor: heroTheme.glow }]} />
-              <View style={[styles.heroAvatarRing, { borderColor: heroTheme.accent }]}>
-                {avatarUri
-                  ? <Image source={{ uri: avatarUri }} style={styles.heroAvatarImg} />
-                  : <View style={styles.heroAvatarFill}>
-                      <Text style={styles.heroInitials}>{userInitials}</Text>
-                    </View>
-                }
-              </View>
-              <View style={[styles.heroCamBtn, { backgroundColor: heroTheme.accent }]}>
-                <MaterialIcons name={avatarLoading ? 'hourglass-top' : 'photo-camera'} size={11} color="#0A0A0A" />
-              </View>
-            </TouchableOpacity>
-          </Animated.View>
+          {/* Горизонтальная компоновка: аватар | имя+уровень | баланс */}
+          <View style={styles.heroRow}>
 
-          {/* Name + email */}
-          <Text style={styles.heroName} numberOfLines={1}>
-            {user?.name || user?.displayName || 'Пользователь'}
-          </Text>
-          <Text style={styles.heroEmail} numberOfLines={1}>{user?.email || ''}</Text>
+            {/* Аватар */}
+            <Animated.View style={{ transform: [{ scale: avatarScale }] }}>
+              <TouchableOpacity onPress={handlePickAvatar} activeOpacity={0.85}>
+                <View style={[styles.heroAvatarRing, { borderColor: heroTheme.accent }]}>
+                  {avatarUri
+                    ? <Image source={{ uri: avatarUri }} style={styles.heroAvatarImg} />
+                    : <View style={[styles.heroAvatarFill, { backgroundColor: `${heroTheme.accent}30` }]}>
+                        <Text style={[styles.heroInitials, { color: heroTheme.accent }]}>{userInitials}</Text>
+                      </View>
+                  }
+                </View>
+                <View style={[styles.heroCamBtn, { backgroundColor: heroTheme.accent }]}>
+                  <MaterialIcons name={avatarLoading ? 'hourglass-top' : 'photo-camera'} size={10} color="#0A0A0A" />
+                </View>
+              </TouchableOpacity>
+            </Animated.View>
 
-          {/* Footer: level badge + balance */}
-          <View style={styles.heroFooter}>
-            <View style={[styles.heroBadge, { backgroundColor: `${heroTheme.accent}1A`, borderColor: `${heroTheme.accent}40` }]}>
-              <MaterialIcons name={isAdmin ? 'admin-panel-settings' : 'workspace-premium'} size={13} color={heroTheme.accent} />
-              <Text style={[styles.heroBadgeText, { color: heroTheme.accent }]}>
-                {isAdmin ? 'Администратор' : levelInfo.label}
+            {/* Имя + email + уровень */}
+            <View style={styles.heroInfo}>
+              <Text style={[styles.heroName, { color: heroText }]} numberOfLines={1}>
+                {user?.name || user?.displayName || 'Пользователь'}
               </Text>
+              <Text style={[styles.heroEmail, { color: heroSub }]} numberOfLines={1}>
+                {user?.email || ''}
+              </Text>
+              <View style={[styles.heroBadge, { backgroundColor: `${heroTheme.accent}25`, borderColor: `${heroTheme.accent}50` }]}>
+                <MaterialIcons name={isAdmin ? 'admin-panel-settings' : 'workspace-premium'} size={12} color={heroTheme.accent} />
+                <Text style={[styles.heroBadgeText, { color: heroTheme.accent }]}>
+                  {isAdmin ? 'Администратор' : levelInfo.label}
+                </Text>
+              </View>
             </View>
+
+            {/* Баланс */}
             {!isAdmin && (
               <View style={styles.heroBalanceBlock}>
                 <Text style={[styles.heroBalanceCur, { color: heroTheme.accent }]}>Баланс</Text>
-                <Text style={styles.heroBalanceAmt}>{balance.toLocaleString('ru-RU')} PRB</Text>
+                <Text style={[styles.heroBalanceAmt, { color: heroText }]}>
+                  {balance.toLocaleString('ru-RU')}
+                </Text>
+                <Text style={[styles.heroBalanceUnit, { color: heroSub }]}>PRB</Text>
               </View>
             )}
+
           </View>
+
+          {/* Нижняя акцентная линия */}
+          <View style={[styles.heroBottomLine, { backgroundColor: `${heroTheme.accent}40` }]} />
         </Animated.View>
 
         {/* ── Notifications ── */}
@@ -420,7 +447,7 @@ export default function SettingsScreen() {
             desc="Просмотрите все уведомления"
             borderColor={colors.border}
             colors={colors}
-            onPress={() => setNotifCenterVisible(true)}
+            onPress={openNotifCenter}
             last
           />
         </SettingCard>
@@ -752,11 +779,35 @@ export default function SettingsScreen() {
       {/* ── Notification Center Modal ── */}
       <Modal
         visible={notifCenterVisible}
-        animationType="slide"
-        transparent={false}
-        onRequestClose={() => setNotifCenterVisible(false)}
+        animationType="none"
+        transparent
+        onRequestClose={closeNotifCenter}
       >
-        <NotificationCenter onClose={() => setNotifCenterVisible(false)} />
+        <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(6,18,30,0.46)' }}>
+          <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={closeNotifCenter} />
+          <Animated.View
+            style={{
+              height: NOTIF_SHEET_H,
+              backgroundColor: '#fff',
+              borderTopLeftRadius: 30,
+              borderTopRightRadius: 30,
+              overflow: 'hidden',
+              shadowColor: '#063B5C',
+              shadowOffset: { width: 0, height: -10 },
+              shadowOpacity: 0.18,
+              shadowRadius: 24,
+              elevation: 18,
+              transform: [{
+                translateY: notifSheetAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [NOTIF_SHEET_H, 0],
+                }),
+              }],
+            }}
+          >
+            <NotificationCenter onClose={closeNotifCenter} />
+          </Animated.View>
+        </View>
       </Modal>
     </View>
   );
@@ -989,81 +1040,63 @@ function ContactSheet({ colors, data, isEditing, onSave, onCancel }) {
 
 const styles = StyleSheet.create({
   root:   { flex: 1 },
-  scroll: { paddingTop: 14, paddingBottom: 118 },
+  scroll: { paddingTop: 8, paddingBottom: 118 },
 
   // Hero card
   heroCard: {
     marginHorizontal: 16,
-    marginTop: 4,
-    borderRadius: 24,
-    overflow: 'hidden',
-    paddingTop: 28,
+    marginTop: 8,
+    borderRadius: 20,
+    paddingTop: 20,
     paddingBottom: 20,
     paddingHorizontal: 20,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
+    shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.35,
-    shadowRadius: 24,
+    shadowRadius: 16,
     elevation: 10,
   },
-  heroToneLayer: {
-    position: 'absolute', top: -50, left: 50, right: -60, bottom: -50,
-    opacity: 0.55, transform: [{ rotate: '-14deg' }], borderRadius: 60,
-  },
-  heroBlob1: {
-    position: 'absolute', top: -24, right: -20,
-    width: 160, height: 160, borderRadius: 80, opacity: 0.55,
-  },
-  heroBlob2: {
-    position: 'absolute', bottom: -48, left: -32,
-    width: 120, height: 120, borderRadius: 60, opacity: 0.3,
-  },
-  heroStripes: {
-    position: 'absolute', top: -120, left: -90, right: -90, bottom: -120,
-    transform: [{ rotate: '38deg' }], gap: 18,
-  },
-  heroStripeLine: { height: 1, backgroundColor: 'rgba(255,255,255,0.045)' },
-  heroRail: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4 },
 
-  heroAvatarArea: { marginBottom: 16 },
-  heroAvatarWrap: { position: 'relative', alignItems: 'center', justifyContent: 'center' },
-  heroAvatarGlow: {
-    position: 'absolute', width: 96, height: 96, borderRadius: 48,
-    transform: [{ scale: 1.35 }],
+  heroRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
   },
+
   heroAvatarRing: {
-    width: 84, height: 84, borderRadius: 42,
-    borderWidth: 2.5, padding: 4, overflow: 'hidden',
+    width: 72, height: 72, borderRadius: 36,
+    borderWidth: 2.5, padding: 3, overflow: 'hidden',
   },
   heroAvatarFill: {
-    flex: 1, borderRadius: 38, alignItems: 'center', justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    flex: 1, borderRadius: 32, alignItems: 'center', justifyContent: 'center',
   },
-  heroAvatarImg: { width: '100%', height: '100%', borderRadius: 38 },
-  heroInitials: { fontSize: 28, fontWeight: '900', color: '#fff', letterSpacing: 1 },
+  heroAvatarImg: { width: '100%', height: '100%', borderRadius: 32 },
+  heroInitials: { fontSize: 24, fontWeight: '900', letterSpacing: 1 },
   heroCamBtn: {
-    position: 'absolute', bottom: -2, right: -2,
-    width: 26, height: 26, borderRadius: 13,
+    position: 'absolute', bottom: -3, right: -3,
+    width: 22, height: 22, borderRadius: 11,
     alignItems: 'center', justifyContent: 'center',
-    borderWidth: 2, borderColor: 'rgba(0,0,0,0.25)',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3, shadowRadius: 4, elevation: 3,
+    borderWidth: 2, borderColor: 'rgba(0,0,0,0.3)',
+    elevation: 3,
   },
 
-  heroName:  { color: '#fff', fontSize: 22, fontWeight: '900', textAlign: 'center', marginBottom: 4, letterSpacing: 0.2 },
-  heroEmail: { color: 'rgba(255,255,255,0.5)', fontSize: 13, fontWeight: '500', textAlign: 'center', marginBottom: 20 },
+  heroInfo: { flex: 1, gap: 4 },
+  heroName:  { color: '#fff', fontSize: 18, fontWeight: '900', letterSpacing: 0.1 },
+  heroEmail: { color: 'rgba(255,255,255,0.55)', fontSize: 12, fontWeight: '500' },
 
-  heroFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' },
   heroBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingHorizontal: 12, paddingVertical: 7,
-    borderRadius: 12, borderWidth: 1,
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 9, paddingVertical: 4,
+    borderRadius: 8, borderWidth: 1, marginTop: 2,
   },
-  heroBadgeText: { fontSize: 12, fontWeight: '800' },
-  heroBalanceBlock: { alignItems: 'flex-end' },
-  heroBalanceCur: { fontSize: 10, fontWeight: '700', marginBottom: 1 },
-  heroBalanceAmt: { color: '#fff', fontSize: 17, fontWeight: '900' },
+  heroBadgeText: { fontSize: 11, fontWeight: '800' },
+
+  heroBalanceBlock: { alignItems: 'flex-end', minWidth: 72 },
+  heroBalanceCur: { fontSize: 9, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 2 },
+  heroBalanceAmt: { fontSize: 22, fontWeight: '900', lineHeight: 24 },
+  heroBalanceUnit: { fontSize: 10, fontWeight: '700', marginTop: 1 },
+
+  heroBottomLine: { height: 1, marginTop: 16, borderRadius: 1 },
 
   // Section labels
   sectionLabel: { fontSize: 10, fontWeight: '900', letterSpacing: 1.4, marginHorizontal: 20, marginTop: 24, marginBottom: 8 },

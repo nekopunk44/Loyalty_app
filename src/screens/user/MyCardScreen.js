@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Modal, Alert, Animated, TextInput, ActivityIndicator,
+  Modal, Alert, Animated, Easing, TextInput, ActivityIndicator,
   RefreshControl, Platform, Dimensions,
 } from 'react-native';
 import Svg, { Rect, Text as SvgText, Line } from 'react-native-svg';
@@ -11,14 +11,16 @@ import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityI
 import { GradientView } from '../../components/ui/GradientView';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
-import { usePayment } from '../../context/PaymentContext';
 import LoyaltyCardService from '../../services/LoyaltyCardService';
 import { getApiUrl } from '../../utils/apiUrl';
 import { apiCall } from '../../utils/api';
 import QRCode from 'react-native-qrcode-svg';
+import CardTopUpScreen from './CardTopUpScreen';
 
 const API_BASE_URL = getApiUrl();
 const useNative = Platform.OS !== 'web';
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const TOPUP_SHEET_HEIGHT = Math.round(SCREEN_HEIGHT * 0.88);
 
 const LEVEL_GRADIENT = {
   Bronze:   ['#082C3A', '#10313B', '#4B3322', '#B06A2F'],
@@ -98,19 +100,12 @@ const LEVEL_BENEFITS = {
 export default function ProfileScreen({ navigation }) {
   const { user } = useAuth();
   const { theme } = useTheme();
-  const { topUpCard } = usePayment();
   const colors = theme.colors;
 
   const [balance, setBalance]     = useState(0);
   const [loading, setLoading]     = useState(true);
   const [accrued, setAccrued]     = useState(0);
-  const [transactions, setTransactions] = useState([]);
-  const [transLoading, setTransLoading] = useState(false);
   const [cardFlipped, setCardFlipped] = useState(false);
-  const [topUpModalVisible, setTopUpModalVisible] = useState(false);
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(null);
-  const [topUpAmount, setTopUpAmount]   = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
   const [stats, setStats] = useState({ bookings: 0, nights: 0, totalSpent: 0, nextLevel: 200000 });
   const [monthlySpending, setMonthlySpending] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -122,7 +117,30 @@ export default function ProfileScreen({ navigation }) {
   const statsAnim  = useRef(new Animated.Value(0)).current;
   const levelAnim  = useRef(new Animated.Value(0)).current;
   const cashAnim   = useRef(new Animated.Value(0)).current;
-  const txAnim     = useRef(new Animated.Value(0)).current;
+
+  // Top-up sheet
+  const [topUpSheetVisible, setTopUpSheetVisible] = useState(false);
+  const topUpSheetAnim = useRef(new Animated.Value(1)).current;
+
+  const openTopUpSheet = () => {
+    setTopUpSheetVisible(true);
+    topUpSheetAnim.setValue(1);
+    Animated.timing(topUpSheetAnim, {
+      toValue: 0,
+      duration: 420,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: useNative,
+    }).start();
+  };
+
+  const closeTopUpSheet = () => {
+    Animated.timing(topUpSheetAnim, {
+      toValue: 1,
+      duration: 300,
+      easing: Easing.in(Easing.cubic),
+      useNativeDriver: useNative,
+    }).start(() => setTopUpSheetVisible(false));
+  };
 
   // Card flip animation
   const flipAnim   = useRef(new Animated.Value(0)).current;
@@ -135,16 +153,13 @@ export default function ProfileScreen({ navigation }) {
   // Stable card number (avoid Math.random() on every render)
   const cardSuffix = useMemo(() => String(Math.floor(Math.random() * 10000)).padStart(4, '0'), []);
 
-  const runEntrance = () => {
-    progressAnim.setValue(0);
-    const anims = [cardAnim, infoAnim, statsAnim, levelAnim, cashAnim, txAnim];
-    anims.forEach(a => a.setValue(0));
+  const runEntrance = (currentStats) => {
+    const anims = [cardAnim, infoAnim, statsAnim, levelAnim, cashAnim];
     Animated.stagger(90, anims.map(a =>
       Animated.spring(a, { toValue: 1, tension: 60, friction: 8, useNativeDriver: useNative })
     )).start();
-    // Progress bar fill after level card appears
     setTimeout(() => {
-      const pct = Math.min((stats.totalSpent || 0) / 200000, 1);
+      const pct = Math.min(((currentStats || stats).totalSpent || 0) / 200000, 1);
       Animated.timing(progressAnim, {
         toValue: pct,
         duration: 900,
@@ -154,14 +169,16 @@ export default function ProfileScreen({ navigation }) {
   };
 
   useFocusEffect(React.useCallback(() => {
-    loadCardData();
-    loadUserStats();
-    loadTransactions();
-  }, [user?.id]));
+    let cancelled = false;
+    const anims = [cardAnim, infoAnim, statsAnim, levelAnim, cashAnim];
+    anims.forEach(a => a.setValue(0));
+    progressAnim.setValue(0);
 
-  useEffect(() => {
-    if (!loading) runEntrance();
-  }, [loading]);
+    Promise.all([loadCardData(), loadUserStats()])
+      .then(([, freshStats]) => { if (!cancelled) runEntrance(freshStats); });
+
+    return () => { cancelled = true; };
+  }, [user?.id]));
 
   const loadCardData = async () => {
     if (!user?.id) { setLoading(false); return; }
@@ -181,20 +198,10 @@ export default function ProfileScreen({ navigation }) {
     }
   };
 
-  const loadTransactions = async () => {
-    if (!user?.id) return;
-    try {
-      setTransLoading(true);
-      const { transactions: txs } = await LoyaltyCardService.getTransactions(user.id, 10, 0);
-      setTransactions(txs || []);
-    } catch { /* keep empty */ } finally {
-      setTransLoading(false);
-    }
-  };
 
   const loadUserStats = async () => {
     try {
-      if (!user?.id) return;
+      if (!user?.id) return null;
       const data = await apiCall(`${API_BASE_URL}/bookings/user/${user.id}`);
       if (data.success && Array.isArray(data.bookings)) {
         const done = data.bookings.filter(b => b.status === 'completed');
@@ -209,9 +216,8 @@ export default function ProfileScreen({ navigation }) {
           const key = `${yi}-${mi}`;
           monthMap[key] = (monthMap[key] || 0) + amount;
         });
-        setStats({ bookings: done.length, nights, totalSpent: spent, nextLevel: 200000 });
-
-        // Build last-6-months series
+        const newStats = { bookings: done.length, nights, totalSpent: spent, nextLevel: 200000 };
+        setStats(newStats);
         const now = new Date();
         const months = [];
         for (let i = 5; i >= 0; i--) {
@@ -222,8 +228,10 @@ export default function ProfileScreen({ navigation }) {
           months.push({ label, value: monthMap[`${y}-${m}`] || 0 });
         }
         setMonthlySpending(months);
+        return newStats;
       }
     } catch { /* keep defaults */ }
+    return null;
   };
 
   const handleFlip = () => {
@@ -252,13 +260,6 @@ export default function ProfileScreen({ navigation }) {
   const frontOpacity = flipAnim.interpolate({ inputRange: [0, 0.49, 0.5, 1], outputRange: [1, 1, 0, 0] });
   const backOpacity = flipAnim.interpolate({ inputRange: [0, 0.49, 0.5, 1], outputRange: [0, 0, 1, 1] });
 
-  const paymentMethods = [
-    { id: '1', name: 'Кредитная карта',   desc: 'Visa, MasterCard, Maestro', icon: 'credit-card' },
-    { id: '2', name: 'Банковский перевод', desc: 'Перевод на счёт',           icon: 'account-balance' },
-    { id: '3', name: 'Цифровой кошелёк',  desc: 'Apple Pay, Google Pay',     icon: 'phone-iphone' },
-    { id: '4', name: 'Яндекс.Касса',      desc: 'Быстрая оплата',            icon: 'flash-on' },
-  ];
-
   const isAdmin     = user?.role === 'admin';
   const level       = user?.membershipLevel || 'Bronze';
   const levelColor  = LEVEL_BORDER[level] || LEVEL_BORDER.Bronze;
@@ -267,41 +268,9 @@ export default function ProfileScreen({ navigation }) {
   const progressPct = Math.min((stats.totalSpent || 0) / 200000, 1);
   const maskedCardGroups = useMemo(() => ['\u2022\u2022\u2022\u2022', '\u2022\u2022\u2022\u2022', '\u2022\u2022\u2022\u2022', cardSuffix], [cardSuffix]);
 
-  const processTopUp = async (amount) => {
-    if (!user?.id) return;
-    try {
-      setIsProcessing(true);
-      const label  = selectedPaymentMethod || 'card';
-      const result = await topUpCard(user.id, amount, label);
-      if (result.success) {
-        setBalance(result.newBalance);
-        setTopUpModalVisible(false);
-        setSelectedPaymentMethod(null);
-        setTopUpAmount('');
-        Alert.alert('Успешно', `Баланс пополнен на ${amount} PRB`);
-      } else {
-        Alert.alert('Ошибка', result.message || 'Не удалось пополнить баланс');
-      }
-    } catch (e) {
-      Alert.alert('Ошибка', e.message);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleTopUp = () => {
-    if (!selectedPaymentMethod) { Alert.alert('Выберите способ оплаты'); return; }
-    const amt = parseInt(topUpAmount);
-    if (!amt || amt <= 0) { Alert.alert('Введите корректную сумму'); return; }
-    Alert.alert('Подтверждение', `Пополнить на ${amt} PRB?`, [
-      { text: 'Отмена' },
-      { text: 'Подтвердить', onPress: () => processTopUp(amt) },
-    ]);
-  };
-
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([loadCardData(), loadUserStats(), loadTransactions()]);
+    await Promise.all([loadCardData(), loadUserStats()]);
     setRefreshing(false);
   }, [user?.id]);
 
@@ -531,44 +500,6 @@ export default function ProfileScreen({ navigation }) {
           </Animated.View>
         )}
 
-        {/* ── ИСТОРИЯ ТРАНЗАКЦИЙ ── */}
-        {!isAdmin && (
-          <Animated.View style={[S.txCard, { backgroundColor: colors.cardBg }, animStyle(txAnim)]}>
-            <View style={S.txHeader}>
-              <MaterialIcons name="history" size={20} color={colors.text} style={{ marginRight: 8 }} />
-              <Text style={[S.txTitle, { color: colors.text }]}>История транзакций</Text>
-            </View>
-            {transLoading ? (
-              <ActivityIndicator color="#FF6B35" style={{ paddingVertical: 20 }} />
-            ) : transactions.length === 0 ? (
-              <Text style={[S.txEmpty, { color: colors.textSecondary }]}>Нет транзакций</Text>
-            ) : (
-              transactions.map((tx, i) => (
-                <View
-                  key={tx.id || i}
-                  style={[S.txRow, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }]}
-                >
-                  <View style={[S.txIconBox, { backgroundColor: tx.type === 'credit' ? '#10B98118' : '#EF444418' }]}>
-                    <MaterialIcons
-                      name={tx.type === 'credit' ? 'add-circle-outline' : 'remove-circle-outline'}
-                      size={20}
-                      color={tx.type === 'credit' ? '#10B981' : '#EF4444'}
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[S.txDesc, { color: colors.text }]} numberOfLines={1}>{tx.description}</Text>
-                    <Text style={[S.txDate, { color: colors.textSecondary }]}>
-                      {new Date(tx.createdAt).toLocaleDateString('ru-RU')}
-                    </Text>
-                  </View>
-                  <Text style={[S.txAmount, { color: tx.type === 'credit' ? '#10B981' : '#EF4444' }]}>
-                    {tx.type === 'credit' ? '+' : '−'}{parseFloat(tx.amount).toLocaleString('ru-RU')} PRB
-                  </Text>
-                </View>
-              ))
-            )}
-          </Animated.View>
-        )}
 
         <View style={{ height: 92 }} />
       </ScrollView>
@@ -576,62 +507,28 @@ export default function ProfileScreen({ navigation }) {
 
       <TouchableOpacity
         style={[S.floatBtn, { backgroundColor: '#063B5C' }]}
-        onPress={() => navigation.navigate('CardTopUp')}
+        onPress={openTopUpSheet}
       >
         <MaterialIcons name="add-circle" size={24} color="#fff" />
         <Text style={S.floatBtnText}>Пополнить баланс</Text>
       </TouchableOpacity>
 
-      {/* ── TOP-UP MODAL ── */}
-      <Modal visible={topUpModalVisible} animationType="slide" transparent>
-        <View style={[S.modalWrap, { backgroundColor: colors.background }]}>
-          <View style={[S.modalHeader, { backgroundColor: colors.cardBg, borderBottomColor: colors.border }]}>
-            <Text style={[S.modalTitle, { color: colors.text }]}>Пополнить баланс</Text>
-            <TouchableOpacity onPress={() => setTopUpModalVisible(false)}>
-              <MaterialIcons name="close" size={24} color={colors.text} />
-            </TouchableOpacity>
-          </View>
-          <ScrollView style={{ padding: 16 }}>
-            <Text style={[S.modalSectionTitle, { color: colors.text }]}>Способ оплаты</Text>
-            {paymentMethods.map(m => (
-              <TouchableOpacity
-                key={m.id}
-                style={[S.payCard, { backgroundColor: colors.cardBg, borderColor: selectedPaymentMethod === m.name ? colors.primary : 'transparent' }]}
-                onPress={() => setSelectedPaymentMethod(m.name)}
-              >
-                <MaterialIcons name={m.icon} size={24} color={selectedPaymentMethod === m.name ? colors.primary : colors.textSecondary} style={{ marginRight: 12 }} />
-                <View style={{ flex: 1 }}>
-                  <Text style={[{ fontWeight: '600', fontSize: 14 }, { color: colors.text }]}>{m.name}</Text>
-                  <Text style={{ fontSize: 12, color: colors.textSecondary }}>{m.desc}</Text>
-                </View>
-                {selectedPaymentMethod === m.name && <MaterialIcons name="check-circle" size={20} color={colors.primary} />}
-              </TouchableOpacity>
-            ))}
-
-            <Text style={[S.modalSectionTitle, { color: colors.text, marginTop: 16 }]}>Сумма</Text>
-            <View style={[S.amountRow, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
-              <Text style={[S.amountCurrency, { color: colors.primary }]}>PRB</Text>
-              <TextInput style={[S.amountInput, { color: colors.text }]} placeholder="Введите сумму" placeholderTextColor={colors.textSecondary} keyboardType="number-pad" value={topUpAmount} onChangeText={setTopUpAmount} />
-            </View>
-
-            <View style={S.quickRow}>
-              {[1000, 5000, 10000, 25000].map(a => (
-                <TouchableOpacity key={a} style={[S.quickBtn, { backgroundColor: colors.cardBg, borderColor: colors.border }]} onPress={() => setTopUpAmount(String(a))}>
-                  <Text style={[S.quickBtnText, { color: colors.primary }]}>{a.toLocaleString('ru-RU')}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <TouchableOpacity style={[S.confirmBtn, { backgroundColor: colors.success }]} onPress={handleTopUp}>
-              {isProcessing ? <ActivityIndicator color="#fff" /> : (
-                <>
-                  <MaterialIcons name="check" size={20} color="#fff" />
-                  <Text style={S.confirmBtnText}>{topUpAmount ? `Пополнить на ${parseInt(topUpAmount).toLocaleString('ru-RU')} PRB` : 'Введите сумму'}</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          </ScrollView>
-        </View>
+      {/* ── TOP-UP BOTTOM SHEET ── */}
+      <Modal visible={topUpSheetVisible} animationType="none" transparent statusBarTranslucent onRequestClose={closeTopUpSheet}>
+        <Animated.View style={[S.topUpOverlay, {
+          opacity: topUpSheetAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
+        }]}>
+          <TouchableOpacity style={StyleSheet.absoluteFill} onPress={closeTopUpSheet} activeOpacity={1} />
+          <Animated.View style={[S.topUpSheet, {
+            backgroundColor: colors.background,
+            transform: [{ translateY: topUpSheetAnim.interpolate({
+              inputRange: [0, 1], outputRange: [0, TOPUP_SHEET_HEIGHT + 40],
+            }) }],
+          }]}>
+            <View style={S.topUpHandle} />
+            <CardTopUpScreen onClose={closeTopUpSheet} />
+          </Animated.View>
+        </Animated.View>
       </Modal>
 
       {/* ── QR MODAL ── */}
@@ -1010,4 +907,15 @@ const S = StyleSheet.create({
   qrPassStatBox: { flex: 1, alignItems: 'center', paddingVertical: 14 },
   qrPassStatValue: { fontSize: 16, fontWeight: '900', marginBottom: 2 },
   qrPassStatLabel: { fontSize: 9, color: '#999', fontWeight: '600', letterSpacing: 0.5 },
+
+  // Top-up bottom sheet
+  topUpOverlay: { flex: 1, backgroundColor: 'rgba(6,18,30,0.55)', justifyContent: 'flex-end' },
+  topUpSheet: {
+    height: TOPUP_SHEET_HEIGHT,
+    backgroundColor: '#060C1A',
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    overflow: 'hidden',
+  },
+  topUpHandle: { width: 46, height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.15)', alignSelf: 'center', marginTop: 10, marginBottom: 2 },
 });
