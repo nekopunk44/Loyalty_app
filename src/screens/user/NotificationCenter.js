@@ -4,7 +4,6 @@ import {
   ScrollView, Modal, Animated, Easing, Dimensions,
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-import { spacing } from '../../constants/theme';
 import { useNotification } from '../../context/NotificationContext';
 import { useTheme } from '../../context/ThemeContext';
 import { pluralize } from '../../utils/pluralize';

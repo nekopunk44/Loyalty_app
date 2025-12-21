@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useMemo, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Modal, Alert, Animated, Easing, TextInput, ActivityIndicator,
+  Modal, Animated, Easing,
   RefreshControl, Platform, Dimensions,
 } from 'react-native';
 import Svg, { Rect, Text as SvgText, Line } from 'react-native-svg';
@@ -97,13 +97,13 @@ const LEVEL_BENEFITS = {
   Platinum: ['Кэшбек 40% от каждого бронирования', 'Бесплатный кухонный сервиз', 'Скидка 40% на парилку', 'Первый час парилки бесплатно'],
 };
 
-export default function ProfileScreen({ navigation }) {
+export default function ProfileScreen() {
   const { user } = useAuth();
   const { theme } = useTheme();
   const colors = theme.colors;
 
   const [balance, setBalance]     = useState(0);
-  const [loading, setLoading]     = useState(true);
+  const [_loading, setLoading]    = useState(true);
   const [accrued, setAccrued]     = useState(0);
   const [cardFlipped, setCardFlipped] = useState(false);
   const [stats, setStats] = useState({ bookings: 0, nights: 0, totalSpent: 0, nextLevel: 200000 });
