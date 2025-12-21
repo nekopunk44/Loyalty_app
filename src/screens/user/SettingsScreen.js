@@ -14,6 +14,15 @@ import * as ImagePicker from 'expo-image-picker';
 const NAVY  = '#063B5C';
 const TEAL  = '#14B8A6';
 const AMBER = '#F59E0B';
+
+const LEVEL_HERO = {
+  bronze:   { bg: '#1C1008', tone: '#3D2010', accent: '#E08B32', glow: 'rgba(224,139,50,0.45)', rail: 'rgba(224,139,50,0.8)'  },
+  silver:   { bg: '#0F1A22', tone: '#243545', accent: '#C9D1D9', glow: 'rgba(200,210,220,0.35)', rail: 'rgba(200,210,220,0.8)' },
+  gold:     { bg: '#1A1005', tone: '#382208', accent: '#F8D67A', glow: 'rgba(248,214,122,0.45)', rail: 'rgba(248,214,122,0.8)' },
+  platinum: { bg: '#080C1C', tone: '#1A134A', accent: '#C4B5FD', glow: 'rgba(185,168,255,0.45)', rail: 'rgba(185,168,255,0.8)' },
+  admin:    { bg: '#071C2C', tone: '#0D3349', accent: '#14B8A6', glow: 'rgba(20,184,166,0.40)',  rail: 'rgba(20,184,166,0.8)'  },
+};
+
 const AVATAR_KEY   = '@user_avatar_uri';
 const RULES_KEY    = '@loyalty_rules_v2';
 const CONTACT_KEY  = '@loyalty_contact_v1';
@@ -239,6 +248,7 @@ export default function SettingsScreen() {
   const levelKey  = (user?.membershipLevel || 'bronze').toLowerCase();
   const levelInfo = LEVELS[levelKey] || LEVELS.bronze;
   const balance   = cardBalance;
+  const heroTheme = isAdmin ? LEVEL_HERO.admin : (LEVEL_HERO[levelKey] || LEVEL_HERO.bronze);
 
   // ── Avatar picker ──
   const pickFromLibrary = async () => {
@@ -329,50 +339,60 @@ export default function SettingsScreen() {
         contentContainerStyle={[styles.scroll, { backgroundColor: settingsPalette.screenBg }]}
         showsVerticalScrollIndicator={false}
       >
-        <Animated.View style={[styles.profilePanel, {
-          opacity: heroAnim,
-          backgroundColor: isAdmin ? `${TEAL}0D` : `${levelInfo.color}0D`,
-          borderColor: isAdmin ? `${TEAL}28` : `${levelInfo.color}28`,
-        }]}>
-          <TouchableOpacity style={styles.profileRow} onPress={handlePickAvatar} activeOpacity={0.9}>
-            <Animated.View style={[styles.profileAvatarWrap, { transform: [{ scale: avatarScale }] }]}>
-              <View style={[styles.profileAvatarRing, { borderColor: isAdmin ? TEAL : levelInfo.color }]}>
+        {/* ── Profile Hero ── */}
+        <Animated.View style={[styles.heroCard, { opacity: heroAnim, backgroundColor: heroTheme.bg }]}>
+          {/* Background depth layers */}
+          <View style={[styles.heroToneLayer, { backgroundColor: heroTheme.tone }]} pointerEvents="none" />
+          <View style={[styles.heroBlob1, { backgroundColor: heroTheme.glow }]} pointerEvents="none" />
+          <View style={[styles.heroBlob2, { backgroundColor: heroTheme.glow }]} pointerEvents="none" />
+          {/* Diagonal stripe texture */}
+          <View style={styles.heroStripes} pointerEvents="none">
+            {Array.from({ length: 24 }, (_, i) => (
+              <View key={i} style={styles.heroStripeLine} />
+            ))}
+          </View>
+          {/* Left accent rail */}
+          <View style={[styles.heroRail, { backgroundColor: heroTheme.rail }]} pointerEvents="none" />
+
+          {/* Avatar */}
+          <Animated.View style={[styles.heroAvatarArea, { transform: [{ scale: avatarScale }] }]}>
+            <TouchableOpacity onPress={handlePickAvatar} activeOpacity={0.85} style={styles.heroAvatarWrap}>
+              <View style={[styles.heroAvatarGlow, { backgroundColor: heroTheme.glow }]} />
+              <View style={[styles.heroAvatarRing, { borderColor: heroTheme.accent }]}>
                 {avatarUri
-                  ? <Image source={{ uri: avatarUri }} style={styles.profileAvatarImg} />
-                  : <View style={[styles.profileAvatarFill, { backgroundColor: isAdmin ? `${TEAL}22` : `${levelInfo.color}22` }]}>
-                      <Text style={[styles.profileAvatarInitials, { color: isAdmin ? TEAL : levelInfo.color }]}>{userInitials}</Text>
+                  ? <Image source={{ uri: avatarUri }} style={styles.heroAvatarImg} />
+                  : <View style={styles.heroAvatarFill}>
+                      <Text style={styles.heroInitials}>{userInitials}</Text>
                     </View>
                 }
               </View>
-              <View style={[styles.profileCamDot, { backgroundColor: isAdmin ? TEAL : levelInfo.color, borderColor: settingsPalette.heroBg }]}>
-                <MaterialIcons name={avatarLoading ? 'hourglass-top' : 'photo-camera'} size={10} color="#fff" />
+              <View style={[styles.heroCamBtn, { backgroundColor: heroTheme.accent }]}>
+                <MaterialIcons name={avatarLoading ? 'hourglass-top' : 'photo-camera'} size={11} color="#0A0A0A" />
               </View>
-            </Animated.View>
+            </TouchableOpacity>
+          </Animated.View>
 
-            <View style={styles.profileInfo}>
-              <Text style={[styles.profileName, { color: settingsPalette.heroText }]} numberOfLines={1}>
-                {user?.name || user?.displayName || 'Пользователь'}
+          {/* Name + email */}
+          <Text style={styles.heroName} numberOfLines={1}>
+            {user?.name || user?.displayName || 'Пользователь'}
+          </Text>
+          <Text style={styles.heroEmail} numberOfLines={1}>{user?.email || ''}</Text>
+
+          {/* Footer: level badge + balance */}
+          <View style={styles.heroFooter}>
+            <View style={[styles.heroBadge, { backgroundColor: `${heroTheme.accent}1A`, borderColor: `${heroTheme.accent}40` }]}>
+              <MaterialIcons name={isAdmin ? 'admin-panel-settings' : 'workspace-premium'} size={13} color={heroTheme.accent} />
+              <Text style={[styles.heroBadgeText, { color: heroTheme.accent }]}>
+                {isAdmin ? 'Администратор' : levelInfo.label}
               </Text>
-              <Text style={[styles.profileEmail, { color: settingsPalette.heroSub }]} numberOfLines={1}>
-                {user?.email || ''}
-              </Text>
-              <View style={[styles.profileLevelBadge, { backgroundColor: isAdmin ? `${TEAL}18` : `${levelInfo.color}18` }]}>
-                <MaterialIcons name={isAdmin ? 'admin-panel-settings' : 'workspace-premium'} size={11} color={isAdmin ? TEAL : levelInfo.color} />
-                <Text style={[styles.profileLevelText, { color: isAdmin ? TEAL : levelInfo.color }]}>
-                  {isAdmin ? 'Администратор' : levelInfo.label}
-                </Text>
-              </View>
             </View>
-
             {!isAdmin && (
-              <View style={styles.profileBalanceBlock}>
-                <Text style={[styles.profileBalanceAmt, { color: settingsPalette.heroText }]}>
-                  {balance.toLocaleString('ru-RU')}
-                </Text>
-                <Text style={[styles.profileBalanceCur, { color: settingsPalette.heroSub }]}>PRB</Text>
+              <View style={styles.heroBalanceBlock}>
+                <Text style={[styles.heroBalanceCur, { color: heroTheme.accent }]}>Баланс</Text>
+                <Text style={styles.heroBalanceAmt}>{balance.toLocaleString('ru-RU')} PRB</Text>
               </View>
             )}
-          </TouchableOpacity>
+          </View>
         </Animated.View>
 
         {/* ── Notifications ── */}
@@ -971,39 +991,79 @@ const styles = StyleSheet.create({
   root:   { flex: 1 },
   scroll: { paddingTop: 14, paddingBottom: 118 },
 
-  // Profile card
-  profilePanel: {
+  // Hero card
+  heroCard: {
     marginHorizontal: 16,
     marginTop: 4,
-    borderRadius: 20,
-    borderWidth: 1,
-    padding: 16,
-    shadowColor: NAVY,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.07,
-    shadowRadius: 12,
-    elevation: 3,
+    borderRadius: 24,
+    overflow: 'hidden',
+    paddingTop: 28,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.35,
+    shadowRadius: 24,
+    elevation: 10,
   },
-  profileRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  profileAvatarWrap: { position: 'relative', flexShrink: 0 },
-  profileAvatarRing: { width: 58, height: 58, borderRadius: 29, borderWidth: 2.5, padding: 3, overflow: 'hidden' },
-  profileAvatarFill: { flex: 1, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
-  profileAvatarImg: { width: '100%', height: '100%', borderRadius: 26 },
-  profileAvatarInitials: { fontSize: 20, fontWeight: '900' },
-  profileCamDot: {
-    position: 'absolute', right: -2, bottom: -2,
-    width: 20, height: 20, borderRadius: 10,
+  heroToneLayer: {
+    position: 'absolute', top: -50, left: 50, right: -60, bottom: -50,
+    opacity: 0.55, transform: [{ rotate: '-14deg' }], borderRadius: 60,
+  },
+  heroBlob1: {
+    position: 'absolute', top: -24, right: -20,
+    width: 160, height: 160, borderRadius: 80, opacity: 0.55,
+  },
+  heroBlob2: {
+    position: 'absolute', bottom: -48, left: -32,
+    width: 120, height: 120, borderRadius: 60, opacity: 0.3,
+  },
+  heroStripes: {
+    position: 'absolute', top: -120, left: -90, right: -90, bottom: -120,
+    transform: [{ rotate: '38deg' }], gap: 18,
+  },
+  heroStripeLine: { height: 1, backgroundColor: 'rgba(255,255,255,0.045)' },
+  heroRail: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4 },
+
+  heroAvatarArea: { marginBottom: 16 },
+  heroAvatarWrap: { position: 'relative', alignItems: 'center', justifyContent: 'center' },
+  heroAvatarGlow: {
+    position: 'absolute', width: 96, height: 96, borderRadius: 48,
+    transform: [{ scale: 1.35 }],
+  },
+  heroAvatarRing: {
+    width: 84, height: 84, borderRadius: 42,
+    borderWidth: 2.5, padding: 4, overflow: 'hidden',
+  },
+  heroAvatarFill: {
+    flex: 1, borderRadius: 38, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.1)',
+  },
+  heroAvatarImg: { width: '100%', height: '100%', borderRadius: 38 },
+  heroInitials: { fontSize: 28, fontWeight: '900', color: '#fff', letterSpacing: 1 },
+  heroCamBtn: {
+    position: 'absolute', bottom: -2, right: -2,
+    width: 26, height: 26, borderRadius: 13,
     alignItems: 'center', justifyContent: 'center',
-    borderWidth: 2,
+    borderWidth: 2, borderColor: 'rgba(0,0,0,0.25)',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3, shadowRadius: 4, elevation: 3,
   },
-  profileInfo: { flex: 1, minWidth: 0 },
-  profileName: { fontSize: 16, fontWeight: '800', marginBottom: 2 },
-  profileEmail: { fontSize: 12, fontWeight: '500', marginBottom: 6 },
-  profileLevelBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
-  profileLevelText: { fontSize: 11, fontWeight: '800' },
-  profileBalanceBlock: { alignItems: 'flex-end', flexShrink: 0 },
-  profileBalanceAmt: { fontSize: 18, fontWeight: '900' },
-  profileBalanceCur: { fontSize: 11, fontWeight: '700', marginTop: 1 },
+
+  heroName:  { color: '#fff', fontSize: 22, fontWeight: '900', textAlign: 'center', marginBottom: 4, letterSpacing: 0.2 },
+  heroEmail: { color: 'rgba(255,255,255,0.5)', fontSize: 13, fontWeight: '500', textAlign: 'center', marginBottom: 20 },
+
+  heroFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' },
+  heroBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 12, paddingVertical: 7,
+    borderRadius: 12, borderWidth: 1,
+  },
+  heroBadgeText: { fontSize: 12, fontWeight: '800' },
+  heroBalanceBlock: { alignItems: 'flex-end' },
+  heroBalanceCur: { fontSize: 10, fontWeight: '700', marginBottom: 1 },
+  heroBalanceAmt: { color: '#fff', fontSize: 17, fontWeight: '900' },
 
   // Section labels
   sectionLabel: { fontSize: 10, fontWeight: '900', letterSpacing: 1.4, marginHorizontal: 20, marginTop: 24, marginBottom: 8 },
