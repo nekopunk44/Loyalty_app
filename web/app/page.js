@@ -1,17 +1,16 @@
-import Cursor from '@/components/Cursor';
 import Navbar from '@/components/Navbar';
 import Hero from '@/components/Hero';
 import Rooms from '@/components/Rooms';
 import Tour from '@/components/Tour';
 import LoyaltyTiers from '@/components/LoyaltyTiers';
 import Reviews from '@/components/Reviews';
-import LoyaltyCta from '@/components/LoyaltyCta';
+import BookingSection from '@/components/BookingSection';
+import MapSection from '@/components/MapSection';
 import Footer from '@/components/Footer';
 
 export default function Home() {
   return (
     <>
-      <Cursor />
       <Navbar />
       <main>
         <Hero />
@@ -19,7 +18,8 @@ export default function Home() {
         <Tour />
         <LoyaltyTiers />
         <Reviews />
-        <LoyaltyCta />
+        <BookingSection />
+        <MapSection />
       </main>
       <Footer />
     </>

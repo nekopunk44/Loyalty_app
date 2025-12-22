@@ -9,6 +9,7 @@ const links = [
   { href: '#loyalty', id: 'loyalty', label: 'Лояльность' },
   { href: '#reviews', id: 'reviews', label: 'Отзывы' },
   { href: '#contact', id: 'contact', label: 'Контакты' },
+  { href: '#map',     id: 'map',     label: 'Карта' },
 ];
 
 export default function Navbar() {

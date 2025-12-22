@@ -4,116 +4,163 @@ import { useRef } from 'react';
 import Image from 'next/image';
 import { motion, useScroll, useTransform } from 'motion/react';
 
-const slides = ['/images/property1.png', '/images/property2.png', '/images/property3.png', '/images/property4.png'];
-
-function SplitText({ text, delay = 0 }) {
-  return (
-    <span style={{ display: 'inline-block' }}>
-      {text.split('').map((ch, i) => (
-        <motion.span
-          key={i}
-          initial={{ y: '110%', opacity: 0 }}
-          animate={{ y: '0%', opacity: 1 }}
-          transition={{
-            duration: 1.2,
-            delay: delay + i * 0.04,
-            ease: [0.16, 1, 0.3, 1],
-          }}
-          style={{ display: 'inline-block', whiteSpace: 'pre' }}
-        >
-          {ch === ' ' ? ' ' : ch}
-        </motion.span>
-      ))}
-    </span>
-  );
-}
+const stats = [
+  { value: '4', label: 'Формата' },
+  { value: '30+', label: 'Гостей max' },
+  { value: '2022', label: 'Год открытия' },
+];
 
 export default function Hero() {
   const ref = useRef(null);
   const { scrollYProgress } = useScroll({ target: ref, offset: ['start start', 'end start'] });
 
-  const imageY = useTransform(scrollYProgress, [0, 1], ['0%', '25%']);
-  const imageScale = useTransform(scrollYProgress, [0, 1], [1.05, 1.2]);
-  const contentY = useTransform(scrollYProgress, [0, 1], ['0%', '-15%']);
-  const contentOpacity = useTransform(scrollYProgress, [0, 0.6], [1, 0]);
+  const imgY = useTransform(scrollYProgress, [0, 1], ['0%', '18%']);
+  const opacity = useTransform(scrollYProgress, [0, 0.7], [1, 0]);
 
   return (
-    <section ref={ref} id="villa" className="relative h-screen w-full overflow-hidden" style={{ background: 'var(--bg)' }}>
-      <motion.div
-        className="absolute inset-0"
-        style={{ y: imageY, scale: imageScale }}
-      >
+    <section ref={ref} id="villa" style={{ position: 'relative', height: '100svh', overflow: 'hidden', background: 'var(--bg)' }}>
+
+      {/* Background photo */}
+      <motion.div style={{ position: 'absolute', inset: 0, y: imgY }}>
         <Image
-          src={slides[0]}
+          src="/images/property3.png"
           alt="Villa Jaconda"
-          fill
-          priority
+          fill priority
           sizes="100vw"
-          quality={70}
+          quality={80}
           className="object-cover"
         />
-        <div className="absolute inset-0" style={{
-          background: 'linear-gradient(180deg, rgba(13,10,8,0.7) 0%, rgba(13,10,8,0.4) 35%, rgba(13,10,8,0.5) 65%, rgba(13,10,8,0.95) 100%)',
-        }} />
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(13,10,8,0.55) 0%, rgba(13,10,8,0.2) 40%, rgba(13,10,8,0.75) 85%, rgba(13,10,8,1) 100%)' }} />
       </motion.div>
 
-      <motion.div
-        className="relative h-full container-x flex flex-col justify-end pb-24 md:pb-32"
-        style={{ y: contentY, opacity: contentOpacity }}
-      >
-        <motion.p
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 1, delay: 0.2 }}
-          className="eyebrow mb-8"
-        >
-          <span className="dot" /> &nbsp; Est. 2022 &nbsp; · &nbsp; Приднестровье
-        </motion.p>
+      <motion.div style={{ opacity, position: 'relative', height: '100%', display: 'flex', flexDirection: 'column' }}>
 
-        <h1 className="font-display display-xl overflow-hidden">
-          <span style={{ display: 'block', overflow: 'hidden' }}>
-            <SplitText text="Villa" delay={0.3} />
-          </span>
-          <span style={{ display: 'block', overflow: 'hidden', color: 'var(--gold)' }}>
-            <SplitText text="Jaconda" delay={0.6} />
-          </span>
-        </h1>
-
+        {/* Top location badge */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: -12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 1, delay: 1.6 }}
-          className="mt-10 flex flex-col md:flex-row md:items-end md:justify-between gap-8"
+          transition={{ duration: 1, delay: 0.5 }}
+          style={{
+            position: 'absolute', top: 'clamp(100px, 14vh, 160px)', left: 0, right: 0,
+            display: 'flex', justifyContent: 'center',
+          }}
         >
-          <p className="font-display max-w-md" style={{ fontSize: 'clamp(1.1rem, 1.6vw, 1.5rem)', lineHeight: 1.4, color: 'var(--text-soft)', fontStyle: 'italic' }}>
-            Восемь номеров. Один дом. Дюжина историй, которые случаются здесь каждый сезон.
-          </p>
+          <span style={{
+            fontSize: 11, letterSpacing: '0.28em', textTransform: 'uppercase',
+            color: 'var(--text-soft)', display: 'flex', alignItems: 'center', gap: 14,
+          }}>
+            <span style={{ width: 32, height: 1, background: 'var(--gold)' }} />
+            Приднестровье · Est. 2022
+            <span style={{ width: 32, height: 1, background: 'var(--gold)' }} />
+          </span>
+        </motion.div>
 
-          <div className="flex items-center gap-4">
-            <a href="#contact" className="btn btn-primary">
+        {/* Main headline */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center', padding: '0 20px' }}>
+          <div style={{ overflow: 'hidden', marginBottom: 8 }}>
+            <motion.h1
+              className="font-display"
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              transition={{ duration: 1.3, ease: [0.16, 1, 0.3, 1], delay: 0.2 }}
+              style={{
+                fontSize: 'clamp(5rem, 14vw, 13rem)',
+                lineHeight: 0.9,
+                letterSpacing: '-0.02em',
+                margin: 0,
+              }}
+            >
+              Villa
+            </motion.h1>
+          </div>
+          <div style={{ overflow: 'hidden' }}>
+            <motion.h1
+              className="font-display"
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              transition={{ duration: 1.3, ease: [0.16, 1, 0.3, 1], delay: 0.35 }}
+              style={{
+                fontSize: 'clamp(5rem, 14vw, 13rem)',
+                lineHeight: 0.9,
+                letterSpacing: '-0.02em',
+                margin: 0,
+                color: 'var(--gold)',
+                fontStyle: 'italic',
+              }}
+            >
+              Jaconda
+            </motion.h1>
+          </div>
+
+          <motion.p
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 1, delay: 1.0 }}
+            style={{
+              marginTop: 36,
+              fontSize: 'clamp(14px, 1.2vw, 17px)',
+              color: 'var(--text-soft)',
+              letterSpacing: '0.04em',
+              maxWidth: 420,
+              lineHeight: 1.65,
+            }}
+          >
+            Приватная вилла в Бендерах — четыре формата на любой случай, от камерного отдыха до полного выкупа территории.
+          </motion.p>
+
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 1, delay: 1.25 }}
+            style={{ marginTop: 40, display: 'flex', gap: 14, flexWrap: 'wrap', justifyContent: 'center' }}
+          >
+            <a href="#contact" className="btn btn-primary" data-cursor>
               Забронировать
               <span className="btn-arrow">→</span>
             </a>
-            <a href="#rooms" className="btn btn-ghost">
-              Номера
+            <a href="#rooms" className="btn btn-ghost" data-cursor>
+              Посмотреть номера
             </a>
+          </motion.div>
+        </div>
+
+        {/* Bottom stats bar */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 1, delay: 1.5 }}
+          style={{
+            padding: '0 clamp(24px, 5vw, 80px) clamp(32px, 5vh, 60px)',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'flex-end',
+            flexWrap: 'wrap',
+            gap: 24,
+          }}
+        >
+          <div style={{ display: 'flex', gap: 'clamp(28px, 5vw, 64px)' }}>
+            {stats.map((s) => (
+              <div key={s.label}>
+                <p className="font-display" style={{ fontSize: 'clamp(1.6rem, 3vw, 2.8rem)', lineHeight: 1, color: 'var(--gold)', marginBottom: 6 }}>
+                  {s.value}
+                </p>
+                <p style={{ fontSize: 11, color: 'var(--muted)', letterSpacing: '0.15em', textTransform: 'uppercase' }}>
+                  {s.label}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, color: 'var(--muted)' }}>
+            <span style={{ fontSize: 10, letterSpacing: '0.3em', textTransform: 'uppercase' }}>Scroll</span>
+            <motion.div
+              animate={{ scaleY: [0, 1, 0] }}
+              transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut', repeatDelay: 0.3 }}
+              style={{ width: 1, height: 44, background: 'currentColor', transformOrigin: 'top' }}
+            />
           </div>
         </motion.div>
-      </motion.div>
 
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 1.5, delay: 2 }}
-        className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-3"
-        style={{ color: 'var(--muted)' }}
-      >
-        <span style={{ fontSize: 10, letterSpacing: '0.3em', textTransform: 'uppercase' }}>Scroll</span>
-        <motion.div
-          animate={{ scaleY: [1, 0.4, 1], originY: 1 }}
-          transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-          style={{ width: 1, height: 50, background: 'currentColor', transformOrigin: 'bottom' }}
-        />
       </motion.div>
     </section>
   );
