@@ -11,6 +11,7 @@ import {
   SlideInLeftCard,
   SlideInRightCard,
 } from '../components/AnimatedCard';
+import PropertyCarousel from '../components/PropertyCarousel';
 
 export default function HomeScreen({ navigation }) {
   const { theme, isDark } = useTheme();
@@ -64,9 +65,36 @@ export default function HomeScreen({ navigation }) {
     },
   ];
 
+  const properties = [
+    {
+      id: '1',
+      name: 'Студия + бассейн + терраса',
+      price: '150$ за 12 часов',
+      image: require('../assets/property1.png'),
+    },
+    {
+      id: '2',
+      name: 'Студия + бассейн + зал',
+      price: '250$ за 12 часов',
+      image: require('../assets/property2.png'),
+    },
+    {
+      id: '3',
+      name: 'Задний двор',
+      price: '200$ за 12 часов',
+      image: require('../assets/property3.png'),
+    },
+    {
+      id: '4',
+      name: 'Сауна',
+      price: '250₽ за час',
+      image: require('../assets/property4.png'),
+    },
+  ];
+
   const loyaltyStats = [
     { label: 'Баллы', value: user?.loyaltyPoints || 0, icon: 'stars', color: '#FFD700' },
-    { label: 'Уровень', value: user?.membershipLevel || 'Bronze', icon: 'medal', color: '#CD7F32' },
+    { label: 'Уровень', value: user?.membershipLevel || 'Bronze', icon: 'emoji-events', color: '#CD7F32' },
     { label: 'Бронирования', value: 12, icon: 'event-note', color: colors.primary },
   ];
 
@@ -96,11 +124,14 @@ export default function HomeScreen({ navigation }) {
     headerTop: {
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'space-between',
+      justifyContent: 'center',
       marginBottom: spacing.lg,
+      position: 'relative',
     },
     headerGreeting: {
       flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     greetingLabel: {
       fontSize: 14,
@@ -122,7 +153,8 @@ export default function HomeScreen({ navigation }) {
       backgroundColor: colors.primary,
       justifyContent: 'center',
       alignItems: 'center',
-      marginLeft: spacing.md,
+      position: 'absolute',
+      right: 0,
       shadowColor: colors.shadow,
       shadowOffset: { width: 0, height: 2 },
       shadowOpacity: 0.2,
@@ -219,6 +251,19 @@ export default function HomeScreen({ navigation }) {
       fontWeight: '700',
       color: '#fff',
       textAlign: 'center',
+    },
+
+    // ========== CATALOG SECTION ==========
+    catalogSection: {
+      marginVertical: spacing.lg,
+    },
+    catalogTitle: {
+      fontSize: 18,
+      fontWeight: '700',
+      color: colors.text,
+      textAlign: 'center',
+      marginHorizontal: spacing.md,
+      marginBottom: spacing.md,
     },
 
     // ========== GALLERY SECTION ==========
@@ -461,11 +506,11 @@ export default function HomeScreen({ navigation }) {
 
           <TouchableOpacity
             style={[styles.actionCard, { backgroundColor: colors.secondary }]}
-            onPress={() => navigation.navigate('Shop')}
+            onPress={() => navigation.navigate('Settings')}
             activeOpacity={0.7}
           >
-            <MaterialIcons name="shopping-bag" size={32} color="#fff" style={styles.actionIcon} />
-            <Text style={styles.actionText}>Магазин</Text>
+            <MaterialIcons name="settings" size={32} color="#fff" style={styles.actionIcon} />
+            <Text style={styles.actionText}>Настройки</Text>
           </TouchableOpacity>
         </View>
       </SlideInBottomCard>
@@ -492,31 +537,15 @@ export default function HomeScreen({ navigation }) {
         </View>
       </SlideInBottomCard>
 
-      {/* ========== AMENITIES GALLERY ========== */}
+      {/* ========== PROPERTIES CATALOG ========== */}
       <FadeInCard delay={300}>
-        <View style={styles.gallerySection}>
-          <View style={styles.gallerySectionHeader}>
-            <Text style={styles.gallerySectionTitle}>Услуги</Text>
-            {isAdmin && (
-              <TouchableOpacity
-                style={styles.addButton}
-                onPress={handleAddPhoto}
-              >
-                <MaterialIcons name="add" size={20} color="#fff" />
-              </TouchableOpacity>
-            )}
-          </View>
-          <FlatList
-            data={amenities}
-            renderItem={renderPhotoCard}
-            keyExtractor={(item) => item.id}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.photosGallery}
-            bounces={false}
-            scrollEnabled={true}
-            snapToInterval={220}
-            decelerationRate="fast"
+        <View style={styles.catalogSection}>
+          <Text style={styles.catalogTitle}>Каталог объектов</Text>
+          <PropertyCarousel 
+            properties={properties}
+            onPropertyPress={(property) => {
+              navigation.navigate('Booking', { selectedProperty: property });
+            }}
           />
         </View>
       </FadeInCard>

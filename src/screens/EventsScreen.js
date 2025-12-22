@@ -1,13 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ScrollView, Modal, Alert } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-import { spacing, borderRadius } from '../constants/theme';
+import { spacing, borderRadius, colors as themeColors } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import { FadeInCard, SlideInLeftCard, ScaleInCard } from '../components/AnimatedCard';
+import { useEvents } from '../context/EventContext';
+import { getEventStyleByType } from '../utils/eventStyles';
 
 export default function EventsScreen() {
   const { theme } = useTheme();
   const colors = theme.colors;
+  const { events, isLoading } = useEvents(); // ← Получаем события из EventContext
   
   const [filter, setFilter] = useState('all');
   const [selectedEvent, setSelectedEvent] = useState(null);
@@ -63,13 +66,21 @@ export default function EventsScreen() {
     },
   ];
 
-  const filteredEvents = mockEvents.filter(event => {
-    if (filter === 'all') return true;
-    if (filter === 'active') return event.status === 'Активный';
-    if (filter === 'upcoming') return event.status === 'Скоро' || event.status === 'Завтра';
-    if (filter === 'joined') return Math.random() > 0.3; // Случайные события
-    return true;
-  });
+  const filteredEvents = useMemo(() => {
+    // Используем события из EventContext (которые включают Firebase + локальные)
+    console.log('🔍 EventsScreen: filteredEvents, всего событий:', events.length, 'фильтр:', filter);
+    
+    const filtered = events.filter(event => {
+      if (filter === 'all') return true;
+      if (filter === 'active') return event.status === 'Активный';
+      if (filter === 'upcoming') return event.status === 'Скоро' || event.status === 'Завтра';
+      if (filter === 'joined') return event.id === '1' || event.id === '3'; // Фиксированные события
+      return true;
+    });
+    
+    console.log('🔍 EventsScreen: отфильтровано событий:', filtered.length);
+    return filtered;
+  }, [filter, events]);
 
   const handleEventPress = (event) => {
     setSelectedEvent(event);
@@ -81,49 +92,60 @@ export default function EventsScreen() {
     setEventDetailModalVisible(false);
   };
 
-  const renderEvent = ({ item, index }) => (
-    <SlideInLeftCard delay={100 + index * 100}>
+  const renderEvent = ({ item, index }) => {
+    // Используем цвет и иконку которые уже содержатся в событии
+    const eventData = {
+      ...item,
+      icon: item.icon || 'event',
+      color: item.color || '#FF6B35',
+      description: item.description || item.title,
+      participants: item.participants || 0,
+    };
+    
+    return (
+    <SlideInLeftCard key={item.id} delay={100 + (index % 3) * 100}>
       <TouchableOpacity 
-        style={[styles.eventCard, { borderLeftColor: item.color }]}
-        onPress={() => handleEventPress(item)}
+        style={[styles.eventCard, { borderLeftColor: eventData.color }]}
+        onPress={() => handleEventPress(eventData)}
+        activeOpacity={0.7}
       >
-        <View style={[styles.iconBox, { backgroundColor: item.color }]}>
-          <MaterialIcons name={item.icon} size={24} color="#fff" />
+        <View style={[styles.iconBox, { backgroundColor: eventData.color }]}>
+          <MaterialIcons name={eventData.icon} size={28} color="#fff" />
         </View>
         <View style={styles.eventContent}>
-          <Text style={styles.eventTitle}>{item.title}</Text>
-          <Text style={styles.eventDescription}>{item.description}</Text>
+          <Text style={styles.eventTitle}>{eventData.title}</Text>
+          <Text style={styles.eventDescription} numberOfLines={2}>{eventData.description}</Text>
           
           {/* Информация о приз/награде */}
           <View style={styles.metaInfo}>
-            {item.prize && (
+            {eventData.prize && (
               <View style={styles.metaItem}>
-                <MaterialIcons name="card-giftcard" size={14} color={item.color} />
-                <Text style={styles.metaText}>{item.prize}</Text>
+                <MaterialIcons name="card-giftcard" size={14} color={eventData.color} />
+                <Text style={styles.metaText}>{eventData.prize}</Text>
               </View>
             )}
-            {item.reward && (
+            {eventData.reward && (
               <View style={styles.metaItem}>
-                <MaterialIcons name="percent" size={14} color={item.color} />
-                <Text style={styles.metaText}>+{item.reward}</Text>
+                <MaterialIcons name="trending-up" size={14} color={eventData.color} />
+                <Text style={styles.metaText}>+{eventData.reward}</Text>
               </View>
             )}
-            {item.startBid && (
+            {eventData.startBid && (
               <View style={styles.metaItem}>
-                <MaterialIcons name="attach-money" size={14} color={item.color} />
-                <Text style={styles.metaText}>От {item.startBid} ₽</Text>
+                <MaterialIcons name="attach-money" size={14} color={eventData.color} />
+                <Text style={styles.metaText}>От {eventData.startBid} ₽</Text>
               </View>
             )}
           </View>
 
           <View style={styles.eventFooter}>
-            <Text style={[styles.eventStatus, { color: item.color }]}>
-              {item.status}
+            <Text style={[styles.eventStatus, { color: eventData.color }]}>
+              {eventData.status}
             </Text>
             <View style={styles.participantsInfo}>
               <MaterialIcons name="people" size={14} color={colors.textSecondary} />
               <Text style={styles.participantsText}>
-                {item.participants}
+                {eventData.participants}
               </Text>
             </View>
           </View>
@@ -131,6 +153,7 @@ export default function EventsScreen() {
       </TouchableOpacity>
     </SlideInLeftCard>
   );
+  };
 
   const styles = StyleSheet.create({
   container: {
@@ -138,7 +161,7 @@ export default function EventsScreen() {
     backgroundColor: colors.background,
   },
   header: {
-    marginBottom: spacing.lg,
+    marginBottom: 0,
   },
   headerTitle: {
     fontSize: 22,
@@ -152,8 +175,10 @@ export default function EventsScreen() {
   },
   filterContainer: {
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
+    paddingTop: spacing.md,
+    paddingBottom: 16,
     gap: spacing.sm,
+    alignItems: 'center',
   },
   filterTab: {
     flexDirection: 'row',
@@ -165,6 +190,7 @@ export default function EventsScreen() {
     marginRight: spacing.sm,
     borderWidth: 1,
     borderColor: colors.border,
+    flexShrink: 0,
   },
   filterTabActive: {
     backgroundColor: colors.primary,
@@ -182,6 +208,7 @@ export default function EventsScreen() {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
     paddingBottom: spacing.lg,
+    flexGrow: 1,
   },
   eventCard: {
     flexDirection: 'row',
@@ -189,21 +216,27 @@ export default function EventsScreen() {
     borderRadius: borderRadius.lg,
     marginBottom: spacing.md,
     padding: spacing.md,
-    alignItems: 'center',
-    borderLeftWidth: 4,
+    alignItems: 'flex-start',
+    borderLeftWidth: 5,
     shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
   },
   iconBox: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: spacing.md,
+    flexShrink: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    elevation: 4,
   },
   eventContent: {
     flex: 1,
@@ -377,8 +410,8 @@ export default function EventsScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Заголовок */}
-      <ScaleInCard delay={50} style={{ paddingHorizontal: spacing.md, paddingTop: spacing.md, marginBottom: spacing.md }}>
+      {/* Заголовок - вне FlatList, чтобы не обновлялся */}
+      <ScaleInCard delay={50} style={{ paddingHorizontal: spacing.md, paddingTop: spacing.md }}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>События и акции</Text>
           <Text style={styles.headerSubtitle}>
@@ -387,45 +420,53 @@ export default function EventsScreen() {
         </View>
       </ScaleInCard>
 
-      {/* Фильтры */}
-      <ScrollView 
-        horizontal 
-        showsHorizontalScrollIndicator={false} 
-        contentContainerStyle={styles.filterContainer}
-      >
-        {filterTabs.map((tab) => (
-          <TouchableOpacity
-            key={tab.id}
-            style={[
-              styles.filterTab,
-              filter === tab.id && styles.filterTabActive,
-            ]}
-            onPress={() => setFilter(tab.id)}
-          >
-            <MaterialIcons 
-              name={tab.icon} 
-              size={16} 
-              color={filter === tab.id ? '#fff' : colors.textSecondary}
-              style={{ marginRight: spacing.xs }}
-            />
-            <Text style={[
-              styles.filterTabText,
-              filter === tab.id && styles.filterTabTextActive,
-            ]}>
-              {tab.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-
-      {/* События */}
       <FlatList
+        ListHeaderComponent={
+          <>
+            {/* Фильтры */}
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false} 
+              contentContainerStyle={styles.filterContainer}
+            >
+              {filterTabs.map((tab) => (
+                <TouchableOpacity
+                  key={tab.id}
+                  style={[
+                    styles.filterTab,
+                    filter === tab.id && styles.filterTabActive,
+                  ]}
+                  onPress={() => setFilter(tab.id)}
+                >
+                  <MaterialIcons 
+                    name={tab.icon} 
+                    size={16} 
+                    color={filter === tab.id ? '#fff' : colors.textSecondary}
+                    style={{ marginRight: spacing.xs }}
+                  />
+                  <Text style={[
+                    styles.filterTabText,
+                    filter === tab.id && styles.filterTabTextActive,
+                  ]}>
+                    {tab.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </>
+        }
         data={filteredEvents}
+        key={`list-${filter}`}
         keyExtractor={(i) => i.id}
         renderItem={renderEvent}
         scrollEnabled={true}
-        nestedScrollEnabled={true}
+        nestedScrollEnabled={false}
+        style={{ flex: 1 }}
         contentContainerStyle={styles.listContent}
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={10}
+        updateCellsBatchingPeriod={50}
+        extraData={filter}
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <MaterialIcons name="event-busy" size={48} color={colors.textSecondary} />

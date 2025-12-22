@@ -130,6 +130,21 @@ export const AuthProvider = ({ children }) => {
         status: 'active',
         membershipLevel: 'Bronze',
         loyaltyPoints: 0,
+        balance: 0, // Остаток на счёте
+        walletBalance: 0, // Баланс кошелька
+        stats: {
+          totalBookings: 0,
+          totalSpent: 0,
+          totalEarned: 0,
+          reviewsCount: 0,
+          averageRating: 0,
+          completedBookings: 0,
+          cancelledBookings: 0,
+          lastBookingDate: null,
+        },
+        paymentMethods: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
       };
 
       // Сохраняем роль в AsyncStorage как резервный вариант
@@ -284,6 +299,19 @@ export const AuthProvider = ({ children }) => {
           status: 'active',
           membershipLevel: 'Bronze',
           loyaltyPoints: 0,
+          balance: 0,
+          walletBalance: 0,
+          stats: {
+            totalBookings: 0,
+            totalSpent: 0,
+            totalEarned: 0,
+            reviewsCount: 0,
+            averageRating: 0,
+            completedBookings: 0,
+            cancelledBookings: 0,
+            lastBookingDate: null,
+          },
+          paymentMethods: [],
         };
         
         // Пытаемся сохранить в Firestore, но не падаем если не удастся (с таймаутом 2 секунды)

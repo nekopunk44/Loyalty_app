@@ -140,7 +140,7 @@ export default function ProfileScreen() {
         </View>
 
         <View style={[styles.statCard, { backgroundColor: theme.colors.cardBg }]}>
-          <MaterialIcons name="local-fire-department" size={28} color={theme.colors.success} />
+          <MaterialIcons name="emoji-events" size={28} color={theme.colors.success} />
           <Text style={[styles.statValue, { color: theme.colors.text }]}>{tier}</Text>
           <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Уровень</Text>
         </View>
