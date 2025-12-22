@@ -66,7 +66,7 @@ export default function Hero() {
           whiteSpace: 'nowrap', zIndex: 2,
         }}
       >
-        Приднестровье · Бендеры · Est. 2022
+        Приднестровье · Слободзея · Est. 2022
       </motion.p>
 
       {/* Main headline — centered, fills the viewport */}
@@ -114,25 +114,10 @@ export default function Hero() {
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 1, delay: 1.0 }}
-          style={{ fontSize: 'clamp(13px, 1.2vw, 16px)', color: 'var(--text-soft)', letterSpacing: '0.03em', maxWidth: 400, lineHeight: 1.65, marginBottom: 36 }}
+          style={{ fontSize: 'clamp(13px, 1.2vw, 16px)', color: 'var(--text-soft)', letterSpacing: '0.03em', maxWidth: 400, lineHeight: 1.65 }}
         >
-          Приватная вилла в Бендерах — четыре формата на любой случай, от камерного отдыха до полного выкупа территории.
+          Приватная вилла в Слободзее — четыре формата на любой случай, от камерного отдыха до полного выкупа территории.
         </motion.p>
-
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 1, delay: 1.2 }}
-          style={{ display: 'flex', gap: 14, flexWrap: 'wrap', justifyContent: 'center' }}
-        >
-          <a href="#contact" className="btn btn-primary" data-cursor>
-            Забронировать
-            <span className="btn-arrow">→</span>
-          </a>
-          <a href="#rooms" className="btn btn-ghost" data-cursor>
-            Номера
-          </a>
-        </motion.div>
       </div>
 
       {/* Bottom bar */}
