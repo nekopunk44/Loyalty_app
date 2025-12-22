@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,6 @@ import {
   TextInput,
   Modal,
   Alert,
-  FlatList,
   Dimensions,
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
@@ -16,39 +15,7 @@ import { colors, spacing, borderRadius } from '../constants/theme';
 import { EventCardAdmin } from '../components/Cards';
 import { FadeInCard, ScaleInCard } from '../components/AnimatedCard';
 import { useEvents } from '../context/EventContext';
-
-const initialMockEvents = [
-  {
-    id: '1',
-    title: 'Аукцион: Картина',
-    description: 'Редкая картина от известного художника',
-    startBid: 1000,
-    status: 'active',
-    prize: '50 000 ₽',
-    endDate: '20.12.2025',
-    participantsCount: 23,
-    allowedUsers: 'all',
-  },
-  {
-    id: '2',
-    title: 'Двойной кешбек',
-    description: '2x кешбека на все покупки',
-    status: 'active',
-    endDate: '15.12.2025',
-    participantsCount: 1243,
-    allowedUsers: 'platinum',
-  },
-  {
-    id: '3',
-    title: 'Розыгрыш подарков',
-    description: 'Автоматическое участие для активных пользователей',
-    prize: 'Путешествие в Европу',
-    status: 'ended',
-    endDate: '10.12.2025',
-    participantsCount: 567,
-    allowedUsers: 'gold',
-  },
-];
+import { getEventStyleByType, getAllEventTypes } from '../utils/eventStyles';
 
 export default function AdminEvents() {
   const { events, addEvent, updateEvent, deleteEvent } = useEvents();
@@ -63,7 +30,14 @@ export default function AdminEvents() {
     endDate: '',
     allowedUsers: 'all',
     status: 'active',
+    eventType: 'auction', // Новое поле для типа события
   });
+
+  // Логирование обновления событий
+  useEffect(() => {
+    console.log('📊 AdminEvents: события обновлены, всего:', events.length);
+    console.log('📊 AdminEvents: события:', events.map(e => ({ id: e.id, title: e.title, status: e.status })));
+  }, [events]);
 
   const userTypes = [
     { value: 'all', label: 'Все пользователи' },
@@ -72,6 +46,8 @@ export default function AdminEvents() {
     { value: 'silver', label: 'Silver' },
   ];
 
+  const eventTypes = getAllEventTypes();
+
   const statuses = [
     { value: 'upcoming', label: 'Скоро' },
     { value: 'active', label: 'Активно' },
@@ -79,25 +55,47 @@ export default function AdminEvents() {
   ];
 
   const getStatusColor = (status) => {
-    switch (status) {
-      case 'active':
-        return colors.success;
-      case 'upcoming':
-        return colors.accent;
-      case 'ended':
-        return colors.textSecondary;
-      default:
-        return colors.primary;
+    // Нормализуем статус: поддерживаем оба формата (английский и русский)
+    const normalizedStatus = status?.toLowerCase() || '';
+    
+    if (normalizedStatus === 'active' || normalizedStatus === 'активный') {
+      return colors.success;
+    } else if (normalizedStatus === 'upcoming' || normalizedStatus === 'скоро') {
+      return colors.accent;
+    } else if (normalizedStatus === 'ended' || normalizedStatus === 'завершен' || normalizedStatus === 'завершён') {
+      return colors.textSecondary;
     }
+    return colors.primary;
   };
 
   const getStatusLabel = (status) => {
+    // Нормализуем статус: поддерживаем оба формата (английский и русский)
+    const normalizedStatus = status?.toLowerCase() || '';
+    
+    // Если это русский статус, верн все как есть
+    if (normalizedStatus === 'активный') return 'Активно';
+    if (normalizedStatus === 'скоро') return 'Скоро';
+    if (normalizedStatus === 'завершен' || normalizedStatus === 'завершён') return 'Завершено';
+    
+    // Если это английский статус, найдем в массиве
     const label = statuses.find((s) => s.value === status);
     return label ? label.label : status;
   };
 
   const handleOpenModal = (event = null) => {
     if (event) {
+      // Конвертируем русский статус в английский для формы
+      let statusValue = event.status || 'active';
+      if (statusValue === 'Активный') statusValue = 'active';
+      else if (statusValue === 'Скоро') statusValue = 'upcoming';
+      else if (statusValue === 'Завершён' || statusValue === 'Завершено') statusValue = 'ended';
+      
+      // Определяем eventType из события или используем default
+      const eventType = event.eventType || 'auction';
+      
+      // Находим иконку и цвет для этого типа события
+      const eventTypeInfo = eventTypes.find(t => t.value === eventType);
+      
       setEditingEvent(event);
       setFormData({
         title: event.title,
@@ -105,7 +103,8 @@ export default function AdminEvents() {
         prize: event.prize || '',
         endDate: event.endDate || '',
         allowedUsers: event.allowedUsers || 'all',
-        status: event.status || 'active',
+        status: statusValue,
+        eventType: eventType,
       });
     } else {
       setEditingEvent(null);
@@ -116,42 +115,89 @@ export default function AdminEvents() {
         endDate: '',
         allowedUsers: 'all',
         status: 'active',
+        eventType: 'auction',
       });
     }
     setModalVisible(true);
   };
 
-  const handleSaveEvent = () => {
+  const handleSaveEvent = async () => {
     if (!formData.title.trim()) {
       Alert.alert('❌ Ошибка', 'Введите название события');
       return;
     }
 
-    if (editingEvent) {
-      // Редактирование существующего события
-      updateEvent(editingEvent.id, {
-        title: formData.title,
-        description: formData.description,
-        prize: formData.prize,
-        endDate: formData.endDate,
-        status: formData.status,
-        allowedUsers: formData.allowedUsers,
-      });
-      setModalVisible(false);
-      setEditingEvent(null);
-      Alert.alert('✅ Успех', 'Событие обновлено!');
-    } else {
-      // Создание нового события
-      addEvent({
-        title: formData.title,
-        description: formData.description,
-        prize: formData.prize,
-        endDate: formData.endDate,
-        status: formData.status,
-        allowedUsers: formData.allowedUsers,
-      });
-      setModalVisible(false);
-      Alert.alert('✅ Успех', 'Событие создано!');
+    try {
+      console.log('🟡 AdminEvents: начинаю сохранение события');
+      
+      if (editingEvent) {
+        // Редактирование существующего события
+        console.log('🟡 AdminEvents: редактирую существующее событие');
+        await updateEvent(editingEvent.id, {
+          title: formData.title,
+          description: formData.description,
+          prize: formData.prize,
+          endDate: formData.endDate,
+          status: formData.status,
+          allowedUsers: formData.allowedUsers,
+          eventType: formData.eventType,
+        });
+        console.log('🟢 AdminEvents: событие обновлено');
+        
+        // Очищаем форму и закрываем модальное окно
+        setFormData({
+          title: '',
+          description: '',
+          prize: '',
+          endDate: '',
+          status: 'active',
+          allowedUsers: 'all',
+          eventType: 'auction',
+        });
+        setEditingEvent(null);
+        setModalVisible(false);
+        
+        Alert.alert('✅ Успех', 'Событие обновлено!');
+      } else {
+        // Создание нового события
+        console.log('🟡 AdminEvents: создаю новое событие');
+        const newEvent = await addEvent({
+          title: formData.title,
+          description: formData.description,
+          prize: formData.prize,
+          endDate: formData.endDate,
+          status: formData.status,
+          allowedUsers: formData.allowedUsers,
+          eventType: formData.eventType,
+        });
+        
+        if (newEvent) {
+          console.log('🟢 AdminEvents: событие создано:', newEvent.id);
+          
+          // Очищаем форму и закрываем модальное окно
+          setFormData({
+            title: '',
+            description: '',
+            prize: '',
+            endDate: '',
+            status: 'active',
+            allowedUsers: 'all',
+            eventType: 'auction',
+          });
+          
+          setModalVisible(false);
+          
+          // Показываем Alert
+          Alert.alert('✅ Успех', 'Событие создано!');
+        } else {
+          console.warn('⚠️ AdminEvents: попытка создать дубликат события');
+          Alert.alert('⚠️ Внимание', 'Событие с таким названием уже существует');
+        }
+      }
+    } catch (error) {
+      console.error('❌ AdminEvents: ошибка при сохранении события:', error);
+      console.error('Error stack:', error.stack);
+      Alert.alert('❌ Ошибка', `Не удалось сохранить событие: ${error.message}`);
     }
   };
 
@@ -160,95 +206,33 @@ export default function AdminEvents() {
     setDeleteModalVisible(true);
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (eventToDelete) {
-      deleteEvent(eventToDelete);
-      setDeleteModalVisible(false);
-      setEventToDelete(null);
-      Alert.alert('✅ Удалено', 'Событие удалено успешно.');
+      try {
+        console.log('🗑️ AdminEvents: подтверждаю удаление события:', eventToDelete);
+        
+        // Закрываем модальное окно ПЕРЕД удалением
+        setDeleteModalVisible(false);
+        
+        // Затем удаляем событие
+        await deleteEvent(eventToDelete);
+        
+        console.log('✅ AdminEvents: событие успешно удалено');
+        setEventToDelete(null);
+        
+        // Показываем Alert после закрытия модального окна
+        Alert.alert('Удалено', 'Событие удалено успешно.');
+      } catch (error) {
+        console.error('AdminEvents: Ошибка при удалении события:', error);
+        setEventToDelete(null);
+        Alert.alert('Ошибка', 'Не удалось удалить событие');
+      }
     }
   };
 
   const getAllowedUsersLabel = (value) => {
     const found = userTypes.find((t) => t.value === value);
     return found ? found.label : value;
-  };
-
-  const renderEvent = ({ item, index }) => {
-    return (
-    <FadeInCard delay={200 + index * 50}>
-      <TouchableOpacity 
-        style={styles.eventCard}
-        onPress={() => handleOpenModal(item)}
-      >
-        {/* Top Bar with Status and Actions */}
-        <View style={styles.eventHeader}>
-          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
-            <MaterialIcons 
-              name={
-                item.status === 'active' ? 'check-circle' : 
-                item.status === 'upcoming' ? 'schedule' : 'done'
-              } 
-              size={14} 
-              color="#fff" 
-            />
-            <Text style={styles.statusText}>{getStatusLabel(item.status)}</Text>
-          </View>
-          <View style={styles.eventActions}>
-            <TouchableOpacity onPress={() => handleOpenModal(item)}>
-              <MaterialIcons name="edit" size={20} color={colors.primary} />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => handleDeleteEvent(item.id)}>
-              <MaterialIcons name="delete" size={20} color={colors.accent} />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Event Title and Description */}
-        <View style={styles.eventContent}>
-          <Text style={styles.eventTitle}>{item.title}</Text>
-          <Text style={styles.eventDescription} numberOfLines={2}>{item.description}</Text>
-        </View>
-
-        {/* Event Stats */}
-        <View style={styles.eventStats}>
-          <View style={styles.statBlock}>
-            <MaterialIcons name="group" size={16} color={colors.primary} />
-            <View>
-              <Text style={styles.statLabel}>Участники</Text>
-              <Text style={styles.statValue}>{item.participantsCount}</Text>
-            </View>
-          </View>
-
-          <View style={styles.statBlock}>
-            <MaterialIcons name="calendar-today" size={16} color={colors.accent} />
-            <View>
-              <Text style={styles.statLabel}>Завершение</Text>
-              <Text style={styles.statValue}>{item.endDate}</Text>
-            </View>
-          </View>
-
-          <View style={styles.statBlock}>
-            <MaterialIcons name="shield" size={16} color={colors.secondary} />
-            <View>
-              <Text style={styles.statLabel}>Доступ</Text>
-              <Text style={styles.statValue} numberOfLines={1}>
-                {getAllowedUsersLabel(item.allowedUsers)}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Prize */}
-        {item.prize && (
-          <View style={styles.prizeSection}>
-            <MaterialIcons name="card-giftcard" size={18} color={colors.success} />
-            <Text style={styles.prizeText}>{item.prize}</Text>
-          </View>
-        )}
-      </TouchableOpacity>
-    </FadeInCard>
-  );
   };
 
   return (
@@ -275,13 +259,13 @@ export default function AdminEvents() {
           <View style={styles.statsContainer}>
             <View style={styles.statBox}>
               <Text style={styles.statNumber}>
-                {events.filter((e) => e.status === 'active').length}
+                {events.filter((e) => e.status === 'Активный' || e.status === 'active').length}
               </Text>
               <Text style={styles.statLabel}>Активные</Text>
             </View>
             <View style={styles.statBox}>
               <Text style={styles.statNumber}>
-                {events.reduce((sum, e) => sum + e.participantsCount, 0)}
+                {events.reduce((sum, e) => sum + (e.participants || e.participantsCount || 0), 0)}
               </Text>
               <Text style={styles.statLabel}>Участников</Text>
             </View>
@@ -290,14 +274,97 @@ export default function AdminEvents() {
 
         {/* События */}
         {events.length > 0 ? (
-          <FlatList
-            data={events}
-            keyExtractor={(item) => item.id}
-            renderItem={renderEvent}
-            scrollEnabled={false}
-            contentContainerStyle={styles.eventsList}
-            extraData={events}
-          />
+          <View style={styles.eventsList}>
+            {events.map((event, index) => {
+              // Новые локальные события (local_*) показываются без задержки, старые с задержкой
+              const isNewEvent = typeof event.id === 'string' && event.id.startsWith('local_');
+              const delay = isNewEvent ? 0 : (200 + index * 50);
+              return (
+                <FadeInCard key={event.id} delay={delay}>
+                  <TouchableOpacity 
+                    style={[styles.eventCard, { borderLeftColor: event.color || colors.primary, borderLeftWidth: 5 }]}
+                    onPress={() => handleOpenModal(event)}
+                  >
+                    {/* Top Bar with Status and Actions */}
+                    <View style={styles.eventHeader}>
+                      <View style={[styles.statusBadge, { backgroundColor: getStatusColor(event.status) }]}>
+                        <MaterialIcons 
+                          name={
+                            event.status === 'active' || event.status === 'Активный' ? 'check-circle' : 
+                            event.status === 'upcoming' || event.status === 'Скоро' ? 'schedule' : 'done'
+                          } 
+                          size={14} 
+                          color="#fff" 
+                        />
+                        <Text style={styles.statusText}>{getStatusLabel(event.status)}</Text>
+                      </View>
+                      
+                      {/* Type badge */}
+                      {event.eventType && (
+                        <View style={[styles.typeBadge, { backgroundColor: event.color || colors.primary }]}>
+                          <Text style={styles.typeText}>
+                            {eventTypes.find(t => t.value === event.eventType)?.label || event.eventType}
+                          </Text>
+                        </View>
+                      )}
+                      
+                      <View style={styles.eventActions}>
+                        <TouchableOpacity onPress={() => handleOpenModal(event)}>
+                          <MaterialIcons name="edit" size={20} color={colors.primary} />
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => handleDeleteEvent(event.id)}>
+                          <MaterialIcons name="delete" size={20} color={colors.accent} />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+
+                    {/* Event Title and Description */}
+                    <View style={styles.eventContent}>
+                      <Text style={styles.eventTitle}>{event.title}</Text>
+                      <Text style={styles.eventDescription} numberOfLines={2}>{event.description}</Text>
+                    </View>
+
+                    {/* Event Stats */}
+                    <View style={styles.eventStats}>
+                      <View style={styles.statBlock}>
+                        <MaterialIcons name="group" size={16} color={colors.primary} />
+                        <View>
+                          <Text style={styles.statLabel}>Участники</Text>
+                          <Text style={styles.statValue}>{event.participants || event.participantsCount || 0}</Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.statBlock}>
+                        <MaterialIcons name="calendar-today" size={16} color={colors.accent} />
+                        <View>
+                          <Text style={styles.statLabel}>Завершение</Text>
+                          <Text style={styles.statValue}>{event.endDate}</Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.statBlock}>
+                        <MaterialIcons name="shield" size={16} color={colors.secondary} />
+                        <View>
+                          <Text style={styles.statLabel}>Доступ</Text>
+                          <Text style={styles.statValue} numberOfLines={1}>
+                            {getAllowedUsersLabel(event.allowedUsers)}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    {/* Prize */}
+                    {event.prize && (
+                      <View style={styles.prizeSection}>
+                        <MaterialIcons name="card-giftcard" size={18} color={colors.success} />
+                        <Text style={styles.prizeText}>{event.prize}</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                </FadeInCard>
+              );
+            })}
+          </View>
         ) : (
           <View style={styles.emptyState}>
             <MaterialIcons name="event-note" size={48} color={colors.textSecondary} />
@@ -372,6 +439,44 @@ export default function AdminEvents() {
                   setFormData({ ...formData, endDate: text })
                 }
               />
+
+              {/* Тип события */}
+              <Text style={styles.inputLabel}>Тип события</Text>
+              <View style={styles.optionsContainer}>
+                {eventTypes.map((type) => (
+                  <TouchableOpacity
+                    key={type.value}
+                    style={[
+                      styles.optionButton,
+                      formData.eventType === type.value && {
+                        ...styles.optionButtonActive,
+                        backgroundColor: type.color,
+                        borderColor: type.color,
+                      },
+                    ]}
+                    onPress={() =>
+                      setFormData({ ...formData, eventType: type.value })
+                    }
+                  >
+                    <MaterialIcons 
+                      name={type.icon} 
+                      size={16} 
+                      color={formData.eventType === type.value ? '#fff' : type.color}
+                      style={styles.typeIcon}
+                    />
+                    <Text
+                      style={[
+                        styles.optionButtonText,
+                        formData.eventType === type.value && {
+                          ...styles.optionButtonTextActive,
+                        },
+                      ]}
+                    >
+                      {type.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
 
               {/* Статус */}
               <Text style={styles.inputLabel}>Статус события</Text>
@@ -499,9 +604,10 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   subtitle: {
-    fontSize: 12,
-    color: colors.textSecondary,
+    fontSize: 14,
+    color: colors.text,
     marginTop: spacing.xs,
+    fontWeight: '500',
   },
   createButton: {
     backgroundColor: colors.primary,
@@ -537,7 +643,6 @@ const styles = StyleSheet.create({
   },
   eventsList: {
     paddingBottom: spacing.lg,
-    gap: spacing.md,
   },
   eventCard: {
     backgroundColor: colors.cardBg,
@@ -555,6 +660,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: spacing.md,
+    gap: spacing.sm,
   },
   statusBadge: {
     flexDirection: 'row',
@@ -568,6 +674,19 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     color: '#fff',
+  },
+  typeBadge: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 4,
+    borderRadius: borderRadius.md,
+    flex: 1,
+  },
+  typeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#fff',
+    textAlign: 'center',
   },
   eventActions: {
     flexDirection: 'row',
@@ -695,10 +814,13 @@ const styles = StyleSheet.create({
   optionButton: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: colors.border,
     borderRadius: borderRadius.md,
     backgroundColor: colors.background,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
   },
   optionButtonActive: {
     backgroundColor: colors.primary,
@@ -711,6 +833,9 @@ const styles = StyleSheet.create({
   },
   optionButtonTextActive: {
     color: '#fff',
+  },
+  typeIcon: {
+    marginRight: 4,
   },
   submitButton: {
     flexDirection: 'row',

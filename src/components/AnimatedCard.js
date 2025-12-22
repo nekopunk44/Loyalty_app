@@ -8,7 +8,7 @@ const USE_NATIVE = typeof window === 'undefined';
  * Компонент с плавной fade-in анимацией
  */
 export const FadeInCard = ({ children, delay = 0, style }) => {
-  const fadeAnim = new Animated.Value(0);
+  const fadeAnim = React.useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.timing(fadeAnim, {
@@ -17,7 +17,7 @@ export const FadeInCard = ({ children, delay = 0, style }) => {
       delay: delay,
       useNativeDriver: USE_NATIVE,
     }).start();
-  }, []);
+  }, [fadeAnim, delay]);
 
   return (
     <Animated.View style={[{ opacity: fadeAnim }, style]}>
@@ -30,8 +30,8 @@ export const FadeInCard = ({ children, delay = 0, style }) => {
  * Компонент с плавной scale анимацией (увеличение)
  */
 export const ScaleInCard = ({ children, delay = 0, style }) => {
-  const scaleAnim = new Animated.Value(0.8);
-  const fadeAnim = new Animated.Value(0);
+  const scaleAnim = React.useRef(new Animated.Value(0.8)).current;
+  const fadeAnim = React.useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.parallel([
@@ -48,7 +48,7 @@ export const ScaleInCard = ({ children, delay = 0, style }) => {
         useNativeDriver: USE_NATIVE,
       }),
     ]).start();
-  }, []);
+  }, [scaleAnim, fadeAnim, delay]);
 
   return (
     <Animated.View
@@ -69,8 +69,8 @@ export const ScaleInCard = ({ children, delay = 0, style }) => {
  * Компонент с плавной slide-from-left анимацией
  */
 export const SlideInLeftCard = ({ children, delay = 0, style }) => {
-  const slideAnim = new Animated.Value(-50);
-  const fadeAnim = new Animated.Value(0);
+  const slideAnim = React.useRef(new Animated.Value(-50)).current;
+  const fadeAnim = React.useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.parallel([
@@ -87,7 +87,7 @@ export const SlideInLeftCard = ({ children, delay = 0, style }) => {
         useNativeDriver: USE_NATIVE,
       }),
     ]).start();
-  }, []);
+  }, [slideAnim, fadeAnim, delay]);
 
   return (
     <Animated.View

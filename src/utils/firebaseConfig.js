@@ -111,6 +111,7 @@ export const FIRESTORE_COLLECTIONS = {
   NOTIFICATIONS: 'notifications',
   LOYALTY_TIERS: 'loyaltyTiers',
   PROMOTIONS: 'promotions',
+  EVENTS: 'events',
   FAQ: 'faq',
   SUPPORT_TICKETS: 'supportTickets',
   ANALYTICS: 'analytics',

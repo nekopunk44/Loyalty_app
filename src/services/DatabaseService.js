@@ -14,6 +14,20 @@ import {
   batchWrite,
 } from './FirebaseService';
 import { FIRESTORE_COLLECTIONS } from '../utils/firebaseConfig';
+import { collection, onSnapshot } from 'firebase/firestore';
+import { initializeApp } from 'firebase/app';
+import { getFirestore } from 'firebase/firestore';
+import firebaseConfig from '../utils/firebaseConfig';
+
+// Инициализируем db один раз
+let db = null;
+try {
+  const app = initializeApp(firebaseConfig);
+  db = getFirestore(app);
+} catch (error) {
+  console.warn('Firebase already initialized:', error.code);
+  db = getFirestore();
+}
 
 /**
  * USERS Collection
@@ -31,6 +45,8 @@ export const createUser = async (userId, userData) => {
     status: 'active',
     membershipLevel: userData.membershipLevel || 'Bronze',
     loyaltyPoints: userData.loyaltyPoints || 0,
+    balance: userData.balance || 0, // Остаток на счёте
+    walletBalance: userData.walletBalance || 0, // Баланс кошелька
     referralCode: generateReferralCode(userId),
     preferences: {
       notifications: true,
@@ -40,8 +56,16 @@ export const createUser = async (userId, userData) => {
     stats: {
       totalBookings: 0,
       totalSpent: 0,
+      totalEarned: 0, // Всего заработано от рефералов
       reviewsCount: 0,
+      averageRating: 0,
+      completedBookings: 0,
+      cancelledBookings: 0,
+      lastBookingDate: null,
     },
+    paymentMethods: [], // Сохранённые методы оплаты
+    createdAt: new Date(),
+    updatedAt: new Date(),
   };
 
   return setDocument(FIRESTORE_COLLECTIONS.USERS, userId, defaultData);
@@ -80,7 +104,135 @@ export const updateUserLoyalty = async (userId, points, level) => {
   return updateDocument(FIRESTORE_COLLECTIONS.USERS, userId, {
     loyaltyPoints: points,
     membershipLevel: level,
+    updatedAt: new Date(),
   });
+};
+
+// Обновить баланс пользователя
+export const updateUserBalance = async (userId, newBalance) => {
+  return updateDocument(FIRESTORE_COLLECTIONS.USERS, userId, {
+    balance: newBalance,
+    updatedAt: new Date(),
+  });
+};
+
+// Обновить баланс кошелька
+export const updateWalletBalance = async (userId, newBalance) => {
+  return updateDocument(FIRESTORE_COLLECTIONS.USERS, userId, {
+    walletBalance: newBalance,
+    updatedAt: new Date(),
+  });
+};
+
+// Увеличить баланс на сумму
+export const addToBalance = async (userId, amount) => {
+  const user = await getUser(userId);
+  if (!user) throw new Error('Пользователь не найден');
+  
+  const newBalance = (user.balance || 0) + amount;
+  return updateUserBalance(userId, newBalance);
+};
+
+// Уменьшить баланс на сумму
+export const deductFromBalance = async (userId, amount) => {
+  const user = await getUser(userId);
+  if (!user) throw new Error('Пользователь не найден');
+  
+  const newBalance = (user.balance || 0) - amount;
+  if (newBalance < 0) throw new Error('Недостаточно средств');
+  
+  return updateUserBalance(userId, newBalance);
+};
+
+// Обновить статистику пользователя
+export const updateUserStats = async (userId, statsUpdates) => {
+  const user = await getUser(userId);
+  if (!user) throw new Error('Пользователь не найден');
+  
+  const updatedStats = {
+    ...user.stats,
+    ...statsUpdates,
+    updatedAt: new Date(),
+  };
+  
+  return updateDocument(FIRESTORE_COLLECTIONS.USERS, userId, {
+    stats: updatedStats,
+    updatedAt: new Date(),
+  });
+};
+
+// Увеличить количество бронирований
+export const incrementTotalBookings = async (userId, amount = 1) => {
+  const user = await getUser(userId);
+  if (!user) throw new Error('Пользователь не найден');
+  
+  const newTotal = (user.stats?.totalBookings || 0) + amount;
+  return updateUserStats(userId, {
+    totalBookings: newTotal,
+    lastBookingDate: new Date(),
+  });
+};
+
+// Увеличить сумму потрачена
+export const incrementTotalSpent = async (userId, amount) => {
+  const user = await getUser(userId);
+  if (!user) throw new Error('Пользователь не найден');
+  
+  const newTotal = (user.stats?.totalSpent || 0) + amount;
+  return updateUserStats(userId, {
+    totalSpent: newTotal,
+  });
+};
+
+// Увеличить сумму заработана через рефералы
+export const incrementTotalEarned = async (userId, amount) => {
+  const user = await getUser(userId);
+  if (!user) throw new Error('Пользователь не найден');
+  
+  const newTotal = (user.stats?.totalEarned || 0) + amount;
+  const newBalance = (user.balance || 0) + amount;
+  
+  return updateDocument(FIRESTORE_COLLECTIONS.USERS, userId, {
+    stats: {
+      ...user.stats,
+      totalEarned: newTotal,
+    },
+    balance: newBalance,
+    updatedAt: new Date(),
+  });
+};
+
+// Обновить количество отзывов
+export const incrementReviewsCount = async (userId, rating) => {
+  const user = await getUser(userId);
+  if (!user) throw new Error('Пользователь не найден');
+  
+  const currentCount = user.stats?.reviewsCount || 0;
+  const currentAverage = user.stats?.averageRating || 0;
+  
+  const newCount = currentCount + 1;
+  const newAverage = ((currentAverage * currentCount) + rating) / newCount;
+  
+  return updateUserStats(userId, {
+    reviewsCount: newCount,
+    averageRating: Math.round(newAverage * 10) / 10,
+  });
+};
+
+// Обновить статус бронирования в статистике
+export const updateBookingStats = async (userId, bookingStatus) => {
+  const user = await getUser(userId);
+  if (!user) throw new Error('Пользователь не найден');
+  
+  const stats = { ...user.stats };
+  
+  if (bookingStatus === 'completed') {
+    stats.completedBookings = (stats.completedBookings || 0) + 1;
+  } else if (bookingStatus === 'cancelled') {
+    stats.cancelledBookings = (stats.cancelledBookings || 0) + 1;
+  }
+  
+  return updateUserStats(userId, stats);
 };
 
 /**
@@ -463,6 +615,120 @@ export const performBatchOperation = async (operations) => {
   return batchWrite(operations);
 };
 
+// EVENTS Collection
+export const createEvent = async (eventData) => {
+  const eventId = generateDocId(FIRESTORE_COLLECTIONS.EVENTS);
+  const defaultData = {
+    id: eventId,
+    title: eventData.title || '',
+    description: eventData.description || '',
+    status: eventData.status || 'Активный',
+    icon: eventData.icon || 'event',
+    color: eventData.color || '#FF6B35',
+    participants: eventData.participants || 0,
+    prize: eventData.prize || null,
+    reward: eventData.reward || null,
+    startBid: eventData.startBid || null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+  
+  console.log('🟡 DatabaseService: createEvent начало, ID:', eventId);
+  
+  // Добавляем timeout для Firebase операции
+  return Promise.race([
+    new Promise(async (resolve, reject) => {
+      try {
+        console.log('🟡 DatabaseService: отправляю в setDocument...');
+        await setDocument(FIRESTORE_COLLECTIONS.EVENTS, eventId, defaultData);
+        console.log('✅ DatabaseService: setDocument успешно');
+        resolve(eventId);
+      } catch (error) {
+        console.error('❌ DatabaseService: ошибка в setDocument:', error);
+        reject(error);
+      }
+    }),
+    new Promise((_, reject) => 
+      setTimeout(() => {
+        console.error('❌ DatabaseService: Firebase timeout (10 сек)');
+        reject(new Error('Firebase timeout - operation exceeded 10 seconds'));
+      }, 10000) // 10 сек timeout
+    )
+  ]);
+};
+
+export const getEvent = (eventId) => {
+  return getDocument(FIRESTORE_COLLECTIONS.EVENTS, eventId);
+};
+
+export const updateEvent = (eventId, eventData) => {
+  return updateDocument(FIRESTORE_COLLECTIONS.EVENTS, eventId, {
+    ...eventData,
+    updatedAt: new Date(),
+  });
+};
+
+export const deleteEvent = (eventId) => {
+  return deleteDocument(FIRESTORE_COLLECTIONS.EVENTS, eventId);
+};
+
+export const getAllEvents = () => {
+  return getAllDocuments(FIRESTORE_COLLECTIONS.EVENTS);
+};
+
+export const getEventsByStatus = (status) => {
+  return queryDocuments(FIRESTORE_COLLECTIONS.EVENTS, [
+    ['status', '==', status],
+  ]);
+};
+
+export const listenToEvents = (callback) => {
+  try {
+    if (!db) {
+      console.error('Database not initialized');
+      callback([]);
+      return () => {};
+    }
+    
+    const unsubscribe = onSnapshot(
+      collection(db, FIRESTORE_COLLECTIONS.EVENTS), 
+      (snapshot) => {
+        const eventsData = snapshot.docs.map(doc => {
+          const data = doc.data();
+          // Гарантируем, что все нужные поля имеют значения
+          return {
+            id: data.id || doc.id,
+            title: data.title || '',
+            description: data.description || '',
+            status: data.status || 'Активный',
+            icon: data.icon || 'event',
+            color: data.color || '#FF6B35',
+            participants: data.participants || 0,
+            prize: data.prize || null,
+            reward: data.reward || null,
+            startBid: data.startBid || null,
+            createdAt: data.createdAt,
+            updatedAt: data.updatedAt,
+            participantsCount: data.participants || 0, // Добавляем для AdminEvents совместимости
+          };
+        });
+        callback(eventsData);
+      }, 
+      (error) => {
+        console.error('❌ Ошибка слушания событий:', error);
+        // ⚠️ ВАЖНО: Не вызываем callback([]) при ошибке!
+        // Это сохранит существующие события (локальные или кэшированные)
+        // callback([]);
+      }
+    );
+    return unsubscribe;
+  } catch (error) {
+    console.error('Ошибка инициализации слушателя:', error);
+    callback([]);
+    return () => {}; // Возвращаем пустую функцию если ошибка
+  }
+};
+
 export default {
   // Users
   createUser,
@@ -532,6 +798,15 @@ export default {
 
   // Analytics
   recordAnalyticsEvent,
+
+  // Events
+  createEvent,
+  getEvent,
+  updateEvent,
+  deleteEvent,
+  getAllEvents,
+  getEventsByStatus,
+  listenToEvents,
 
   // Utility
   performBatchOperation,
