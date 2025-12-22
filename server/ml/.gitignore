@@ -2,7 +2,5 @@
 __pycache__/
 *.pyc
 .env
-artifacts/*.pkl
-artifacts/metrics.json
 .pytest_cache/
 .coverage
