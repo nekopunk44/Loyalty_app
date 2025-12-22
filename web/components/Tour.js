@@ -24,9 +24,10 @@ export default function Tour() {
           alt="Villa Jaconda — interior"
           fill
           sizes="100vw"
+          quality={70}
           className="object-cover"
-          style={{ filter: 'brightness(0.45) saturate(0.85)' }}
         />
+        <div style={{ position: 'absolute', inset: 0, background: 'rgba(13,10,8,0.55)' }} />
       </motion.div>
 
       <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at center, transparent 0%, rgba(13,10,8,0.6) 100%)' }} />

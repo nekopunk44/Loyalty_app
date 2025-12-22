@@ -55,39 +55,32 @@ const rooms = [
   },
 ];
 
-function RoomPanel({ room, index, total, progress }) {
-  const start = index / total;
-  const end = (index + 1) / total;
-
-  const opacity = useTransform(progress, [start - 0.05, start, end - 0.05, end], [0.3, 1, 1, 0.3]);
-  const imageScale = useTransform(progress, [start, end], [1.15, 1]);
-  const overlayOpacity = useTransform(progress, [start, (start + end) / 2, end], [0.85, 0.55, 0.85]);
-
+function RoomPanel({ room, index, total }) {
   return (
-    <motion.article
+    <article
       style={{
         flex: '0 0 100vw',
         height: '100vh',
         position: 'relative',
-        opacity,
       }}
     >
-      <motion.div style={{ position: 'absolute', inset: 0, scale: imageScale }}>
+      <div style={{ position: 'absolute', inset: 0 }}>
         <Image
           src={room.photos[0]}
           alt={room.name}
           fill
           sizes="100vw"
+          quality={70}
           className="object-cover"
           priority={index === 0}
+          loading={index === 0 ? 'eager' : 'lazy'}
         />
-      </motion.div>
+      </div>
 
-      <motion.div
+      <div
         style={{
           position: 'absolute', inset: 0,
-          background: 'linear-gradient(180deg, rgba(13,10,8,0.4) 0%, rgba(13,10,8,1) 95%)',
-          opacity: overlayOpacity,
+          background: 'linear-gradient(180deg, rgba(13,10,8,0.55) 0%, rgba(13,10,8,0.95) 95%)',
         }}
       />
 
@@ -162,7 +155,7 @@ function RoomPanel({ room, index, total, progress }) {
 
         </div>
       </div>
-    </motion.article>
+    </article>
   );
 }
 
