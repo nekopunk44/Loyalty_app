@@ -97,7 +97,7 @@ export default function LoyaltyCta() {
               {[
                 { label: 'Телефон',  value: '+373 778 12 345', href: 'tel:+37377812345' },
                 { label: 'Email',    value: 'hello@villajaconda.com', href: 'mailto:hello@villajaconda.com' },
-                { label: 'Адрес',    value: 'г. Слободзея, Приднестровье', href: null },
+                { label: 'Адрес',    value: 'ул. Набережная 85, Слободзея', href: '#map' },
                 { label: 'Reception', value: 'круглосуточно', href: null },
               ].map((row, i) => (
                 <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', paddingBottom: 20, borderBottom: i < 3 ? '1px solid var(--line)' : 'none', gap: 16 }}>
