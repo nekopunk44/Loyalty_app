@@ -412,15 +412,21 @@ const listenWithRetry = (retries = 10) => {
   });
 };
 
+const mlJobs = require('./services/mlJobs');
+
 const startServer = async () => {
   try {
     await connectDB();
     await listenWithRetry();
+    mlJobs.start();
   } catch (error) {
     logger.error('Server startup failed', { error: error.message, stack: error.stack });
     process.exit(1);
   }
 };
+
+process.on('SIGTERM', () => { mlJobs.stop(); });
+process.on('SIGINT', () => { mlJobs.stop(); });
 
 startServer();
 

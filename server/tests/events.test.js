@@ -47,6 +47,14 @@ jest.mock('../utils/dates', () => ({
 
 jest.mock('../logger', () => ({ info: jest.fn(), error: jest.fn(), warn: jest.fn() }));
 
+jest.mock('../services/mlClient', () => ({
+  recommendEvents: jest.fn(),
+  rfmRecompute: jest.fn(),
+  churnPredict: jest.fn(),
+  health: jest.fn(),
+}));
+const mlClient = require('../services/mlClient');
+
 // ─── Хелперы ────────────────────────────────────────────────────────────────
 
 const SECRET     = 'test-secret-events';
@@ -81,6 +89,88 @@ describe('GET /api/events', () => {
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(Array.isArray(res.body.events)).toBe(true);
+    expect(res.body.personalized).toBe(false);
+  });
+});
+
+// ─── GET /?personalized=true ────────────────────────────────────────────────
+
+describe('GET /api/events?personalized=true', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    Event.findAll.mockResolvedValue([
+      mockEvent({ id: 1, title: 'A', startDate: new Date('2025-07-01') }),
+      mockEvent({ id: 2, title: 'B', startDate: new Date('2025-07-05') }),
+      mockEvent({ id: 3, title: 'C', startDate: new Date('2025-07-10') }),
+    ]);
+  });
+
+  test('без токена — fallback к обычной сортировке с reason=no_auth', async () => {
+    const res = await request(createApp()).get('/api/events?personalized=true');
+    expect(res.status).toBe(200);
+    expect(res.body.personalized).toBe(false);
+    expect(res.body.reason).toBe('no_auth');
+    expect(mlClient.recommendEvents).not.toHaveBeenCalled();
+  });
+
+  test('ML недоступен — fallback с reason=ml_unavailable', async () => {
+    mlClient.recommendEvents.mockResolvedValue({ ok: false, error: 'ECONNREFUSED' });
+    const res = await request(createApp())
+      .get('/api/events?personalized=true')
+      .set('Authorization', `Bearer ${userToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.personalized).toBe(false);
+    expect(res.body.reason).toBe('ml_unavailable');
+    expect(res.body.events).toHaveLength(3);
+  });
+
+  test('переупорядочивает события по score, unscored — в конец', async () => {
+    mlClient.recommendEvents.mockResolvedValue({
+      ok: true,
+      data: {
+        recommendations: [
+          { event_id: 3, score: 0.9 },
+          { event_id: 1, score: 0.4 },
+        ],
+        fallback_used: false,
+      },
+    });
+    const res = await request(createApp())
+      .get('/api/events?personalized=true')
+      .set('Authorization', `Bearer ${userToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.personalized).toBe(true);
+    expect(res.body.fallback_used).toBe(false);
+    // event 3 (score 0.9) → event 1 (score 0.4) → event 2 (нет в ML, fallback по дате)
+    expect(res.body.events.map((e) => e.title)).toEqual(['C', 'A', 'B']);
+    expect(mlClient.recommendEvents).toHaveBeenCalledWith({ userId: 'user-1', k: 50 });
+  });
+
+  test('cold-start fallback ML возвращает fallback_used=true в payload', async () => {
+    mlClient.recommendEvents.mockResolvedValue({
+      ok: true,
+      data: {
+        recommendations: [{ event_id: 1, score: 0.5 }, { event_id: 2, score: 0.3 }],
+        fallback_used: true,
+      },
+    });
+    const res = await request(createApp())
+      .get('/api/events?personalized=true')
+      .set('Authorization', `Bearer ${userToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.personalized).toBe(true);
+    expect(res.body.fallback_used).toBe(true);
+  });
+
+  test('k клампится до 50', async () => {
+    mlClient.recommendEvents.mockResolvedValue({
+      ok: true,
+      data: { recommendations: [], fallback_used: false },
+    });
+    await request(createApp())
+      .get('/api/events?personalized=true&k=9999')
+      .set('Authorization', `Bearer ${userToken}`);
+    expect(mlClient.recommendEvents).toHaveBeenCalledWith({ userId: 'user-1', k: 50 });
   });
 });
 

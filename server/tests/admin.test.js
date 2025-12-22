@@ -39,6 +39,14 @@ jest.mock('../utils/pagination', () => ({
 
 jest.mock('../logger', () => ({ info: jest.fn(), error: jest.fn(), warn: jest.fn() }));
 
+jest.mock('../services/mlClient', () => ({
+  churnPredict: jest.fn(),
+  rfmRecompute: jest.fn(),
+  recommendEvents: jest.fn(),
+  health: jest.fn(),
+}));
+const mlClient = require('../services/mlClient');
+
 // ─── Хелперы ────────────────────────────────────────────────────────────────
 
 const SECRET          = 'test-secret-admin';
@@ -349,5 +357,118 @@ describe('GET /api/admin/finances/withdrawals', () => {
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(Array.isArray(res.body.withdrawals)).toBe(true);
+  });
+});
+
+// ─── GET /churn-risk ─────────────────────────────────────────────────────────
+
+describe('GET /api/admin/churn-risk', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    UserModel.findOne.mockResolvedValue(mockAdminUser);
+  });
+
+  test('401 без токена', async () => {
+    const res = await request(createApp()).get('/api/admin/churn-risk');
+    expect(res.status).toBe(401);
+  });
+
+  test('403 для обычного пользователя', async () => {
+    UserModel.findOne.mockResolvedValue({ userId: 'user-1', role: 'user' });
+    const res = await request(createApp())
+      .get('/api/admin/churn-risk')
+      .set('Authorization', `Bearer ${userToken}`);
+    expect(res.status).toBe(403);
+  });
+
+  test('503 когда БД недоступна', async () => {
+    const res = await request(createApp(() => false))
+      .get('/api/admin/churn-risk')
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(res.status).toBe(503);
+  });
+
+  test('пусто если нет активных пользователей', async () => {
+    Booking.findAll.mockResolvedValue([]);
+    const res = await request(createApp())
+      .get('/api/admin/churn-risk')
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.items).toEqual([]);
+    expect(res.body.total).toBe(0);
+    expect(mlClient.churnPredict).not.toHaveBeenCalled();
+  });
+
+  test('возвращает сортированный список с профилями', async () => {
+    Booking.findAll.mockResolvedValue([
+      { userId: 'u-low' }, { userId: 'u-med' }, { userId: 'u-high' },
+    ]);
+    mlClient.churnPredict
+      .mockResolvedValueOnce({ ok: true, data: { user_id: 'u-low',  churn_probability: 0.10, risk: 'low' } })
+      .mockResolvedValueOnce({ ok: true, data: { user_id: 'u-med',  churn_probability: 0.55, risk: 'medium' } })
+      .mockResolvedValueOnce({ ok: true, data: { user_id: 'u-high', churn_probability: 0.90, risk: 'high' } });
+    User.findAll.mockResolvedValue([
+      { userId: 'u-high', displayName: 'Alice', email: 'a@b', membershipLevel: 'Silver' },
+      { userId: 'u-med',  displayName: 'Bob',   email: 'b@b', membershipLevel: 'Bronze' },
+      { userId: 'u-low',  displayName: 'Carol', email: 'c@b', membershipLevel: 'Gold' },
+    ]);
+
+    const res = await request(createApp())
+      .get('/api/admin/churn-risk')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.total).toBe(3);
+    expect(res.body.items.map((i) => i.userId)).toEqual(['u-high', 'u-med', 'u-low']);
+    expect(res.body.items[0].displayName).toBe('Alice');
+    expect(res.body.items[0].probability).toBe(0.9);
+    expect(res.body.meta.counts).toEqual({ high: 1, medium: 1, low: 1 });
+    expect(res.body.meta.scanned).toBe(3);
+    expect(res.body.meta.predicted).toBe(3);
+    expect(res.body.meta.failed).toBe(0);
+  });
+
+  test('фильтр ?risk=high оставляет только high', async () => {
+    Booking.findAll.mockResolvedValue([{ userId: 'u-a' }, { userId: 'u-b' }]);
+    mlClient.churnPredict
+      .mockResolvedValueOnce({ ok: true, data: { risk: 'low',  churn_probability: 0.1 } })
+      .mockResolvedValueOnce({ ok: true, data: { risk: 'high', churn_probability: 0.85 } });
+    User.findAll.mockResolvedValue([{ userId: 'u-b', displayName: 'X', email: 'x@x', membershipLevel: 'Bronze' }]);
+
+    const res = await request(createApp())
+      .get('/api/admin/churn-risk?risk=high')
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.items).toHaveLength(1);
+    expect(res.body.items[0].risk).toBe('high');
+  });
+
+  test('503 partial когда ML полностью недоступен', async () => {
+    Booking.findAll.mockResolvedValue([{ userId: 'u-a' }, { userId: 'u-b' }]);
+    mlClient.churnPredict.mockResolvedValue({ ok: false, error: 'ECONNREFUSED' });
+    const res = await request(createApp())
+      .get('/api/admin/churn-risk')
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(res.status).toBe(503);
+    expect(res.body.partial).toBe(true);
+    expect(res.body.failed).toBe(2);
+  });
+
+  test('limit клампится в [1, 500]', async () => {
+    Booking.findAll.mockResolvedValue([]);
+    await request(createApp())
+      .get('/api/admin/churn-risk?limit=99999')
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(Booking.findAll).toHaveBeenCalledWith(
+      expect.objectContaining({ limit: 500 }),
+    );
+
+    await request(createApp())
+      .get('/api/admin/churn-risk?limit=0')
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(Booking.findAll).toHaveBeenLastCalledWith(
+      expect.objectContaining({ limit: 1 }),
+    );
   });
 });

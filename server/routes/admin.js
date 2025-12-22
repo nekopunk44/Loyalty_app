@@ -370,5 +370,122 @@ module.exports = function createAdminRouter({ isDbConnected }) {
     }
   });
 
+  /**
+   * GET /churn-risk — оценка риска оттока для активных пользователей.
+   *
+   * Query:
+   *   limit (1..500, default 100)       — макс. пользователей в выборке
+   *   windowDays (1..365, default 90)   — окно активности (бронирования за N дней)
+   *   risk (high|medium|low|all, all)   — фильтр по уровню риска
+   *
+   * Источник истины — ML-сервис /churn/predict. Выдача отсортирована по
+   * probability DESC. При недоступности ML возвращается 503 с partial=true
+   * и пустым items, чтобы фронт мог корректно показать состояние.
+   */
+  router.get('/churn-risk', verifyAdmin, async (req, res) => {
+    try {
+      if (!isDbConnected()) {
+        return res.status(503).json({ success: false, error: 'База данных не подключена' });
+      }
+
+      const rawLimit = parseInt(req.query.limit, 10);
+      const limit = Math.min(Math.max(Number.isNaN(rawLimit) ? 100 : rawLimit, 1), 500);
+      const rawWindow = parseInt(req.query.windowDays, 10);
+      const windowDays = Math.min(Math.max(Number.isNaN(rawWindow) ? 90 : rawWindow, 1), 365);
+      const riskFilter = ['high', 'medium', 'low', 'all'].includes(req.query.risk)
+        ? req.query.risk : 'all';
+
+      const cutoff = new Date(Date.now() - windowDays * 86400 * 1000);
+      const activeRows = await Booking.findAll({
+        attributes: [[sequelize.fn('DISTINCT', sequelize.col('userId')), 'userId']],
+        where: { createdAt: { [Op.gte]: cutoff } },
+        raw: true,
+        limit,
+      });
+      const userIds = activeRows.map((r) => r.userId).filter(Boolean);
+
+      if (userIds.length === 0) {
+        return res.status(200).json({ success: true, items: [], total: 0 });
+      }
+
+      const mlClient = require('../services/mlClient');
+      const BATCH = 20;
+      const predictions = [];
+      let failed = 0;
+
+      for (let i = 0; i < userIds.length; i += BATCH) {
+        const chunk = userIds.slice(i, i + BATCH);
+        const results = await Promise.all(
+          chunk.map((uid) => mlClient.churnPredict({ userId: uid })),
+        );
+        for (let j = 0; j < results.length; j += 1) {
+          const r = results[j];
+          if (!r.ok) { failed += 1; continue; }
+          predictions.push({
+            userId: chunk[j],
+            probability: r.data.churn_probability,
+            risk: r.data.risk,
+          });
+        }
+      }
+
+      if (predictions.length === 0) {
+        return res.status(503).json({
+          success: false,
+          error: 'ML-сервис недоступен',
+          partial: true,
+          items: [],
+          failed,
+        });
+      }
+
+      const filtered = riskFilter === 'all'
+        ? predictions
+        : predictions.filter((p) => p.risk === riskFilter);
+
+      // Подтягиваем профили пользователей одним запросом
+      const profiles = await User.findAll({
+        where: { userId: { [Op.in]: filtered.map((p) => p.userId) } },
+        attributes: ['userId', 'displayName', 'email', 'membershipLevel'],
+        raw: true,
+      });
+      const profileById = new Map(profiles.map((u) => [u.userId, u]));
+
+      const items = filtered
+        .map((p) => ({
+          ...p,
+          probability: Number(p.probability.toFixed(4)),
+          displayName: profileById.get(p.userId)?.displayName || null,
+          email: profileById.get(p.userId)?.email || null,
+          membershipLevel: profileById.get(p.userId)?.membershipLevel || null,
+        }))
+        .sort((a, b) => b.probability - a.probability);
+
+      return res.status(200).json({
+        success: true,
+        items,
+        total: items.length,
+        meta: {
+          windowDays,
+          scanned: userIds.length,
+          predicted: predictions.length,
+          failed,
+          counts: {
+            high:   predictions.filter((p) => p.risk === 'high').length,
+            medium: predictions.filter((p) => p.risk === 'medium').length,
+            low:    predictions.filter((p) => p.risk === 'low').length,
+          },
+        },
+      });
+    } catch (error) {
+      logger.error('admin churn-risk error', { error: error.message });
+      return res.status(500).json({
+        success: false,
+        error: 'Ошибка при получении оценки оттока',
+        details: isDev() ? error.message : undefined,
+      });
+    }
+  });
+
   return router;
 };
