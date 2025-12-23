@@ -11,8 +11,8 @@ export default function MapSection() {
   const ref = useRef(null);
   const inView = useInView(ref, { once: true, margin: '-10%' });
 
-  // tight bbox ≈ 400m radius so the pin is clearly visible at street level
-  const osmEmbed = `https://www.openstreetmap.org/export/embed.html?bbox=${LNG - 0.003}%2C${LAT - 0.002}%2C${LNG + 0.003}%2C${LAT + 0.002}&layer=mapnik&marker=${LAT}%2C${LNG}`;
+  // Google Maps embed — no API key needed for basic iframe, shows exact place
+  const gmapsEmbed = `https://maps.google.com/maps?q=${LAT},${LNG}&z=17&hl=ru&output=embed`;
 
   return (
     <section id="map" ref={ref} style={{ background: 'var(--bg)', borderTop: '1px solid var(--line)' }}>
@@ -43,32 +43,18 @@ export default function MapSection() {
         initial={{ opacity: 0, y: 40 }}
         animate={inView ? { opacity: 1, y: 0 } : {}}
         transition={{ duration: 1.1, delay: 0.25 }}
-        style={{ position: 'relative', height: 'clamp(360px, 50vh, 540px)', overflow: 'hidden', filter: 'grayscale(0.4) contrast(1.05)' }}
+        style={{ position: 'relative', height: 'clamp(360px, 50vh, 540px)', overflow: 'hidden' }}
       >
         <iframe
           title="Villa Jaconda — карта"
-          src={osmEmbed}
+          src={gmapsEmbed}
           width="100%"
           height="100%"
-          style={{
-            border: 0,
-            display: 'block',
-            width: '100%',
-            height: '100%',
-            position: 'absolute',
-            inset: 0,
-            colorScheme: 'dark',
-          }}
+          style={{ border: 0, display: 'block', position: 'absolute', inset: 0, width: '100%', height: '100%' }}
           loading="lazy"
           referrerPolicy="no-referrer-when-downgrade"
+          allowFullScreen
         />
-        {/* Dark overlay to match the site palette */}
-        <div style={{
-          position: 'absolute', inset: 0, pointerEvents: 'none',
-          background: 'rgba(13,10,8,0.18)',
-          mixBlendMode: 'multiply',
-        }} />
-        {/* Bottom gradient fade into footer */}
         <div style={{
           position: 'absolute', bottom: 0, left: 0, right: 0, height: 80, pointerEvents: 'none',
           background: 'linear-gradient(0deg, var(--bg) 0%, transparent 100%)',
