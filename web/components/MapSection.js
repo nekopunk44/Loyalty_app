@@ -3,9 +3,9 @@
 import { useRef } from 'react';
 import { motion, useInView } from 'motion/react';
 
-// Villa Jaconda — Набережная 85, Слободзея
-const LAT = 46.8451328;
-const LNG = 29.6189952;
+// Villa Jaconda — Набережная 85, Слободзея (verified via Nominatim)
+const LAT = 46.7380868;
+const LNG = 29.6914225;
 
 export default function MapSection() {
   const ref = useRef(null);
