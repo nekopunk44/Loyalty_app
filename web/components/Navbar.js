@@ -6,6 +6,7 @@ const LINKS = [
   { id:'rooms',   label:'Номера' },
   { id:'tour',    label:'3D-тур' },
   { id:'loyalty', label:'Лояльность' },
+  { id:'app',     label:'Приложение' },
   { id:'reviews', label:'Отзывы' },
   { id:'faq',     label:'FAQ' },
   { id:'contact', label:'Контакты' },
