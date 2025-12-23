@@ -30,7 +30,7 @@ export const metadata = {
     type: "website",
     locale: "ru_RU",
   },
-  icons: { icon: "/favicon.png", apple: "/logo.png" },
+  icons: { icon: "/favicon.svg", apple: "/favicon.svg" },
 };
 
 export default function RootLayout({ children }) {

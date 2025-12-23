@@ -1,187 +1,110 @@
 'use client';
+import { useState } from 'react';
+import Icon from './ui/Icon';
 
-import { useRef } from 'react';
-import { motion, useScroll, useTransform, useInView } from 'motion/react';
-
-const tiers = [
-  {
-    key: 'bronze',
-    name: 'Bronze',
-    threshold: 0,
-    next: 500,
-    color: '#E08B32',
-    perks: [
-      { title: 'Кешбек 1%',            sub: 'с каждого бронирования' },
-      { title: 'Бонус в день рождения', sub: 'дополнительные баллы' },
-      { title: 'История броней',        sub: 'полный архив визитов' },
-    ],
-  },
-  {
-    key: 'silver',
-    name: 'Silver',
-    threshold: 500,
-    next: 2000,
-    color: '#94A3B8',
-    perks: [
-      { title: 'Кешбек 1.5%',           sub: '+0.5% к базовому' },
-      { title: 'Приоритетная поддержка', sub: 'быстрый ответ' },
-      { title: 'Бонус в день рождения',  sub: 'увеличенные баллы' },
-    ],
-  },
-  {
-    key: 'gold',
-    name: 'Gold',
-    threshold: 2000,
-    next: 5000,
-    color: '#F59E0B',
-    perks: [
-      { title: 'Кешбек 2%',             sub: '+1% к базовому' },
-      { title: 'Ранний доступ',          sub: 'первыми видите акции' },
-      { title: 'VIP поддержка',          sub: 'персональный менеджер' },
-    ],
-  },
-  {
-    key: 'platinum',
-    name: 'Platinum',
-    threshold: 5000,
-    next: null,
-    color: '#C8A2FF',
-    perks: [
-      { title: 'Кешбек 3%',             sub: 'максимальный' },
-      { title: 'VIP обслуживание',       sub: 'высший приоритет' },
-      { title: 'Личный менеджер',        sub: 'всегда на связи' },
-    ],
-  },
+const TIERS = [
+  { key: 'bronze', name: 'Bronze', threshold: 0, next: 500, color: '#E08B32', cashback: '1%', perks: ['Кешбек 1% с каждого бронирования', 'Бонус в день рождения', 'Полный архив визитов'] },
+  { key: 'silver', name: 'Silver', threshold: 500, next: 2000, color: '#7A90A8', cashback: '1.5%', perks: ['Кешбек 1.5% — +0.5% к базовому', 'Приоритетная поддержка', 'Бонус ко дню рождения ×2'] },
+  { key: 'gold', name: 'Gold', threshold: 2000, next: 5000, color: '#C08828', cashback: '2%', perks: ['Кешбек 2% — двойной бонус', 'Ранний доступ к акциям и событиям', 'VIP поддержка 24/7'] },
+  { key: 'platinum', name: 'Platinum', threshold: 5000, next: null, color: '#9060CC', cashback: '3%', perks: ['Кешбек 3% — максимальный', 'Личный менеджер всегда на связи', 'Закрытые события и тарифы'] },
 ];
 
-function TierCard({ tier, index, total }) {
-  const ref = useRef(null);
-  const inView = useInView(ref, { once: true, margin: '-20%' });
-
-  return (
-    <motion.article
-      ref={ref}
-      initial={{ opacity: 0, y: 60 }}
-      animate={inView ? { opacity: 1, y: 0 } : {}}
-      transition={{ duration: 1, delay: index * 0.12, ease: [0.16, 1, 0.3, 1] }}
-      data-cursor
-      style={{
-        position: 'relative',
-        padding: 'clamp(28px, 3vw, 44px)',
-        borderTop: '1px solid var(--line)',
-        borderLeft: index === 0 ? '1px solid var(--line)' : 'none',
-        background: 'transparent',
-        transition: 'background 0.5s ease',
-        minHeight: 'clamp(380px, 50vh, 480px)',
-        display: 'flex',
-        flexDirection: 'column',
-      }}
-      whileHover={{ backgroundColor: 'rgba(212, 164, 94, 0.04)' }}
-    >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 32 }}>
-        <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 11, letterSpacing: '0.25em', color: 'var(--muted)' }}>
-          {String(index + 1).padStart(2, '0')} / {String(total).padStart(2, '0')}
-        </span>
-        <span style={{
-          width: 10, height: 10, borderRadius: '50%',
-          background: tier.color,
-          boxShadow: `0 0 24px ${tier.color}66`,
-        }} />
-      </div>
-
-      <h3 className="font-display" style={{
-        fontSize: 'clamp(2rem, 3vw, 2.8rem)',
-        lineHeight: 1,
-        marginBottom: 14,
-        color: tier.color,
-        letterSpacing: '-0.01em',
-      }}>
-        {tier.name}
-      </h3>
-
-      <p style={{ fontSize: 12, color: 'var(--muted)', letterSpacing: '0.08em', marginBottom: 36, fontVariantNumeric: 'tabular-nums' }}>
-        {tier.next === null
-          ? `от ${tier.threshold} баллов`
-          : `${tier.threshold} – ${tier.next} баллов`}
-      </p>
-
-      <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 18, marginTop: 'auto' }}>
-        {tier.perks.map((p) => (
-          <li key={p.title}>
-            <p style={{ fontSize: 14, color: 'var(--text)', marginBottom: 4, fontWeight: 500 }}>
-              {p.title}
-            </p>
-            <p style={{ fontSize: 12, color: 'var(--muted)', letterSpacing: '0.03em' }}>
-              {p.sub}
-            </p>
-          </li>
-        ))}
-      </ul>
-    </motion.article>
-  );
-}
-
 export default function LoyaltyTiers() {
-  const ref = useRef(null);
-  const inView = useInView(ref, { once: true, margin: '-20%' });
-
-  const { scrollYProgress } = useScroll({ target: ref, offset: ['start end', 'end start'] });
-  const lineHeight = useTransform(scrollYProgress, [0, 0.5], ['0%', '100%']);
+  const [active, setActive] = useState(1);
+  const t = TIERS[active];
 
   return (
-    <section id="loyalty" ref={ref} className="section" style={{ background: 'var(--bg)', borderTop: '1px solid var(--line)', position: 'relative', overflow: 'hidden' }}>
+    <section id="loyalty" style={{ background: 'var(--r-surface-warm)', borderTop: '1px solid var(--r-line)', paddingTop: 'clamp(80px,10vw,140px)', paddingBottom: 'clamp(80px,10vw,140px)' }}>
+      <div style={{ maxWidth: 1440, margin: '0 auto', padding: '0 clamp(20px,4vw,60px)' }}>
 
-      <div style={{
-        position: 'absolute', top: 0, bottom: 0, left: '50%',
-        width: 1, background: 'rgba(212, 164, 94, 0.08)', pointerEvents: 'none',
-      }}>
-        <motion.div style={{ width: '100%', height: lineHeight, background: 'var(--gold)' }} />
-      </div>
-
-      <div className="container-x" style={{ position: 'relative' }}>
-
-        <div style={{ display: 'grid', gap: 'clamp(40px, 6vw, 80px)', gridTemplateColumns: 'repeat(auto-fit, minmax(min(380px, 100%), 1fr))', marginBottom: 'clamp(60px, 10vh, 120px)', alignItems: 'end' }}>
-          <div>
-            <motion.p
-              initial={{ opacity: 0, y: 16 }}
-              animate={inView ? { opacity: 1, y: 0 } : {}}
-              transition={{ duration: 0.9 }}
-              className="eyebrow mb-6"
-            >
-              — Программа лояльности · 4 уровня
-            </motion.p>
-
-            <motion.h2
-              initial={{ opacity: 0, y: 30 }}
-              animate={inView ? { opacity: 1, y: 0 } : {}}
-              transition={{ duration: 1.1, delay: 0.1 }}
-              className="font-display display-lg"
-              style={{ maxWidth: '14ch' }}
-            >
-              От <em style={{ fontStyle: 'italic', color: '#E08B32' }}>Bronze</em> до{' '}
-              <em style={{ fontStyle: 'italic', color: '#C8A2FF' }}>Platinum</em>
-            </motion.h2>
-          </div>
-
-          <motion.p
-            initial={{ opacity: 0, y: 20 }}
-            animate={inView ? { opacity: 1, y: 0 } : {}}
-            transition={{ duration: 1, delay: 0.25 }}
-            style={{ color: 'var(--text-soft)', fontSize: 15, lineHeight: 1.75, maxWidth: 460 }}
-          >
-            Баллы начисляются за каждое бронирование и активность в приложении. Чем выше уровень — тем больше кешбек, тем раньше открываются скрытые тарифы и закрытые события.
-          </motion.p>
+        <div style={{ marginBottom: 'clamp(48px,7vw,80px)' }}>
+          <p style={{ fontSize: 10, letterSpacing: '0.32em', textTransform: 'uppercase', color: 'var(--r-gold)', fontWeight: 500, marginBottom: 14 }}>— Программа лояльности</p>
+          <h2 style={{ fontFamily: 'var(--r-serif)', fontSize: 'clamp(2.4rem,5vw,4.5rem)', fontWeight: 300, lineHeight: 1, letterSpacing: '-0.02em', color: 'var(--r-text)', margin: 0 }}>
+            От <em style={{ fontStyle: 'italic', color: '#E08B32' }}>Bronze</em> до <em style={{ fontStyle: 'italic', color: '#9060CC' }}>Platinum</em>
+          </h2>
         </div>
 
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(min(260px, 100%), 1fr))',
-          borderRight: '1px solid var(--line)',
-          borderBottom: '1px solid var(--line)',
-        }}>
-          {tiers.map((tier, i) => (
-            <TierCard key={tier.key} tier={tier} index={i} total={tiers.length} />
-          ))}
+        <div style={{ position: 'relative', marginBottom: 56 }}>
+          <div style={{ position: 'absolute', top: 28, left: '12.5%', right: '12.5%', height: 1, background: 'var(--r-line-strong)', zIndex: 0 }} />
+          <div style={{ position: 'absolute', top: 28, left: '12.5%', width: `${(active / 3) * 75}%`, height: 1, background: t.color, zIndex: 0, transition: 'width 0.5s ease, background 0.4s ease' }} />
+
+          <div className="loyalty-path" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', position: 'relative', zIndex: 1 }}>
+            {TIERS.map((tier, i) => {
+              const isActive = i === active;
+              const isPast = i < active;
+              return (
+                <button key={tier.key} onClick={() => setActive(i)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, padding: '0 8px', fontFamily: 'inherit' }}>
+                  <div style={{ width: isActive ? 56 : 40, height: isActive ? 56 : 40, borderRadius: '50%', background: isActive || isPast ? tier.color : 'var(--r-bg)', border: `2px solid ${isActive || isPast ? tier.color : 'var(--r-line-strong)'}`, boxShadow: isActive ? `0 0 0 6px ${tier.color}22, 0 8px 24px ${tier.color}44` : 'none', transition: 'all 0.4s cubic-bezier(0.16,1,0.3,1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {isPast && !isActive ? (
+                      <Icon name="check" size={16} color="#fff" strokeWidth={2.5} />
+                    ) : isActive ? (
+                      <span style={{ fontFamily: 'var(--r-serif)', fontSize: 18, color: '#fff', fontWeight: 400 }}>{tier.cashback}</span>
+                    ) : (
+                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--r-line-strong)' }} />
+                    )}
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <p style={{ fontFamily: 'var(--r-serif)', fontSize: isActive ? 22 : 16, fontWeight: isActive ? 400 : 300, color: isActive ? tier.color : 'var(--r-muted)', lineHeight: 1, marginBottom: 6, transition: 'all 0.3s ease' }}>{tier.name}</p>
+                    <p style={{ fontSize: 10, color: 'var(--r-muted)', letterSpacing: '0.06em' }}>{tier.next ? `${tier.threshold}–${tier.next}` : `${tier.threshold}+`} балл.</p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div key={active} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(300px,100%),1fr))', gap: 20, animation: 'fadeSlideUp 0.5s cubic-bezier(0.16,1,0.3,1) both' }}>
+
+          <div style={{ background: 'var(--r-text)', borderRadius: 12, padding: 'clamp(32px,4vw,48px)', position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: 280 }}>
+            <div style={{ position: 'absolute', top: -60, right: -60, width: 200, height: 200, borderRadius: '50%', background: `radial-gradient(circle, ${t.color}50 0%, transparent 70%)`, pointerEvents: 'none' }} />
+            <div style={{ position: 'absolute', bottom: -40, left: -20, width: 160, height: 160, borderRadius: '50%', background: `radial-gradient(circle, ${t.color}25 0%, transparent 70%)`, pointerEvents: 'none' }} />
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+                <div style={{ width: 10, height: 10, borderRadius: '50%', background: t.color, boxShadow: `0 0 16px ${t.color}` }} />
+                <span style={{ fontSize: 10, letterSpacing: '0.22em', textTransform: 'uppercase', color: 'rgba(247,242,232,0.5)' }}>
+                  {t.next ? `${t.threshold} – ${t.next} баллов` : `от ${t.threshold} баллов`}
+                </span>
+              </div>
+              <h3 style={{ fontFamily: 'var(--r-serif)', fontSize: 'clamp(3rem,5vw,5rem)', fontWeight: 300, color: t.color, lineHeight: 1, margin: '0 0 8px', letterSpacing: '-0.02em' }}>{t.name}</h3>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+              <span style={{ fontFamily: 'var(--r-serif)', fontSize: 'clamp(4rem,7vw,6rem)', fontWeight: 400, color: t.color, lineHeight: 1 }}>{t.cashback}</span>
+              <span style={{ fontSize: 15, color: 'rgba(247,242,232,0.5)' }}>кешбека</span>
+            </div>
+          </div>
+
+          <div style={{ background: 'var(--r-surface)', borderRadius: 12, padding: 'clamp(32px,4vw,48px)', border: '1px solid var(--r-line)' }}>
+            <p style={{ fontSize: 10, letterSpacing: '0.22em', textTransform: 'uppercase', color: 'var(--r-muted)', marginBottom: 24 }}>— Привилегии</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+              {t.perks.map((perk, pi) => (
+                <div key={perk} style={{ display: 'flex', gap: 16, alignItems: 'center', padding: '18px 0', borderBottom: pi < t.perks.length - 1 ? '1px solid var(--r-line)' : 'none' }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 8, background: `${t.color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <Icon name="check" size={14} color={t.color} strokeWidth={2} />
+                  </div>
+                  <p style={{ fontSize: 15, color: 'var(--r-text)', margin: 0 }}>{perk}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ background: `${t.color}10`, borderRadius: 12, padding: 'clamp(32px,4vw,48px)', border: `1px solid ${t.color}30`, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+            <div>
+              <p style={{ fontSize: 10, letterSpacing: '0.22em', textTransform: 'uppercase', color: t.color, marginBottom: 16 }}>— Как начать</p>
+              <p style={{ fontFamily: 'var(--r-serif)', fontSize: 'clamp(1.5rem,2.5vw,2.2rem)', fontWeight: 300, color: 'var(--r-text)', lineHeight: 1.2, marginBottom: 16 }}>
+                Скачайте приложение и начните копить баллы с первого бронирования
+              </p>
+              <p style={{ fontSize: 13, color: 'var(--r-text-soft)', lineHeight: 1.65 }}>
+                {TIERS[active + 1] ? `До следующего уровня (${TIERS[active + 1].name}) — ${TIERS[active + 1].threshold - TIERS[active].threshold} баллов.` : 'Вы на максимальном уровне!'}
+              </p>
+            </div>
+            <a href="#contact"
+              style={{ marginTop: 32, display: 'inline-flex', alignItems: 'center', gap: 10, padding: '14px 24px', background: t.color, color: '#fff', borderRadius: 999, fontSize: 12, letterSpacing: '0.14em', textTransform: 'uppercase', textDecoration: 'none', fontWeight: 500, alignSelf: 'flex-start', transition: 'opacity 0.3s ease' }}
+              onMouseEnter={e => e.currentTarget.style.opacity = '0.8'}
+              onMouseLeave={e => e.currentTarget.style.opacity = '1'}>
+              Забронировать и начать →
+            </a>
+          </div>
         </div>
       </div>
     </section>

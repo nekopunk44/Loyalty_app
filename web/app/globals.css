@@ -20,7 +20,7 @@
 
 html {
   scroll-behavior: smooth;
-  background: var(--bg);
+  background: var(--r-bg);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -30,8 +30,8 @@ html {
 body {
   margin: 0;
   min-height: 100vh;
-  color: var(--text);
-  background: var(--bg);
+  color: var(--r-text);
+  background: var(--r-bg);
   font-family: var(--font-sans), "Inter", system-ui, sans-serif;
   font-weight: 400;
   -webkit-font-smoothing: antialiased;
@@ -43,7 +43,7 @@ body {
 a { color: inherit; text-decoration: none; }
 button { font-family: inherit; }
 
-::selection { background: var(--gold); color: var(--bg); }
+::selection { background: var(--r-gold); color: var(--r-bg); }
 
 /* === Typography === */
 
@@ -196,8 +196,8 @@ button { font-family: inherit; }
 
 /* === Scrollbar === */
 
-::-webkit-scrollbar { width: 6px; background: var(--bg); }
-::-webkit-scrollbar-thumb { background: var(--gold-deep); border-radius: 4px; }
+::-webkit-scrollbar { width: 6px; background: var(--r-surface-warm); }
+::-webkit-scrollbar-thumb { background: var(--r-gold); border-radius: 4px; }
 
 /* === Bullet === */
 
@@ -215,4 +215,56 @@ button { font-family: inherit; }
 @media (max-width: 720px) {
   .section { padding: 80px 0; }
   .btn { padding: 16px 24px; font-size: 12px; }
+}
+
+/* ── Redesign tokens ── */
+:root {
+  --r-bg: #f7f2e8;
+  --r-surface: #ffffff;
+  --r-surface-warm: #ede8db;
+  --r-line: rgba(160,120,60,0.13);
+  --r-line-strong: rgba(160,120,60,0.26);
+  --r-text: #1c1208;
+  --r-text-soft: #4a3820;
+  --r-muted: #8a7560;
+  --r-gold: #a07840;
+  --r-gold-light: #c8954e;
+  --r-serif: 'Cormorant Garamond', Georgia, serif;
+  --r-sans: 'Inter', system-ui, sans-serif;
+}
+
+@keyframes kbA {
+  from { transform: scale(1) translate(0,0); }
+  to   { transform: scale(1.08) translate(-2%,-1%); }
+}
+@keyframes kbB {
+  from { transform: scale(1) translate(0,0); }
+  to   { transform: scale(1.08) translate(2%,1%); }
+}
+@keyframes slideUp {
+  from { transform: translateY(50px); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes fadeSlideUp {
+  from { transform: translateY(24px); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+@keyframes pulse-line {
+  0%,100% { opacity:1; transform:scaleY(1); }
+  50%     { opacity:0.3; transform:scaleY(0.6); }
+}
+@keyframes pulse {
+  0%,100% { opacity:1; transform:scale(1); }
+  50%     { opacity:0.5; transform:scale(0.8); }
+}
+
+@media (max-width: 768px) {
+  .rooms-row { grid-template-columns: 1fr !important; }
+  .rooms-row > div { order: unset !important; }
+  .booking-grid { grid-template-columns: 1fr !important; }
+  .loyalty-path { grid-template-columns: repeat(2,1fr) !important; }
 }

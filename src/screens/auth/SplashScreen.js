@@ -5,29 +5,30 @@ import { spacing } from '../../constants/theme';
 import { useTheme } from '../../context/ThemeContext';
 import VJMonogram from '../../components/auth/VJMonogram';
 
-const NAVY = '#063B5C';
-const TEAL = '#14B8A6';
-const AMBER = '#F59E0B';
+const DARK = '#0D0A08';
+const GOLD = '#D4A45E';
+const CREAM = '#F4EDD8';
+const WARM = '#2A1E0F';
 
 const SPLASH_THEME = {
   light: {
-    rootBg: '#F4F1EA',
-    gradient: ['#69C8BA', '#FFD0AE', '#FFB261'],
-    brandText: NAVY,
-    secondaryText: '#6B7280',
-    line: 'rgba(20,184,166,0.62)',
-    logoColor: NAVY,
-    badgeBorder: '#F4F1EA',
-    dot: NAVY,
+    rootBg: CREAM,
+    gradient: [CREAM, '#EDD9A3', '#C9A45E'],
+    brandText: WARM,
+    secondaryText: '#8B7355',
+    line: 'rgba(180,130,60,0.62)',
+    logoColor: WARM,
+    badgeBorder: CREAM,
+    dot: WARM,
   },
   dark: {
-    rootBg: '#0B1426',
-    gradient: ['#071827', '#065B66', '#102E4A'],
+    rootBg: DARK,
+    gradient: ['#1A1108', '#2A1A09', DARK],
     brandText: '#FFFFFF',
-    secondaryText: '#B6C2D2',
-    line: 'rgba(245,158,11,0.72)',
+    secondaryText: '#A09070',
+    line: 'rgba(212,164,94,0.72)',
     logoColor: '#FFFFFF',
-    badgeBorder: '#0B1426',
+    badgeBorder: DARK,
     dot: '#FFFFFF',
   },
 };
@@ -226,7 +227,7 @@ export default function SplashScreen({ navigation }) {
           <VJMonogram
             size={128}
             mainColor={palette.logoColor}
-            accentColor={AMBER}
+            accentColor={GOLD}
             startDelay={120}
             fast
           />
@@ -291,7 +292,7 @@ const styles = StyleSheet.create({
     height: 130,
     borderRadius: 65,
     borderWidth: 2,
-    borderColor: TEAL,
+    borderColor: GOLD,
   },
   logoWrap: {
     position: 'relative',
@@ -303,12 +304,12 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: AMBER,
+    backgroundColor: GOLD,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
     borderColor: '#F8F9FA',
-    shadowColor: AMBER,
+    shadowColor: GOLD,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.5,
     shadowRadius: 4,
@@ -329,7 +330,7 @@ const styles = StyleSheet.create({
   appName: {
     fontSize: 34,
     fontWeight: '900',
-    color: NAVY,
+    color: WARM,
     letterSpacing: 0.5,
   },
   subtitleRow: {
@@ -342,7 +343,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 1,
     maxWidth: 32,
-    backgroundColor: `${TEAL}80`,
+    backgroundColor: `${GOLD}80`,
   },
   appSubtitle: {
     fontSize: 14,
@@ -363,9 +364,9 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: NAVY,
+    backgroundColor: WARM,
   },
   dotMid: {
-    backgroundColor: TEAL,
+    backgroundColor: GOLD,
   },
 });

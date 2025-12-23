@@ -1,30 +1,27 @@
 'use client';
+import { useEffect, useState } from 'react';
 
-import { useEffect, useRef, useState } from 'react';
-import { motion, AnimatePresence, useScroll, useSpring } from 'motion/react';
-
-const links = [
-  { href: '#rooms',   id: 'rooms',   label: 'Номера' },
-  { href: '#tour',    id: 'tour',    label: '3D-тур' },
-  { href: '#loyalty', id: 'loyalty', label: 'Лояльность' },
-  { href: '#reviews', id: 'reviews', label: 'Отзывы' },
-  { href: '#contact', id: 'contact', label: 'Контакты' },
-  { href: '#map',     id: 'map',     label: 'Карта' },
+const LINKS = [
+  { id:'rooms',   label:'Номера' },
+  { id:'tour',    label:'3D-тур' },
+  { id:'loyalty', label:'Лояльность' },
+  { id:'reviews', label:'Отзывы' },
+  { id:'faq',     label:'FAQ' },
+  { id:'contact', label:'Контакты' },
 ];
 
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
-  const [open, setOpen] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [active, setActive] = useState(null);
-  const [indicator, setIndicator] = useState({ left: 0, width: 0, opacity: 0 });
-  const navRef = useRef(null);
-  const linkRefs = useRef({});
-
-  const { scrollYProgress } = useScroll();
-  const scaleX = useSpring(scrollYProgress, { stiffness: 120, damping: 28, mass: 0.3 });
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 40);
+    const onScroll = () => {
+      setScrolled(window.scrollY > 60);
+      const h = document.documentElement.scrollHeight - window.innerHeight;
+      setProgress(h > 0 ? (window.scrollY / h) * 100 : 0);
+    };
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
@@ -33,160 +30,96 @@ export default function Navbar() {
   useEffect(() => {
     const observers = [];
     const visible = new Map();
-
-    links.forEach((l) => {
+    LINKS.forEach(l => {
       const el = document.getElementById(l.id);
       if (!el) return;
-      const io = new IntersectionObserver(
-        ([entry]) => {
-          if (entry.isIntersecting) visible.set(l.id, entry.intersectionRatio);
-          else visible.delete(l.id);
-
-          let topId = null;
-          let topRatio = 0;
-          visible.forEach((ratio, id) => {
-            if (ratio > topRatio) { topRatio = ratio; topId = id; }
-          });
-          setActive(topId);
-        },
-        { rootMargin: '-30% 0px -50% 0px', threshold: [0, 0.25, 0.5, 0.75, 1] }
-      );
+      const io = new IntersectionObserver(([entry]) => {
+        if (entry.isIntersecting) visible.set(l.id, entry.intersectionRatio);
+        else visible.delete(l.id);
+        let topId = null, topRatio = 0;
+        visible.forEach((r, id) => { if (r > topRatio) { topRatio = r; topId = id; } });
+        setActive(topId);
+      }, { rootMargin: '-40% 0px -40% 0px', threshold: [0, 0.25, 0.5, 0.75, 1] });
       io.observe(el);
       observers.push(io);
     });
-
-    return () => observers.forEach((o) => o.disconnect());
+    return () => observers.forEach(o => o.disconnect());
   }, []);
 
-  useEffect(() => {
-    if (!active || !navRef.current || !linkRefs.current[active]) {
-      setIndicator((i) => ({ ...i, opacity: 0 }));
-      return;
-    }
-    const link = linkRefs.current[active];
-    const nav = navRef.current;
-    const linkRect = link.getBoundingClientRect();
-    const navRect = nav.getBoundingClientRect();
-    setIndicator({
-      left: linkRect.left - navRect.left,
-      width: linkRect.width,
-      opacity: 1,
-    });
-  }, [active, scrolled]);
+  const scrollTo = id => {
+    const el = document.getElementById(id);
+    if (el) window.scrollTo({ top: el.offsetTop - 72, behavior: 'smooth' });
+    setOpen(false);
+  };
 
   return (
-    <motion.header
-      initial={{ y: -40, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-      transition={{ duration: 1, ease: [0.16, 1, 0.3, 1], delay: 0.4 }}
-      className="fixed top-0 left-0 right-0 z-50"
-      style={{
-        backdropFilter: scrolled ? 'blur(18px) saturate(1.1)' : 'blur(0px)',
-        WebkitBackdropFilter: scrolled ? 'blur(18px) saturate(1.1)' : 'blur(0px)',
-        background: scrolled ? 'rgba(13, 10, 8, 0.78)' : 'transparent',
-        borderBottom: scrolled ? '1px solid var(--line)' : '1px solid transparent',
-        transition: 'background 0.5s ease, border-color 0.5s ease, backdrop-filter 0.5s ease',
-      }}
-    >
-      <div className="container-x flex items-center justify-between" style={{ height: scrolled ? 68 : 92, transition: 'height 0.5s ease' }}>
+    <header style={{
+      position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50,
+      backdropFilter: scrolled ? 'blur(20px) saturate(1.2)' : 'none',
+      WebkitBackdropFilter: scrolled ? 'blur(20px) saturate(1.2)' : 'none',
+      background: scrolled ? 'rgba(247,242,232,0.92)' : 'transparent',
+      borderBottom: `1px solid ${scrolled ? 'rgba(160,120,60,0.15)' : 'transparent'}`,
+      transition: 'all 0.5s ease',
+    }}>
+      <div style={{ maxWidth: 1440, margin: '0 auto', padding: '0 clamp(20px,4vw,60px)', height: scrolled ? 64 : 88, display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: 'height 0.4s ease' }}>
 
-        <a href="#top" className="font-display" style={{ fontSize: 22, letterSpacing: '0.04em' }} data-cursor>
-          VILLA <span style={{ color: 'var(--gold)' }}>JACONDA</span>
+        <a href="#" onClick={e => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+          style={{ display: 'flex', alignItems: 'center', gap: 11, textDecoration: 'none', color: 'var(--r-text)' }}>
+          <svg viewBox="0 0 100 100" fill="none" width="28" height="28" style={{ color: 'var(--r-gold)', flexShrink: 0 }}>
+            <g stroke="currentColor" strokeWidth="0.6" opacity="0.3">
+              <line x1="14" y1="12" x2="14" y2="88"/><line x1="36.6" y1="12" x2="36.6" y2="88"/>
+              <line x1="50" y1="12" x2="50" y2="88"/><line x1="63.4" y1="12" x2="63.4" y2="88"/>
+              <line x1="86" y1="12" x2="86" y2="88"/>
+              <line x1="12" y1="14" x2="88" y2="14"/><line x1="12" y1="36.6" x2="88" y2="36.6"/>
+              <line x1="12" y1="50" x2="88" y2="50"/><line x1="12" y1="63.4" x2="88" y2="63.4"/>
+              <line x1="12" y1="86" x2="88" y2="86"/>
+            </g>
+            <circle cx="50" cy="50" r="34" stroke="currentColor" strokeWidth="2"/>
+            <circle cx="50" cy="50" r="24" stroke="currentColor" strokeWidth="2"/>
+            <circle cx="50" cy="50" r="12" stroke="currentColor" strokeWidth="2"/>
+          </svg>
+          <span style={{ fontFamily: 'var(--r-serif)', fontSize: 20, fontWeight: 300, letterSpacing: '0.04em' }}>
+            VILLA <span style={{ color: 'var(--r-gold)' }}>JACONDA</span>
+          </span>
         </a>
 
-        <nav ref={navRef} className="hidden md:flex items-center relative" style={{ gap: 36 }}>
-          <motion.span
-            animate={{ left: indicator.left, width: indicator.width, opacity: indicator.opacity }}
-            transition={{ type: 'spring', stiffness: 280, damping: 32 }}
-            style={{
-              position: 'absolute',
-              bottom: -14,
-              height: 1,
-              background: 'var(--gold)',
-              pointerEvents: 'none',
-            }}
-          />
-          {links.map((l) => {
-            const isActive = active === l.id;
-            return (
-              <a
-                key={l.href}
-                href={l.href}
-                ref={(el) => { linkRefs.current[l.id] = el; }}
-                data-cursor
-                style={{
-                  fontSize: 12,
-                  letterSpacing: '0.18em',
-                  textTransform: 'uppercase',
-                  color: isActive ? 'var(--gold)' : 'var(--text-soft)',
-                  transition: 'color 0.4s ease',
-                  position: 'relative',
-                }}
-                onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.color = 'var(--gold-light)'; }}
-                onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.color = 'var(--text-soft)'; }}
-              >
-                {l.label}
-              </a>
-            );
-          })}
+        <nav className="hidden md:flex" style={{ alignItems: 'center', gap: 32 }}>
+          {LINKS.map(l => (
+            <a key={l.id} href={`#${l.id}`}
+              onClick={e => { e.preventDefault(); scrollTo(l.id); }}
+              style={{ fontSize: 12, letterSpacing: '0.16em', textTransform: 'uppercase', color: active === l.id ? 'var(--r-gold)' : 'var(--r-text-soft)', fontWeight: active === l.id ? 500 : 400, transition: 'color 0.3s ease', textDecoration: 'none' }}
+              onMouseEnter={e => { if (active !== l.id) e.currentTarget.style.color = 'var(--r-text)'; }}
+              onMouseLeave={e => { if (active !== l.id) e.currentTarget.style.color = 'var(--r-text-soft)'; }}>
+              {l.label}
+            </a>
+          ))}
+          <a href="#contact" onClick={e => { e.preventDefault(); scrollTo('contact'); }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '11px 22px', background: 'var(--r-text)', color: 'var(--r-bg)', borderRadius: 999, fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', textDecoration: 'none', fontWeight: 500, transition: 'background 0.3s ease' }}
+            onMouseEnter={e => e.currentTarget.style.background = 'var(--r-gold)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'var(--r-text)'}>
+            Забронировать →
+          </a>
         </nav>
 
-        <a href="#contact" className="btn btn-ghost hidden md:inline-flex" style={{ padding: '12px 22px', fontSize: 12 }} data-cursor>
-          Забронировать
-          <span className="btn-arrow">→</span>
-        </a>
-
-        <button
-          onClick={() => setOpen(!open)}
-          className="md:hidden p-2"
-          aria-label="Menu"
-          style={{ background: 'transparent', border: 'none', color: 'var(--text)' }}
-        >
-          <div style={{ width: 28, height: 1, background: 'currentColor', marginBottom: 8, transition: 'transform 0.3s', transform: open ? 'translateY(4.5px) rotate(45deg)' : 'none' }} />
-          <div style={{ width: 28, height: 1, background: 'currentColor', transition: 'transform 0.3s', transform: open ? 'translateY(-4.5px) rotate(-45deg)' : 'none' }} />
+        <button className="md:hidden" onClick={() => setOpen(!open)} aria-label="Menu"
+          style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 8 }}>
+          <div style={{ width: 28, height: 1, background: 'var(--r-text)', marginBottom: 8, transition: 'transform 0.3s', transform: open ? 'translateY(4.5px) rotate(45deg)' : 'none' }} />
+          <div style={{ width: 28, height: 1, background: 'var(--r-text)', transition: 'transform 0.3s', transform: open ? 'translateY(-4.5px) rotate(-45deg)' : 'none' }} />
         </button>
       </div>
 
-      <motion.div
-        style={{
-          scaleX,
-          transformOrigin: '0%',
-          height: 1,
-          background: 'var(--gold)',
-          width: '100%',
-        }}
-      />
+      <div style={{ height: 2, background: 'var(--r-gold)', width: `${progress}%`, transition: 'width 0.1s linear', opacity: 0.7 }} />
 
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-            className="md:hidden overflow-hidden"
-            style={{ background: 'rgba(13, 10, 8, 0.96)', borderTop: '1px solid var(--line)' }}
-          >
-            <div className="container-x py-8 flex flex-col gap-6">
-              {links.map((l) => (
-                <a
-                  key={l.href}
-                  href={l.href}
-                  onClick={() => setOpen(false)}
-                  className="font-display"
-                  style={{ fontSize: 28, color: active === l.id ? 'var(--gold)' : 'var(--text)' }}
-                >
-                  {l.label}
-                </a>
-              ))}
-              <a href="#contact" onClick={() => setOpen(false)} className="btn btn-primary mt-4 self-start">
-                Забронировать
-                <span className="btn-arrow">→</span>
-              </a>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.header>
+      {open && (
+        <div style={{ background: 'rgba(247,242,232,0.98)', backdropFilter: 'blur(20px)', borderTop: '1px solid var(--r-line)', padding: '24px clamp(20px,4vw,60px) 32px' }}>
+          {LINKS.map(l => (
+            <a key={l.id} href={`#${l.id}`} onClick={e => { e.preventDefault(); scrollTo(l.id); }}
+              style={{ display: 'block', fontFamily: 'var(--r-serif)', fontSize: 28, fontWeight: 300, color: active === l.id ? 'var(--r-gold)' : 'var(--r-text)', marginBottom: 20, textDecoration: 'none' }}>
+              {l.label}
+            </a>
+          ))}
+        </div>
+      )}
+    </header>
   );
 }
