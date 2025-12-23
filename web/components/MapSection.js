@@ -11,8 +11,8 @@ export default function MapSection() {
   const ref = useRef(null);
   const inView = useInView(ref, { once: true, margin: '-10%' });
 
-  // Google Maps embed — no API key needed for basic iframe, shows exact place
-  const gmapsEmbed = `https://maps.google.com/maps?q=${LAT},${LNG}&z=17&hl=ru&output=embed`;
+  // Search by exact business name — Google resolves the correct pin automatically
+  const gmapsEmbed = `https://maps.google.com/maps?q=Аренда+Виллы+Джаконда+Relax,+Набережная+85,+Слободзея&z=17&hl=ru&output=embed`;
 
   return (
     <section id="map" ref={ref} style={{ background: 'var(--bg)', borderTop: '1px solid var(--line)' }}>
