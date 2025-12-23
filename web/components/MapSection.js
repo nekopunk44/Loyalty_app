@@ -24,19 +24,9 @@ export default function MapSection() {
         <motion.h2 initial={{ opacity: 0, y: 24 }} animate={inView ? { opacity: 1, y: 0 } : {}} transition={{ duration: 1, delay: 0.1 }} className="font-display" style={{ fontSize: 'clamp(2rem, 4vw, 3.8rem)', marginBottom: 12 }}>
           г. Слободзея, <em style={{ fontStyle: 'italic', color: 'var(--gold)' }}>Приднестровье</em>
         </motion.h2>
-        <motion.div initial={{ opacity: 0 }} animate={inView ? { opacity: 1 } : {}} transition={{ duration: 1, delay: 0.2 }} style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap', marginBottom: 32 }}>
-          <p style={{ color: 'var(--text-soft)', fontSize: 14 }}>ул. Набережная 85, Слободзея</p>
-          <a
-            href="https://maps.app.goo.gl/KNWx6gpAskeJRAxE9"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{ fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--gold)', borderBottom: '1px solid rgba(212,164,94,0.4)', paddingBottom: 2, transition: 'color 0.3s ease' }}
-            onMouseEnter={e => e.currentTarget.style.color = 'var(--gold-light)'}
-            onMouseLeave={e => e.currentTarget.style.color = 'var(--gold)'}
-          >
-            Открыть в Google Maps ↗
-          </a>
-        </motion.div>
+        <motion.p initial={{ opacity: 0 }} animate={inView ? { opacity: 1 } : {}} transition={{ duration: 1, delay: 0.2 }} style={{ color: 'var(--text-soft)', fontSize: 14, marginBottom: 32 }}>
+          ул. Набережная 85, Слободзея
+        </motion.p>
       </div>
 
       <motion.div
