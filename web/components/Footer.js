@@ -1,5 +1,6 @@
 'use client';
 import Icon from './ui/Icon';
+import VJMonogram from './VJMonogram';
 
 const NAV = [
   { href: '#rooms', label: 'Номера' }, { href: '#tour', label: '3D-тур' }, { href: '#loyalty', label: 'Лояльность' },
@@ -17,19 +18,7 @@ export default function Footer() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 64, paddingBottom: 48, borderBottom: '1px solid rgba(247,242,232,0.12)', flexWrap: 'wrap', gap: 32 }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-              <svg viewBox="0 0 100 100" fill="none" width="36" height="36" style={{ color: 'var(--r-gold)', flexShrink: 0 }}>
-                <g stroke="currentColor" strokeWidth="0.5" opacity="0.3">
-                  <line x1="14" y1="12" x2="14" y2="88"/><line x1="36.6" y1="12" x2="36.6" y2="88"/>
-                  <line x1="50" y1="12" x2="50" y2="88"/><line x1="63.4" y1="12" x2="63.4" y2="88"/>
-                  <line x1="86" y1="12" x2="86" y2="88"/>
-                  <line x1="12" y1="14" x2="88" y2="14"/><line x1="12" y1="36.6" x2="88" y2="36.6"/>
-                  <line x1="12" y1="50" x2="88" y2="50"/><line x1="12" y1="63.4" x2="88" y2="63.4"/>
-                  <line x1="12" y1="86" x2="88" y2="86"/>
-                </g>
-                <circle cx="50" cy="50" r="34" stroke="currentColor" strokeWidth="2"/>
-                <circle cx="50" cy="50" r="24" stroke="currentColor" strokeWidth="2"/>
-                <circle cx="50" cy="50" r="12" stroke="currentColor" strokeWidth="2"/>
-              </svg>
+              <VJMonogram size={44} mainColor="rgba(247,242,232,0.95)" accentColor="#a07840" animate={false} />
               <span style={{ fontFamily: 'var(--r-serif)', fontSize: 24, fontWeight: 300, letterSpacing: '0.04em', color: 'rgba(247,242,232,0.95)' }}>
                 VILLA <span style={{ color: 'var(--r-gold)' }}>JACONDA</span>
               </span>
