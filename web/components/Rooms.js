@@ -1,163 +1,241 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 const ROOMS = [
-  { id: 'standart', num: '01', name: 'Стандарт', tag: 'Studio',    sub: 'до 10 гостей', price: '150', unit: 'ночь', cover: '/images/std1.png'  },
-  { id: 'luks',     num: '02', name: 'Люкс',     tag: 'Premium',   sub: 'до 20 гостей', price: '200', unit: 'ночь', cover: '/images/luks1.png' },
-  { id: 'zad',      num: '03', name: 'Задний двор', tag: 'Outdoor',   sub: 'до 15 гостей', price: '100', unit: 'день', cover: '/images/zad1.png'  },
-  { id: 'full',     num: '04', name: 'Вся территория', tag: 'Exclusive', sub: 'до 30 гостей', price: '500', unit: 'ночь', cover: '/images/luks2.png' },
+  {
+    id: 'standart', num: '01', name: 'Стандарт', tag: 'Studio',
+    desc: 'Студия с террасой и бассейном для пары или компании до 10 человек.',
+    price: '150', unit: 'ночь', guests: 10,
+    images: ['/images/std1.png', '/images/std2.png', '/images/std3.png'],
+  },
+  {
+    id: 'luks', num: '02', name: 'Люкс', tag: 'Premium',
+    desc: 'Десять комнат, большой зал и кухня для компании до 20 человек.',
+    price: '200', unit: 'ночь', guests: 20,
+    images: ['/images/luks1.png', '/images/luks3.png', '/images/luks4.png'],
+  },
+  {
+    id: 'zad', num: '03', name: 'Задний двор', tag: 'Outdoor',
+    desc: 'Открытая территория с бассейном, беседкой и мангальной зоной.',
+    price: '100', unit: 'день', guests: 15,
+    images: ['/images/zad1.png', '/images/zad2.png', '/images/zad3.png'],
+  },
+  {
+    id: 'full', num: '04', name: 'Вся территория', tag: 'Exclusive',
+    desc: 'Полный выкуп виллы для корпоративов и мероприятий до 30 человек.',
+    price: '500', unit: 'ночь', guests: 30,
+    images: ['/images/luks2.png', '/images/luks5.png', '/images/luks6.png'],
+  },
 ];
 
 export default function Rooms() {
-  const [hovered, setHovered] = useState(null);
+  const [room, setRoom]       = useState(0);
+  const [photo, setPhoto]     = useState(0);
+  const [textKey, setTextKey] = useState(0);
+
+  const goTo = (idx) => {
+    if (idx === room) return;
+    setRoom(idx);
+    setPhoto(0);
+    setTextKey(k => k + 1);
+  };
+
+  const prev = () => goTo((room - 1 + ROOMS.length) % ROOMS.length);
+  const next = () => goTo((room + 1) % ROOMS.length);
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'ArrowLeft')  prev();
+      if (e.key === 'ArrowRight') next();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [room]);
 
   const scrollToContact = () => {
     const el = document.getElementById('contact');
     if (el) window.scrollTo({ top: el.offsetTop - 72, behavior: 'smooth' });
   };
 
+  const cur = ROOMS[room];
+
   return (
-    <section id="rooms" style={{ background: 'var(--r-bg)' }}>
+    <section id="rooms" style={{ position: 'relative', height: '100svh', overflow: 'hidden', background: '#080604' }}>
       <style>{`
-        .rooms-grid {
-          display: grid;
-          grid-template-columns: repeat(5, 1fr);
-          gap: 3px;
-          padding: 0 3px 3px;
+        @keyframes roomText {
+          from { opacity: 0; transform: translateY(14px); }
+          to   { opacity: 1; transform: translateY(0);    }
         }
-        .rooms-grid .card:nth-child(1) { grid-column: 1 / 3; }
-        .rooms-grid .card:nth-child(2) { grid-column: 3 / 6; }
-        .rooms-grid .card:nth-child(3) { grid-column: 1 / 4; }
-        .rooms-grid .card:nth-child(4) { grid-column: 4 / 6; }
-        @media (max-width: 860px) {
-          .rooms-grid {
-            grid-template-columns: 1fr 1fr;
-            gap: 2px;
-            padding: 0 2px 2px;
-          }
-          .rooms-grid .card:nth-child(n) { grid-column: auto; }
-        }
-        @media (max-width: 540px) {
-          .rooms-grid { grid-template-columns: 1fr; }
-        }
+        .room-text-enter { animation: roomText 0.65s cubic-bezier(0.16,1,0.3,1) forwards; }
       `}</style>
 
-      {/* Заголовок секции */}
-      <div style={{ maxWidth: 1440, margin: '0 auto', padding: 'clamp(72px,9vw,120px) clamp(20px,4vw,60px) clamp(36px,4.5vw,56px)' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: 24 }}>
-          <div>
-            <p style={{ fontSize: 10, letterSpacing: '0.34em', textTransform: 'uppercase', color: 'var(--r-gold)', marginBottom: 16, margin: '0 0 14px' }}>
-              — Каталог
-            </p>
-            <h2 style={{ fontFamily: 'var(--r-serif)', fontSize: 'clamp(2.2rem,4.5vw,4rem)', fontWeight: 300, lineHeight: 1.05, letterSpacing: '-0.025em', color: 'var(--r-text)', margin: 0 }}>
-              Четыре формата <em style={{ fontStyle: 'italic', color: 'var(--r-gold)' }}>проживания</em>
-            </h2>
-          </div>
-          <p style={{ fontSize: 13, color: 'var(--r-text-soft)', lineHeight: 1.8, maxWidth: 320, margin: 0 }}>
-            От уютной студии на двоих до полного выкупа виллы на&nbsp;30&nbsp;гостей.
+      {/* Все фото — crossfade */}
+      {ROOMS.map((r, ri) =>
+        r.images.map((src, ii) => (
+          <img key={`${ri}-${ii}`} src={src} alt=""
+            style={{
+              position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover',
+              opacity: ri === room && ii === photo ? 1 : 0,
+              transform: ri === room && ii === photo ? 'scale(1)' : 'scale(1.04)',
+              transition: 'opacity 0.9s ease, transform 1.4s ease',
+              willChange: 'opacity, transform',
+            }}
+          />
+        ))
+      )}
+
+      {/* Градиент */}
+      <div style={{
+        position: 'absolute', inset: 0, zIndex: 1,
+        background: 'linear-gradient(to bottom, rgba(8,6,4,0.52) 0%, transparent 28%, transparent 45%, rgba(8,6,4,0.94) 100%)',
+      }} />
+      <div style={{
+        position: 'absolute', inset: 0, zIndex: 1,
+        background: 'linear-gradient(to right, rgba(8,6,4,0.28) 0%, transparent 55%)',
+      }} />
+
+      {/* Тег + счётчик — верх */}
+      <div key={textKey} className="room-text-enter" style={{
+        position: 'absolute', top: 'clamp(88px,12vh,116px)', left: 'clamp(28px,5vw,72px)',
+        zIndex: 3, display: 'flex', alignItems: 'center', gap: 14,
+      }}>
+        <span style={{ fontFamily: 'var(--r-serif)', fontSize: 12, color: 'rgba(245,237,224,0.4)', letterSpacing: '0.08em' }}>
+          {cur.num}
+        </span>
+        <div style={{ width: 28, height: 1, background: 'rgba(212,164,94,0.4)' }} />
+        <span style={{ fontSize: 9, letterSpacing: '0.32em', textTransform: 'uppercase', color: 'rgba(212,164,94,0.75)' }}>
+          {cur.tag}
+        </span>
+      </div>
+
+      {/* Индикатор фото — верх-справа */}
+      <div style={{
+        position: 'absolute', top: 'clamp(88px,12vh,116px)', right: 'clamp(28px,5vw,72px)',
+        zIndex: 3, display: 'flex', gap: 10, alignItems: 'center',
+      }}>
+        {cur.images.map((_, ii) => (
+          <button key={ii} onClick={() => setPhoto(ii)} style={{
+            height: 1, width: ii === photo ? 28 : 8,
+            background: ii === photo ? '#d4a45e' : 'rgba(245,237,224,0.3)',
+            border: 'none', padding: 0, cursor: 'pointer',
+            transition: 'width 0.4s ease, background 0.3s ease',
+          }} />
+        ))}
+      </div>
+
+      {/* Стрелки prev/next — прозрачные зоны по бокам */}
+      <button onClick={prev} aria-label="Назад" style={{
+        position: 'absolute', left: 0, top: 0, bottom: 0, width: 'clamp(56px,9vw,110px)',
+        zIndex: 3, background: 'transparent', border: 'none', cursor: 'pointer',
+        display: 'flex', alignItems: 'center', justifyContent: 'flex-start',
+        paddingLeft: 'clamp(20px,3.5vw,40px)',
+      }}>
+        <svg width="22" height="22" viewBox="0 0 22 22" fill="none"
+          style={{ opacity: 0.55, transition: 'opacity 0.25s, transform 0.25s' }}
+          onMouseEnter={e => { e.currentTarget.style.opacity='1'; e.currentTarget.style.transform='translateX(-3px)'; }}
+          onMouseLeave={e => { e.currentTarget.style.opacity='0.55'; e.currentTarget.style.transform='translateX(0)'; }}>
+          <path d="M14 5L8 11L14 17" stroke="#f5ede0" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </button>
+      <button onClick={next} aria-label="Вперёд" style={{
+        position: 'absolute', right: 0, top: 0, bottom: 0, width: 'clamp(56px,9vw,110px)',
+        zIndex: 3, background: 'transparent', border: 'none', cursor: 'pointer',
+        display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
+        paddingRight: 'clamp(20px,3.5vw,40px)',
+      }}>
+        <svg width="22" height="22" viewBox="0 0 22 22" fill="none"
+          style={{ opacity: 0.55, transition: 'opacity 0.25s, transform 0.25s' }}
+          onMouseEnter={e => { e.currentTarget.style.opacity='1'; e.currentTarget.style.transform='translateX(3px)'; }}
+          onMouseLeave={e => { e.currentTarget.style.opacity='0.55'; e.currentTarget.style.transform='translateX(0)'; }}>
+          <path d="M8 5L14 11L8 17" stroke="#f5ede0" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </button>
+
+      {/* Контент — низ */}
+      <div style={{
+        position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 3,
+        padding: 'clamp(24px,4vw,56px) clamp(28px,5vw,72px) clamp(32px,5vh,56px)',
+        display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 32, flexWrap: 'wrap',
+      }}>
+
+        {/* Название + описание */}
+        <div key={textKey} className="room-text-enter">
+          <h2 style={{
+            fontFamily: 'var(--r-serif)', fontWeight: 300,
+            fontSize: 'clamp(3rem,6.5vw,6.5rem)', lineHeight: 0.9,
+            letterSpacing: '-0.03em', color: '#f5ede0',
+            margin: '0 0 clamp(12px,1.8vh,20px)',
+          }}>
+            {cur.name}
+          </h2>
+          <p style={{
+            fontSize: 'clamp(12px,0.9vw,14px)', color: 'rgba(202,187,169,0.62)',
+            lineHeight: 1.8, maxWidth: 360, margin: 0,
+          }}>
+            {cur.desc}
           </p>
+        </div>
+
+        {/* Цена + CTA + навигация */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 20 }}>
+
+          {/* Цена */}
+          <div key={textKey} className="room-text-enter" style={{ textAlign: 'right' }}>
+            <p style={{ fontSize: 9, letterSpacing: '0.3em', textTransform: 'uppercase', color: 'rgba(212,164,94,0.55)', margin: '0 0 6px' }}>
+              от
+            </p>
+            <p style={{ fontFamily: 'var(--r-serif)', fontSize: 'clamp(2rem,3.5vw,3rem)', color: '#d4a45e', lineHeight: 1, margin: '0 0 5px' }}>
+              {cur.price}&nbsp;<span style={{ fontFamily: 'var(--r-sans)', fontSize: '0.38em', color: 'rgba(202,187,169,0.45)' }}>PRB</span>
+            </p>
+            <p style={{ fontSize: 10, color: 'rgba(202,187,169,0.4)', letterSpacing: '0.1em', margin: 0 }}>
+              / {cur.unit} · до {cur.guests} гостей
+            </p>
+          </div>
+
+          {/* CTA */}
+          <button onClick={scrollToContact} style={{
+            padding: '12px 26px', background: 'transparent',
+            color: '#f5ede0', border: '1px solid rgba(245,237,224,0.28)',
+            borderRadius: 999, fontSize: 10, letterSpacing: '0.18em',
+            textTransform: 'uppercase', fontFamily: 'inherit',
+            cursor: 'pointer', transition: 'all 0.3s ease',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.background='#d4a45e'; e.currentTarget.style.borderColor='transparent'; e.currentTarget.style.color='#080604'; }}
+          onMouseLeave={e => { e.currentTarget.style.background='transparent'; e.currentTarget.style.borderColor='rgba(245,237,224,0.28)'; e.currentTarget.style.color='#f5ede0'; }}>
+            Выбрать →
+          </button>
+
+          {/* Навигация по номерам */}
+          <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
+            {ROOMS.map((r, ri) => (
+              <button key={ri} onClick={() => goTo(ri)} style={{
+                background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7,
+              }}>
+                <span style={{
+                  fontSize: 9, letterSpacing: '0.2em', fontFamily: 'var(--r-serif)',
+                  color: ri === room ? '#d4a45e' : 'rgba(245,237,224,0.28)',
+                  transition: 'color 0.35s ease',
+                }}>
+                  {r.num}
+                </span>
+                <div style={{
+                  height: 1, width: ri === room ? 22 : 6,
+                  background: ri === room ? '#d4a45e' : 'rgba(245,237,224,0.2)',
+                  transition: 'all 0.4s ease',
+                }} />
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* Сетка карточек */}
-      <div className="rooms-grid">
-        {ROOMS.map((room, i) => {
-          const isHov = hovered === i;
-          return (
-            <div key={room.id} className="card"
-              style={{ position: 'relative', overflow: 'hidden', height: 'clamp(340px,48vh,600px)', cursor: 'pointer' }}
-              onMouseEnter={() => setHovered(i)}
-              onMouseLeave={() => setHovered(null)}
-              onClick={scrollToContact}>
-
-              {/* Фото */}
-              <img src={room.cover} alt={room.name} style={{
-                position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover',
-                transform: isHov ? 'scale(1.07)' : 'scale(1)',
-                transition: 'transform 1.3s cubic-bezier(0.16,1,0.3,1)',
-              }} />
-
-              {/* Градиент */}
-              <div style={{
-                position: 'absolute', inset: 0,
-                background: 'linear-gradient(to bottom, rgba(8,6,4,0.04) 0%, rgba(8,6,4,0.15) 42%, rgba(8,6,4,0.84) 100%)',
-                opacity: isHov ? 1 : 0.88,
-                transition: 'opacity 0.5s ease',
-              }} />
-
-              {/* Тег — верхний левый */}
-              <div style={{
-                position: 'absolute', top: 24, left: 24,
-                fontSize: 9, letterSpacing: '0.32em', textTransform: 'uppercase',
-                color: '#d4a45e', padding: '5px 13px',
-                border: '1px solid rgba(212,164,94,0.38)', borderRadius: 2,
-                backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)',
-              }}>
-                {room.tag}
-              </div>
-
-              {/* Призрачный номер — правый верх */}
-              <div style={{
-                position: 'absolute', top: 14, right: 22,
-                fontFamily: 'var(--r-serif)', fontSize: 'clamp(4rem,7.5vw,8rem)',
-                lineHeight: 1, color: 'rgba(255,255,255,1)', fontWeight: 400,
-                letterSpacing: '-0.05em', userSelect: 'none',
-                opacity: isHov ? 0.14 : 0.05,
-                transition: 'opacity 0.6s ease',
-              }}>
-                {room.num}
-              </div>
-
-              {/* Контент — нижний */}
-              <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '0 28px 28px' }}>
-                <h3 style={{
-                  fontFamily: 'var(--r-serif)', fontWeight: 300,
-                  fontSize: 'clamp(1.8rem,2.8vw,2.6rem)', lineHeight: 1,
-                  letterSpacing: '-0.02em', color: '#f5ede0',
-                  margin: '0 0 10px',
-                }}>
-                  {room.name}
-                </h3>
-
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
-                  <span style={{ fontFamily: 'var(--r-serif)', fontSize: 'clamp(1.1rem,1.7vw,1.45rem)', color: '#d4a45e', lineHeight: 1 }}>
-                    от {room.price} PRB
-                  </span>
-                  <span style={{ fontSize: 10, color: 'rgba(202,187,169,0.45)', letterSpacing: '0.06em' }}>
-                    / {room.unit} · {room.sub}
-                  </span>
-                </div>
-
-                {/* CTA — появляется при наведении */}
-                <div style={{
-                  overflow: 'hidden',
-                  height: isHov ? 34 : 0,
-                  transition: 'height 0.42s cubic-bezier(0.16,1,0.3,1)',
-                }}>
-                  <div style={{ paddingTop: 14 }}>
-                    <span style={{
-                      fontSize: 10, letterSpacing: '0.24em', textTransform: 'uppercase',
-                      color: '#d4a45e', borderBottom: '1px solid rgba(212,164,94,0.4)',
-                      paddingBottom: 2,
-                    }}>
-                      Выбрать →
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Тонкая золотая рамка при наведении */}
-              <div style={{
-                position: 'absolute', inset: 0,
-                border: '1px solid rgba(212,164,94,0.3)',
-                opacity: isHov ? 1 : 0,
-                transition: 'opacity 0.4s ease',
-                pointerEvents: 'none',
-              }} />
-            </div>
-          );
-        })}
-      </div>
+      {/* Плавный переход в следующую секцию */}
+      <div style={{
+        position: 'absolute', bottom: 0, left: 0, right: 0, height: 100,
+        zIndex: 4, pointerEvents: 'none',
+        background: 'linear-gradient(to bottom, transparent, var(--r-bg))',
+      }} />
     </section>
   );
 }
