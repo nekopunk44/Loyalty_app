@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 
 const ROOMS = [
   {
@@ -21,7 +21,7 @@ const ROOMS = [
     images: ['/images/zad1.png', '/images/zad2.png', '/images/zad3.png'],
   },
   {
-    id: 'full', num: '04', name: 'Вся территория', tag: 'Exclusive',
+    id: 'full', num: '04', name: 'Вся\nтерритория', tag: 'Exclusive',
     desc: 'Полный выкуп виллы для корпоративов и мероприятий до 30 человек.',
     price: '500', unit: 'ночь', guests: 30,
     images: ['/images/luks2.png', '/images/luks5.png', '/images/luks6.png'],
@@ -29,213 +29,211 @@ const ROOMS = [
 ];
 
 export default function Rooms() {
-  const [room, setRoom]       = useState(0);
-  const [photo, setPhoto]     = useState(0);
-  const [textKey, setTextKey] = useState(0);
+  const [active, setActive] = useState(0);
+  const [photo,  setPhoto]  = useState(0);
+  const [hov,    setHov]    = useState(null);
 
-  const goTo = (idx) => {
-    if (idx === room) return;
-    setRoom(idx);
-    setPhoto(0);
-    setTextKey(k => k + 1);
-  };
-
-  const prev = () => goTo((room - 1 + ROOMS.length) % ROOMS.length);
-  const next = () => goTo((room + 1) % ROOMS.length);
-
-  useEffect(() => {
-    const onKey = (e) => {
-      if (e.key === 'ArrowLeft')  prev();
-      if (e.key === 'ArrowRight') next();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [room]);
-
-  const scrollToContact = () => {
+  const pick = (i) => { if (i !== active) { setActive(i); setPhoto(0); } };
+  const goContact = () => {
     const el = document.getElementById('contact');
     if (el) window.scrollTo({ top: el.offsetTop - 72, behavior: 'smooth' });
   };
 
-  const cur = ROOMS[room];
-
   return (
-    <section id="rooms" style={{ position: 'relative', height: '100svh', overflow: 'hidden', background: '#080604' }}>
+    <section id="rooms" style={{ height: '100svh', display: 'flex', overflow: 'hidden', background: '#080604' }}>
       <style>{`
-        @keyframes roomText {
-          from { opacity: 0; transform: translateY(14px); }
-          to   { opacity: 1; transform: translateY(0);    }
+        @keyframes panelIn {
+          from { opacity: 0; transform: translateY(18px); }
+          to   { opacity: 1; transform: translateY(0); }
         }
-        .room-text-enter { animation: roomText 0.65s cubic-bezier(0.16,1,0.3,1) forwards; }
+        .panel-in { animation: panelIn 0.7s cubic-bezier(0.16,1,0.3,1) both; }
       `}</style>
 
-      {/* Все фото — crossfade */}
-      {ROOMS.map((r, ri) =>
-        r.images.map((src, ii) => (
-          <img key={`${ri}-${ii}`} src={src} alt=""
+      {ROOMS.map((room, i) => {
+        const isActive = i === active;
+        const isHov    = hov === i && !isActive;
+        const flex     = isActive ? '0 0 58%' : isHov ? '0 0 16%' : '0 0 14%';
+
+        return (
+          <div key={room.id}
+            onClick={() => pick(i)}
+            onMouseEnter={() => setHov(i)}
+            onMouseLeave={() => setHov(null)}
             style={{
-              position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover',
-              opacity: ri === room && ii === photo ? 1 : 0,
-              transform: ri === room && ii === photo ? 'scale(1)' : 'scale(1.04)',
-              transition: 'opacity 0.9s ease, transform 1.4s ease',
-              willChange: 'opacity, transform',
-            }}
-          />
-        ))
-      )}
+              position: 'relative', overflow: 'hidden',
+              flex, transition: 'flex 0.75s cubic-bezier(0.16,1,0.3,1)',
+              cursor: isActive ? 'default' : 'pointer',
+            }}>
 
-      {/* Градиент */}
-      <div style={{
-        position: 'absolute', inset: 0, zIndex: 1,
-        background: 'linear-gradient(to bottom, rgba(8,6,4,0.52) 0%, transparent 28%, transparent 45%, rgba(8,6,4,0.94) 100%)',
-      }} />
-      <div style={{
-        position: 'absolute', inset: 0, zIndex: 1,
-        background: 'linear-gradient(to right, rgba(8,6,4,0.28) 0%, transparent 55%)',
-      }} />
+            {/* ── Фото ── */}
+            {room.images.map((src, ii) => (
+              <img key={ii} src={src} alt=""
+                style={{
+                  position: 'absolute', inset: 0, width: '100%', height: '100%',
+                  objectFit: 'cover',
+                  opacity: isActive ? (ii === photo ? 1 : 0) : (ii === 0 ? 1 : 0),
+                  transform: isActive ? 'scale(1)' : (isHov ? 'scale(1.06)' : 'scale(1.12)'),
+                  transition: 'opacity 0.85s ease, transform 0.9s cubic-bezier(0.16,1,0.3,1)',
+                }}
+              />
+            ))}
 
-      {/* Тег + счётчик — верх */}
-      <div key={textKey} className="room-text-enter" style={{
-        position: 'absolute', top: 'clamp(88px,12vh,116px)', left: 'clamp(28px,5vw,72px)',
-        zIndex: 3, display: 'flex', alignItems: 'center', gap: 14,
-      }}>
-        <span style={{ fontFamily: 'var(--r-serif)', fontSize: 12, color: 'rgba(245,237,224,0.4)', letterSpacing: '0.08em' }}>
-          {cur.num}
-        </span>
-        <div style={{ width: 28, height: 1, background: 'rgba(212,164,94,0.4)' }} />
-        <span style={{ fontSize: 9, letterSpacing: '0.32em', textTransform: 'uppercase', color: 'rgba(212,164,94,0.75)' }}>
-          {cur.tag}
-        </span>
-      </div>
+            {/* ── Оверлей ── */}
+            <div style={{
+              position: 'absolute', inset: 0,
+              background: isActive
+                ? 'linear-gradient(175deg, rgba(8,6,4,0.06) 0%, transparent 32%, transparent 42%, rgba(8,6,4,0.93) 100%)'
+                : `rgba(8,6,4,${isHov ? '0.48' : '0.62'})`,
+              transition: 'background 0.7s ease',
+            }} />
 
-      {/* Индикатор фото — верх-справа */}
-      <div style={{
-        position: 'absolute', top: 'clamp(88px,12vh,116px)', right: 'clamp(28px,5vw,72px)',
-        zIndex: 3, display: 'flex', gap: 10, alignItems: 'center',
-      }}>
-        {cur.images.map((_, ii) => (
-          <button key={ii} onClick={() => setPhoto(ii)} style={{
-            height: 1, width: ii === photo ? 28 : 8,
-            background: ii === photo ? '#d4a45e' : 'rgba(245,237,224,0.3)',
-            border: 'none', padding: 0, cursor: 'pointer',
-            transition: 'width 0.4s ease, background 0.3s ease',
-          }} />
-        ))}
-      </div>
-
-      {/* Стрелки prev/next — прозрачные зоны по бокам */}
-      <button onClick={prev} aria-label="Назад" style={{
-        position: 'absolute', left: 0, top: 0, bottom: 0, width: 'clamp(56px,9vw,110px)',
-        zIndex: 3, background: 'transparent', border: 'none', cursor: 'pointer',
-        display: 'flex', alignItems: 'center', justifyContent: 'flex-start',
-        paddingLeft: 'clamp(20px,3.5vw,40px)',
-      }}>
-        <svg width="22" height="22" viewBox="0 0 22 22" fill="none"
-          style={{ opacity: 0.55, transition: 'opacity 0.25s, transform 0.25s' }}
-          onMouseEnter={e => { e.currentTarget.style.opacity='1'; e.currentTarget.style.transform='translateX(-3px)'; }}
-          onMouseLeave={e => { e.currentTarget.style.opacity='0.55'; e.currentTarget.style.transform='translateX(0)'; }}>
-          <path d="M14 5L8 11L14 17" stroke="#f5ede0" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
-      </button>
-      <button onClick={next} aria-label="Вперёд" style={{
-        position: 'absolute', right: 0, top: 0, bottom: 0, width: 'clamp(56px,9vw,110px)',
-        zIndex: 3, background: 'transparent', border: 'none', cursor: 'pointer',
-        display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
-        paddingRight: 'clamp(20px,3.5vw,40px)',
-      }}>
-        <svg width="22" height="22" viewBox="0 0 22 22" fill="none"
-          style={{ opacity: 0.55, transition: 'opacity 0.25s, transform 0.25s' }}
-          onMouseEnter={e => { e.currentTarget.style.opacity='1'; e.currentTarget.style.transform='translateX(3px)'; }}
-          onMouseLeave={e => { e.currentTarget.style.opacity='0.55'; e.currentTarget.style.transform='translateX(0)'; }}>
-          <path d="M8 5L14 11L8 17" stroke="#f5ede0" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
-      </button>
-
-      {/* Контент — низ */}
-      <div style={{
-        position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 3,
-        padding: 'clamp(24px,4vw,56px) clamp(28px,5vw,72px) clamp(32px,5vh,56px)',
-        display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 32, flexWrap: 'wrap',
-      }}>
-
-        {/* Название + описание */}
-        <div key={textKey} className="room-text-enter">
-          <h2 style={{
-            fontFamily: 'var(--r-serif)', fontWeight: 300,
-            fontSize: 'clamp(3rem,6.5vw,6.5rem)', lineHeight: 0.9,
-            letterSpacing: '-0.03em', color: '#f5ede0',
-            margin: '0 0 clamp(12px,1.8vh,20px)',
-          }}>
-            {cur.name}
-          </h2>
-          <p style={{
-            fontSize: 'clamp(12px,0.9vw,14px)', color: 'rgba(202,187,169,0.62)',
-            lineHeight: 1.8, maxWidth: 360, margin: 0,
-          }}>
-            {cur.desc}
-          </p>
-        </div>
-
-        {/* Цена + CTA + навигация */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 20 }}>
-
-          {/* Цена */}
-          <div key={textKey} className="room-text-enter" style={{ textAlign: 'right' }}>
-            <p style={{ fontSize: 9, letterSpacing: '0.3em', textTransform: 'uppercase', color: 'rgba(212,164,94,0.55)', margin: '0 0 6px' }}>
-              от
-            </p>
-            <p style={{ fontFamily: 'var(--r-serif)', fontSize: 'clamp(2rem,3.5vw,3rem)', color: '#d4a45e', lineHeight: 1, margin: '0 0 5px' }}>
-              {cur.price}&nbsp;<span style={{ fontFamily: 'var(--r-sans)', fontSize: '0.38em', color: 'rgba(202,187,169,0.45)' }}>PRB</span>
-            </p>
-            <p style={{ fontSize: 10, color: 'rgba(202,187,169,0.4)', letterSpacing: '0.1em', margin: 0 }}>
-              / {cur.unit} · до {cur.guests} гостей
-            </p>
-          </div>
-
-          {/* CTA */}
-          <button onClick={scrollToContact} style={{
-            padding: '12px 26px', background: 'transparent',
-            color: '#f5ede0', border: '1px solid rgba(245,237,224,0.28)',
-            borderRadius: 999, fontSize: 10, letterSpacing: '0.18em',
-            textTransform: 'uppercase', fontFamily: 'inherit',
-            cursor: 'pointer', transition: 'all 0.3s ease',
-          }}
-          onMouseEnter={e => { e.currentTarget.style.background='#d4a45e'; e.currentTarget.style.borderColor='transparent'; e.currentTarget.style.color='#080604'; }}
-          onMouseLeave={e => { e.currentTarget.style.background='transparent'; e.currentTarget.style.borderColor='rgba(245,237,224,0.28)'; e.currentTarget.style.color='#f5ede0'; }}>
-            Выбрать →
-          </button>
-
-          {/* Навигация по номерам */}
-          <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
-            {ROOMS.map((r, ri) => (
-              <button key={ri} onClick={() => goTo(ri)} style={{
-                background: 'none', border: 'none', padding: 0, cursor: 'pointer',
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7,
+            {/* ── Inactive: вертикальное имя ── */}
+            {!isActive && (
+              <div style={{
+                position: 'absolute', inset: 0,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                flexDirection: 'column', gap: 20,
               }}>
                 <span style={{
-                  fontSize: 9, letterSpacing: '0.2em', fontFamily: 'var(--r-serif)',
-                  color: ri === room ? '#d4a45e' : 'rgba(245,237,224,0.28)',
-                  transition: 'color 0.35s ease',
+                  fontFamily: 'var(--r-serif)',
+                  fontSize: 'clamp(0.75rem, 1.1vw, 1rem)',
+                  color: isHov ? 'rgba(212,164,94,0.9)' : 'rgba(212,164,94,0.55)',
+                  letterSpacing: '0.24em', textTransform: 'uppercase',
+                  writingMode: 'vertical-rl', transform: 'rotate(180deg)',
+                  transition: 'color 0.4s ease',
                 }}>
-                  {r.num}
+                  {room.tag}
                 </span>
-                <div style={{
-                  height: 1, width: ri === room ? 22 : 6,
-                  background: ri === room ? '#d4a45e' : 'rgba(245,237,224,0.2)',
-                  transition: 'all 0.4s ease',
-                }} />
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
+                <div style={{ width: 1, height: 28, background: 'rgba(212,164,94,0.3)' }} />
+                <span style={{
+                  fontFamily: 'var(--r-serif)',
+                  fontSize: 'clamp(1rem, 1.5vw, 1.4rem)',
+                  fontWeight: 300, letterSpacing: '0.06em',
+                  color: isHov ? 'rgba(245,237,224,0.92)' : 'rgba(245,237,224,0.55)',
+                  writingMode: 'vertical-rl', transform: 'rotate(180deg)',
+                  whiteSpace: 'nowrap', transition: 'color 0.4s ease',
+                }}>
+                  {room.name.replace('\n', ' ')}
+                </span>
+              </div>
+            )}
 
-      {/* Плавный переход в следующую секцию */}
-      <div style={{
-        position: 'absolute', bottom: 0, left: 0, right: 0, height: 100,
-        zIndex: 4, pointerEvents: 'none',
-        background: 'linear-gradient(to bottom, transparent, var(--r-bg))',
-      }} />
+            {/* ── Active: призрачный номер ── */}
+            {isActive && (
+              <div style={{
+                position: 'absolute', top: '8%', left: '-2%',
+                fontFamily: 'var(--r-serif)',
+                fontSize: 'clamp(10rem, 22vw, 26rem)',
+                lineHeight: 1, color: 'rgba(255,255,255,0.04)',
+                fontWeight: 400, letterSpacing: '-0.06em',
+                userSelect: 'none', pointerEvents: 'none',
+              }}>
+                {room.num}
+              </div>
+            )}
+
+            {/* ── Active: секция-метка вверху ── */}
+            {isActive && (
+              <div key={active} className="panel-in" style={{
+                position: 'absolute', top: 'clamp(88px,12vh,116px)', left: 'clamp(32px,4vw,60px)',
+                display: 'flex', alignItems: 'center', gap: 14,
+              }}>
+                <span style={{ fontSize: 9, letterSpacing: '0.36em', textTransform: 'uppercase', color: 'rgba(245,237,224,0.35)' }}>
+                  Каталог
+                </span>
+                <div style={{ width: 1, height: 14, background: 'rgba(212,164,94,0.3)' }} />
+                <span style={{ fontSize: 9, letterSpacing: '0.36em', textTransform: 'uppercase', color: 'rgba(212,164,94,0.7)' }}>
+                  {room.tag}
+                </span>
+                <div style={{ width: 1, height: 14, background: 'rgba(212,164,94,0.2)' }} />
+                <span style={{ fontSize: 9, letterSpacing: '0.2em', color: 'rgba(245,237,224,0.3)' }}>
+                  {room.num} / 04
+                </span>
+              </div>
+            )}
+
+            {/* ── Active: нижний контент ── */}
+            {isActive && (
+              <div key={`info-${active}`} className="panel-in"
+                style={{
+                  position: 'absolute', bottom: 0, left: 0, right: 0,
+                  padding: 'clamp(24px,4vw,52px) clamp(32px,4vw,60px) clamp(32px,5vh,52px)',
+                  display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap',
+                }}>
+
+                {/* Левая часть */}
+                <div>
+                  <h3 style={{
+                    fontFamily: 'var(--r-serif)', fontWeight: 300,
+                    fontSize: 'clamp(3rem,5.5vw,5.5rem)', lineHeight: 0.9,
+                    letterSpacing: '-0.03em', color: '#f5ede0',
+                    margin: '0 0 clamp(14px,2vh,22px)', whiteSpace: 'pre-line',
+                  }}>
+                    {room.name}
+                  </h3>
+                  <p style={{
+                    fontSize: 'clamp(12px,0.85vw,13px)', color: 'rgba(202,187,169,0.58)',
+                    lineHeight: 1.85, maxWidth: 340, margin: 0, letterSpacing: '0.01em',
+                  }}>
+                    {room.desc}
+                  </p>
+                </div>
+
+                {/* Правая часть */}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 18, flexShrink: 0 }}>
+                  {/* Цена */}
+                  <div style={{ textAlign: 'right' }}>
+                    <p style={{ fontSize: 9, letterSpacing: '0.3em', textTransform: 'uppercase', color: 'rgba(212,164,94,0.5)', margin: '0 0 6px' }}>
+                      от
+                    </p>
+                    <p style={{ fontFamily: 'var(--r-serif)', fontSize: 'clamp(2rem,3vw,2.8rem)', color: '#d4a45e', lineHeight: 1, margin: '0 0 5px' }}>
+                      {room.price}&thinsp;<span style={{ fontFamily: 'var(--r-sans)', fontSize: '0.38em', color: 'rgba(202,187,169,0.4)' }}>PRB</span>
+                    </p>
+                    <p style={{ fontSize: 10, color: 'rgba(202,187,169,0.36)', letterSpacing: '0.1em', margin: 0 }}>
+                      / {room.unit} · до {room.guests} гостей
+                    </p>
+                  </div>
+
+                  {/* Переключатель фото */}
+                  <div style={{ display: 'flex', gap: 9, alignItems: 'center' }}>
+                    {room.images.map((_, ii) => (
+                      <button key={ii}
+                        onClick={e => { e.stopPropagation(); setPhoto(ii); }}
+                        style={{
+                          height: 1, width: ii === photo ? 26 : 8,
+                          background: ii === photo ? '#d4a45e' : 'rgba(245,237,224,0.28)',
+                          border: 'none', padding: 0, cursor: 'pointer',
+                          transition: 'all 0.4s ease',
+                        }}
+                      />
+                    ))}
+                  </div>
+
+                  {/* CTA */}
+                  <button onClick={goContact} style={{
+                    padding: '12px 26px', background: 'transparent', color: '#f5ede0',
+                    border: '1px solid rgba(245,237,224,0.25)', borderRadius: 999,
+                    fontSize: 10, letterSpacing: '0.2em', textTransform: 'uppercase',
+                    fontFamily: 'inherit', cursor: 'pointer', transition: 'all 0.3s ease',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background='#d4a45e'; e.currentTarget.style.color='#080604'; e.currentTarget.style.borderColor='transparent'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background='transparent'; e.currentTarget.style.color='#f5ede0'; e.currentTarget.style.borderColor='rgba(245,237,224,0.25)'; }}>
+                    Выбрать →
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ── Тонкий разделитель ── */}
+            {i < ROOMS.length - 1 && (
+              <div style={{
+                position: 'absolute', top: 0, right: 0, bottom: 0, width: 1,
+                background: 'rgba(212,164,94,0.1)', zIndex: 2,
+              }} />
+            )}
+          </div>
+        );
+      })}
     </section>
   );
 }
