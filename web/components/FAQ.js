@@ -1,63 +1,231 @@
 'use client';
 import { useState } from 'react';
-import Icon from './ui/Icon';
+
+const GOLD     = '#d4a45e';
+const GOLD_DIM = 'rgba(212,164,94,0.55)';
+const CREAM    = '#f5ede0';
+const BG_DARK  = '#0a0805';
+const INSTAGRAM_URL = 'https://www.instagram.com/villa_jaconda_relax?igsh=MXhwY21lc2k1NW44';
+
+const CATS = [
+  { id: 'all',     label: 'Все' },
+  { id: 'booking', label: 'Бронирование' },
+  { id: 'loyalty', label: 'Лояльность' },
+  { id: 'stay',    label: 'Проживание' },
+];
 
 const FAQS = [
-  { q: 'Как работает программа лояльности?', a: 'За каждое бронирование вам начисляются баллы. Уровень определяется накопленными баллами: Bronze (0–500), Silver (500–2000), Gold (2000–5000), Platinum (от 5000). С ростом уровня увеличивается кешбек и открываются дополнительные привилегии.' },
-  { q: 'Можно ли забронировать весь комплекс?', a: 'Да, формат «Вся территория» включает полный выкуп виллы — все номера, общие зоны, бассейн, сауну, мангальную и беседку. Закрытый формат для крупных мероприятий до 30 человек.' },
-  { q: 'Как происходит бронирование?', a: 'Заполните форму на сайте — заявка придёт нам в WhatsApp. Мы свяжемся в течение часа, уточним детали и подтвердим бронирование. Оплата при заезде или по договорённости.' },
-  { q: 'Есть ли минимальный срок проживания?', a: 'Стандарт и Люкс — от 1 ночи. Задний двор — от 1 дня. Полный выкуп — от 1 ночи. В высокий сезон (июнь–август) может быть минимум 2 ночи — уточняйте при бронировании.' },
-  { q: 'Какие удобства входят в стоимость?', a: 'Бассейн, WiFi, парковка и базовая уборка входят во все форматы. Сауна, мангал, беседка, большой зал — зависят от выбранного формата.' },
-  { q: 'Можно ли привезти животных?', a: 'Этот вопрос решается индивидуально. Свяжитесь с нами заранее, чтобы согласовать условия.' },
-  { q: 'Как попасть на виллу? Есть ли трансфер?', a: 'Вилла находится по адресу: ул. Набережная 85, Слободзея, Приднестровье. Трансфер организуется по запросу. Собственная парковка на территории.' },
-  { q: 'Как скачать приложение лояльности?', a: 'Приложение доступно в App Store и Google Play. Поиск: «Villa Jaconda». После регистрации баллы начнут начисляться с первого бронирования.' },
+  { cat: 'loyalty', q: 'Как работает программа лояльности?',           a: 'За каждое бронирование вам начисляются баллы. Уровень определяется накопленными баллами: Bronze (0–500), Silver (500–2000), Gold (2000–5000), Platinum (от 5000). С ростом уровня увеличивается кешбек и открываются дополнительные привилегии.' },
+  { cat: 'booking', q: 'Можно ли забронировать весь комплекс?',         a: 'Да, формат «Вся территория» включает полный выкуп виллы — все номера, общие зоны, бассейн, сауну, мангальную и беседку. Закрытый формат для крупных мероприятий до 30 человек.' },
+  { cat: 'booking', q: 'Как происходит бронирование?',                  a: 'Заполните форму на сайте — заявка придёт нам в WhatsApp. Мы свяжемся в течение часа, уточним детали и подтвердим бронирование. Оплата при заезде или по договорённости.' },
+  { cat: 'booking', q: 'Есть ли минимальный срок проживания?',          a: 'Стандарт и Люкс — от 1 ночи. Задний двор — от 1 дня. Полный выкуп — от 1 ночи. В высокий сезон (июнь–август) может быть минимум 2 ночи — уточняйте при бронировании.' },
+  { cat: 'stay',    q: 'Какие удобства входят в стоимость?',            a: 'Бассейн, WiFi, парковка и базовая уборка входят во все форматы. Сауна, мангал, беседка, большой зал — зависят от выбранного формата.' },
+  { cat: 'stay',    q: 'Можно ли привезти животных?',                   a: 'Этот вопрос решается индивидуально. Свяжитесь с нами заранее, чтобы согласовать условия.' },
+  { cat: 'stay',    q: 'Как попасть на виллу? Есть ли трансфер?',       a: 'Вилла находится по адресу: ул. Набережная 85, Слободзея, Приднестровье. Трансфер организуется по запросу. Собственная парковка на территории.' },
+  { cat: 'loyalty', q: 'Как скачать приложение лояльности?',            a: 'Приложение доступно в App Store и Google Play. Поиск: «Villa Jaconda». После регистрации баллы начнут начисляться с первого бронирования.' },
 ];
 
 export default function FAQ() {
-  const [open, setOpen] = useState(null);
+  const [open, setOpen] = useState(0);
+  const [cat, setCat]   = useState('all');
+
+  const filtered = FAQS.map((f, i) => ({ ...f, _i: i })).filter(f => cat === 'all' || f.cat === cat);
 
   return (
-    <section id="faq" style={{ background: 'var(--r-surface-warm)', borderTop: '1px solid var(--r-line)', paddingTop: 'clamp(80px,10vw,140px)', paddingBottom: 'clamp(80px,10vw,140px)' }}>
-      <div style={{ maxWidth: 1440, margin: '0 auto', padding: '0 clamp(20px,4vw,60px)' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(360px,100%),1fr))', gap: 'clamp(48px,8vw,100px)', alignItems: 'start' }}>
+    <section id="faq" style={{
+      background: `linear-gradient(180deg, ${BG_DARK} 0%, #0d0a07 100%)`,
+      paddingTop: 'clamp(90px,11vw,160px)',
+      paddingBottom: 'clamp(90px,11vw,160px)',
+      position: 'relative', overflow: 'hidden',
+    }}>
+      <style>{`
+        @keyframes faqFade {
+          from { opacity: 0; transform: translateY(10px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        .faq-grid { display: grid; gap: clamp(48px, 6vw, 96px); grid-template-columns: minmax(0, 360px) minmax(0, 1fr); align-items: start; }
+        @media (max-width: 980px) {
+          .faq-grid { grid-template-columns: 1fr !important; }
+          .faq-sticky { position: relative !important; top: 0 !important; }
+        }
+      `}</style>
 
-          <div style={{ position: 'sticky', top: 100 }}>
-            <p style={{ fontSize: 10, letterSpacing: '0.32em', textTransform: 'uppercase', color: 'var(--r-gold)', fontWeight: 500, marginBottom: 16 }}>— FAQ</p>
-            <h2 style={{ fontFamily: 'var(--r-serif)', fontSize: 'clamp(2.4rem,4.5vw,4rem)', fontWeight: 300, lineHeight: 1.05, letterSpacing: '-0.02em', color: 'var(--r-text)', margin: '0 0 24px' }}>
-              Частые<br /><em style={{ fontStyle: 'italic', color: 'var(--r-gold)' }}>вопросы</em>
+      {/* Декоративные элементы */}
+      <div style={{
+        position: 'absolute', top: '-20%', left: '-10%',
+        width: 540, height: 540, borderRadius: '50%',
+        background: `radial-gradient(circle, ${GOLD}08 0%, transparent 65%)`,
+        pointerEvents: 'none',
+      }} />
+
+      {/* Огромная цитата в фоне */}
+      <div style={{
+        position: 'absolute', top: '8%', right: '-2%',
+        fontFamily: 'var(--r-serif)', fontStyle: 'italic',
+        fontSize: 'clamp(20rem, 32vw, 28rem)', fontWeight: 300,
+        lineHeight: 0.85, letterSpacing: '-0.06em',
+        color: `${GOLD}06`, userSelect: 'none', pointerEvents: 'none',
+        zIndex: 0,
+      }}>
+        ?
+      </div>
+
+      <div style={{ maxWidth: 1440, margin: '0 auto', padding: '0 clamp(20px,4vw,60px)', position: 'relative', zIndex: 1 }}>
+
+        <div className="faq-grid">
+
+          {/* ═══════════ LEFT: sticky sidebar ═══════════ */}
+          <div className="faq-sticky" style={{ position: 'sticky', top: 100 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 22 }}>
+              <div style={{ width: 22, height: 1, background: GOLD, opacity: 0.55 }} />
+              <span style={{ fontSize: 9, letterSpacing: '0.38em', textTransform: 'uppercase', color: GOLD_DIM }}>
+                FAQ · Часто
+              </span>
+            </div>
+
+            <h2 style={{
+              fontFamily: 'var(--r-serif)',
+              fontSize: 'clamp(2.4rem, 4.8vw, 4.4rem)',
+              fontWeight: 300, lineHeight: 1, letterSpacing: '-0.025em',
+              color: CREAM, margin: '0 0 22px',
+            }}>
+              Частые<br />
+              <em style={{ fontStyle: 'italic', color: GOLD }}>вопросы</em>
             </h2>
-            <p style={{ fontSize: 14, color: 'var(--r-text-soft)', lineHeight: 1.7, maxWidth: 320 }}>
-              Не нашли ответ? Напишите нам — ответим быстро.
+
+            <p style={{
+              fontSize: 14, color: 'rgba(245,237,224,0.6)',
+              lineHeight: 1.8, maxWidth: 320,
+              margin: '0 0 32px',
+            }}>
+              Собрали ответы на главное. Не нашли свой вопрос — напишите напрямую, ответим за час.
             </p>
-            <a href="https://wa.me/37377812345" target="_blank" rel="noopener noreferrer"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginTop: 28, padding: '12px 22px', background: 'var(--r-text)', color: 'var(--r-bg)', borderRadius: 999, fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', textDecoration: 'none', fontWeight: 500, transition: 'background 0.3s ease' }}
-              onMouseEnter={e => e.currentTarget.style.background = 'var(--r-gold)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'var(--r-text)'}>
-              <Icon name="message-circle" size={14} strokeWidth={1.5} />
+
+            {/* Фильтры по категориям */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 0, marginBottom: 32, borderTop: '1px solid rgba(212,164,94,0.15)' }}>
+              {CATS.map(c => {
+                const isAct = cat === c.id;
+                return (
+                  <button key={c.id} onClick={() => setCat(c.id)}
+                    style={{
+                      background: 'transparent', border: 'none',
+                      borderBottom: '1px solid rgba(212,164,94,0.15)',
+                      padding: '14px 0', cursor: isAct ? 'default' : 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      fontFamily: 'inherit', textAlign: 'left',
+                      transition: 'all 0.3s ease', position: 'relative',
+                    }}
+                    onMouseEnter={e => { if (!isAct) e.currentTarget.querySelector('.cat-arrow').style.transform = 'translateX(4px)'; }}
+                    onMouseLeave={e => { if (!isAct) e.currentTarget.querySelector('.cat-arrow').style.transform = 'translateX(0)'; }}>
+                    <span style={{
+                      fontFamily: 'var(--r-serif)',
+                      fontStyle: isAct ? 'italic' : 'normal',
+                      fontSize: isAct ? 17 : 14,
+                      color: isAct ? GOLD : 'rgba(245,237,224,0.6)',
+                      letterSpacing: '0.02em',
+                      transition: 'all 0.3s ease',
+                    }}>{c.label}</span>
+                    <span className="cat-arrow" style={{
+                      color: isAct ? GOLD : 'rgba(245,237,224,0.3)',
+                      fontSize: 14, transition: 'transform 0.3s ease',
+                    }}>→</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <a href={INSTAGRAM_URL} target="_blank" rel="noopener noreferrer"
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 10,
+                padding: '14px 26px',
+                background: GOLD, color: BG_DARK,
+                borderRadius: 999, fontSize: 11, letterSpacing: '0.24em',
+                textTransform: 'uppercase', textDecoration: 'none', fontWeight: 500,
+                transition: 'all 0.3s ease',
+                boxShadow: '0 8px 28px rgba(212,164,94,0.25)',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 14px 36px rgba(212,164,94,0.4)'; }}
+              onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 8px 28px rgba(212,164,94,0.25)'; }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
+                <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+                <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
+              </svg>
               Написать →
             </a>
           </div>
 
-          <div>
-            {FAQS.map((faq, i) => (
-              <div key={i} style={{ borderBottom: '1px solid var(--r-line)' }}>
-                <button onClick={() => setOpen(open === i ? null : i)}
-                  style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, padding: '22px 0', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
-                  <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-                    <span style={{ fontFamily: 'var(--r-serif)', fontSize: 12, color: 'var(--r-gold)', letterSpacing: '0.1em', flexShrink: 0 }}>
-                      {String(i + 1).padStart(2, '0')}
-                    </span>
-                    <span style={{ fontSize: 15, color: 'var(--r-text)', fontWeight: open === i ? 500 : 400 }}>{faq.q}</span>
+          {/* ═══════════ RIGHT: accordion list ═══════════ */}
+          <div key={cat} style={{ animation: 'faqFade 0.4s cubic-bezier(0.16,1,0.3,1) both' }}>
+            {filtered.map((faq, i) => {
+              const isOpen = open === faq._i;
+              return (
+                <div key={faq._i} style={{
+                  borderBottom: '1px solid rgba(212,164,94,0.12)',
+                  background: isOpen ? 'rgba(212,164,94,0.04)' : 'transparent',
+                  transition: 'background 0.4s ease',
+                  borderLeft: `2px solid ${isOpen ? GOLD : 'transparent'}`,
+                  paddingLeft: isOpen ? 18 : 0,
+                  marginLeft: isOpen ? -20 : 0,
+                  paddingRight: isOpen ? 18 : 0,
+                  marginRight: isOpen ? -20 : 0,
+                }}>
+                  <button onClick={() => setOpen(isOpen ? null : faq._i)}
+                    style={{
+                      width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 22,
+                      padding: '24px 0', background: 'transparent', border: 'none',
+                      cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
+                    }}>
+                    <div style={{ display: 'flex', gap: 22, alignItems: 'center', flex: 1 }}>
+                      <span style={{
+                        fontFamily: 'var(--r-serif)', fontStyle: 'italic',
+                        fontSize: 13, color: GOLD, letterSpacing: '0.18em',
+                        flexShrink: 0, fontWeight: 300, minWidth: 28,
+                      }}>
+                        {String(i + 1).padStart(2, '0')}
+                      </span>
+                      <span style={{
+                        fontFamily: 'var(--r-serif)',
+                        fontSize: isOpen ? 19 : 17,
+                        fontStyle: isOpen ? 'italic' : 'normal',
+                        fontWeight: 300,
+                        color: isOpen ? CREAM : 'rgba(245,237,224,0.78)',
+                        lineHeight: 1.3,
+                        transition: 'all 0.35s ease',
+                      }}>
+                        {faq.q}
+                      </span>
+                    </div>
+                    <div style={{
+                      width: 34, height: 34, borderRadius: '50%',
+                      border: `1px solid ${isOpen ? GOLD : 'rgba(212,164,94,0.25)'}`,
+                      background: isOpen ? GOLD : 'transparent',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      flexShrink: 0, transition: 'all 0.35s ease',
+                    }}>
+                      <span style={{
+                        color: isOpen ? BG_DARK : GOLD,
+                        fontSize: 18, lineHeight: 1, fontWeight: 300,
+                        transform: isOpen ? 'rotate(45deg)' : 'rotate(0deg)',
+                        transition: 'transform 0.35s ease',
+                      }}>+</span>
+                    </div>
+                  </button>
+                  <div style={{
+                    overflow: 'hidden',
+                    maxHeight: isOpen ? 400 : 0,
+                    opacity: isOpen ? 1 : 0,
+                    transition: 'max-height 0.45s cubic-bezier(0.16,1,0.3,1), opacity 0.35s ease',
+                  }}>
+                    <p style={{
+                      fontSize: 14.5, color: 'rgba(245,237,224,0.7)',
+                      lineHeight: 1.8, padding: '0 0 26px 50px',
+                      margin: 0, maxWidth: 640,
+                    }}>{faq.a}</p>
                   </div>
-                  <div style={{ transform: open === i ? 'rotate(45deg)' : 'rotate(0deg)', transition: 'transform 0.3s ease', flexShrink: 0 }}>
-                    <Icon name="plus" size={18} color="var(--r-gold)" strokeWidth={1.5} />
-                  </div>
-                </button>
-                <div style={{ overflow: 'hidden', maxHeight: open === i ? 300 : 0, transition: 'max-height 0.4s cubic-bezier(0.16,1,0.3,1)', opacity: open === i ? 1 : 0 }}>
-                  <p style={{ fontSize: 14, color: 'var(--r-text-soft)', lineHeight: 1.75, padding: '0 0 22px 36px' }}>{faq.a}</p>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>
