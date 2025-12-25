@@ -2,10 +2,6 @@
 import Icon from './ui/Icon';
 import VJMonogram from './VJMonogram';
 
-const NAV = [
-  { href: '#rooms', label: 'Номера' }, { href: '#tour', label: '3D-тур' }, { href: '#loyalty', label: 'Лояльность' },
-  { href: '#faq', label: 'FAQ' }, { href: '#', label: 'Бронирование', modal: true },
-];
 const SOCIAL = [{ name: 'Instagram', icon: 'camera' }, { name: 'Telegram', icon: 'send' }, { name: 'WhatsApp', icon: 'message-circle' }];
 
 export default function Footer() {
@@ -28,24 +24,7 @@ export default function Footer() {
           </div>
         </div>
 
-        <div style={{ display: 'grid', gap: 32, gridTemplateColumns: 'repeat(auto-fit,minmax(min(160px,100%),1fr))', marginBottom: 28 }}>
-          <div>
-            <p style={{ fontSize: 9, letterSpacing: '0.28em', textTransform: 'uppercase', color: 'rgba(247,242,232,0.3)', marginBottom: 12 }}>Навигация</p>
-            <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {NAV.map(l => (
-                <li key={l.label}>
-                  <a href={l.href}
-                    onClick={l.modal ? e => { e.preventDefault(); window.dispatchEvent(new CustomEvent('open-booking-modal')); } : undefined}
-                    style={{ fontSize: 13, color: 'rgba(247,242,232,0.55)', textDecoration: 'none', transition: 'color 0.3s ease', cursor: 'pointer' }}
-                    onMouseEnter={e => e.currentTarget.style.color = 'var(--r-gold)'}
-                    onMouseLeave={e => e.currentTarget.style.color = 'rgba(247,242,232,0.55)'}>
-                    {l.label}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-
+        <div style={{ display: 'grid', gap: 32, gridTemplateColumns: 'repeat(auto-fit,minmax(min(200px,100%),1fr))', marginBottom: 28 }}>
           <div>
             <p style={{ fontSize: 9, letterSpacing: '0.28em', textTransform: 'uppercase', color: 'rgba(247,242,232,0.3)', marginBottom: 12 }}>Контакты</p>
             <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
