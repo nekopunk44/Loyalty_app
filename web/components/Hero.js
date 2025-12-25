@@ -119,15 +119,6 @@ export default function Hero() {
         }} />
 
         {/* Подпись */}
-        <p style={{
-          fontSize: 'clamp(12px, 0.95vw, 14px)',
-          color: D.creamSoft, lineHeight: 1.9, letterSpacing: '0.025em',
-          margin: 'clamp(18px,2.8vh,28px) auto 0',
-          maxWidth: 360,
-          ...reveal(0.66, 10),
-        }}>
-          Приватная вилла в Слободзее&nbsp;— от камерного отдыха до полного выкупа территории на&nbsp;30&nbsp;гостей.
-        </p>
       </div>
 
       {/* Scroll-индикатор */}
