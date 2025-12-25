@@ -138,7 +138,7 @@ export default function Hero() {
       <div style={{
         position: 'absolute', bottom: 0, left: 0, right: 0, height: 115,
         zIndex: 3, pointerEvents: 'none',
-        background: 'linear-gradient(to bottom, transparent, var(--r-bg))',
+        background: 'linear-gradient(to bottom, transparent, #080604)',
       }} />
     </section>
   );
