@@ -4,7 +4,7 @@ import VJMonogram from './VJMonogram';
 
 const NAV = [
   { href: '#rooms', label: 'Номера' }, { href: '#tour', label: '3D-тур' }, { href: '#loyalty', label: 'Лояльность' },
-  { href: '#faq', label: 'FAQ' }, { href: '#contact', label: 'Бронирование' },
+  { href: '#faq', label: 'FAQ' }, { href: '#', label: 'Бронирование', modal: true },
 ];
 const SOCIAL = [{ name: 'Instagram', icon: 'camera' }, { name: 'Telegram', icon: 'send' }, { name: 'WhatsApp', icon: 'message-circle' }];
 
@@ -31,8 +31,10 @@ export default function Footer() {
             <p style={{ fontSize: 10, letterSpacing: '0.28em', textTransform: 'uppercase', color: 'rgba(247,242,232,0.35)', marginBottom: 20 }}>Навигация</p>
             <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
               {NAV.map(l => (
-                <li key={l.href}>
-                  <a href={l.href} style={{ fontSize: 14, color: 'rgba(247,242,232,0.6)', textDecoration: 'none', transition: 'color 0.3s ease' }}
+                <li key={l.label}>
+                  <a href={l.href}
+                    onClick={l.modal ? e => { e.preventDefault(); window.dispatchEvent(new CustomEvent('open-booking-modal')); } : undefined}
+                    style={{ fontSize: 14, color: 'rgba(247,242,232,0.6)', textDecoration: 'none', transition: 'color 0.3s ease', cursor: 'pointer' }}
                     onMouseEnter={e => e.currentTarget.style.color = 'var(--r-gold)'}
                     onMouseLeave={e => e.currentTarget.style.color = 'rgba(247,242,232,0.6)'}>
                     {l.label}
