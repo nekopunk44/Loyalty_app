@@ -251,45 +251,72 @@ export default function Rooms() {
         <div style={{
           position: 'relative', zIndex: 2,
           padding: '0 clamp(48px,5vw,80px) clamp(36px,4.5vh,52px)',
-          borderTop: '1px solid rgba(212,164,94,0.12)',
+          borderTop: '1px solid rgba(212,164,94,0.28)',
+          background: 'linear-gradient(to bottom, rgba(212,164,94,0.04), transparent 60%)',
           display: 'flex', gap: 0,
         }}>
           {ROOMS.map((r, ri) => {
             const isAct = ri === active;
             return (
               <button key={ri} onClick={() => go(ri)} style={{
-                flex: 1, padding: 'clamp(20px,2.8vh,28px) 4px 4px',
+                flex: 1, padding: 'clamp(22px,2.8vh,30px) 6px 4px',
                 background: 'transparent', border: 'none',
+                borderRight: ri < ROOMS.length - 1 ? '1px solid rgba(212,164,94,0.10)' : 'none',
                 cursor: isAct ? 'default' : 'pointer',
-                display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 5,
+                display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 7,
                 transition: 'all 0.4s ease', textAlign: 'left',
                 position: 'relative',
               }}
-              onMouseEnter={e => { if (!isAct) e.currentTarget.querySelector('.nav-line').style.transform = 'scaleX(0.5)'; }}
-              onMouseLeave={e => { if (!isAct) e.currentTarget.querySelector('.nav-line').style.transform = 'scaleX(0)'; }}>
+              onMouseEnter={e => {
+                if (!isAct) {
+                  e.currentTarget.querySelector('.nav-line').style.transform = 'scaleX(1)';
+                  e.currentTarget.querySelector('.nav-num').style.color = 'rgba(212,164,94,0.85)';
+                  e.currentTarget.querySelector('.nav-name').style.color = '#f5ede0';
+                  e.currentTarget.querySelector('.nav-price').style.color = 'rgba(212,164,94,0.85)';
+                }
+              }}
+              onMouseLeave={e => {
+                if (!isAct) {
+                  e.currentTarget.querySelector('.nav-line').style.transform = 'scaleX(0)';
+                  e.currentTarget.querySelector('.nav-num').style.color = 'rgba(212,164,94,0.55)';
+                  e.currentTarget.querySelector('.nav-name').style.color = 'rgba(245,237,224,0.75)';
+                  e.currentTarget.querySelector('.nav-price').style.color = 'rgba(245,237,224,0.55)';
+                }
+              }}>
                 <div className="nav-line" style={{
-                  position: 'absolute', top: -1, left: 0, right: 0, height: 1,
+                  position: 'absolute', top: -1, left: 0, right: 0, height: 2,
                   background: '#d4a45e',
                   transform: isAct ? 'scaleX(1)' : 'scaleX(0)',
                   transformOrigin: 'left center',
                   transition: 'transform 0.5s cubic-bezier(0.16,1,0.3,1)',
+                  boxShadow: isAct ? '0 0 12px rgba(212,164,94,0.5)' : 'none',
                 }} />
-                <span style={{
-                  fontSize: 9, letterSpacing: '0.3em', fontFamily: 'var(--r-serif)',
-                  color: isAct ? '#d4a45e' : 'rgba(245,237,224,0.3)',
+                <span className="nav-num" style={{
+                  fontSize: 10, letterSpacing: '0.32em', fontFamily: 'var(--r-serif)',
+                  color: isAct ? '#d4a45e' : 'rgba(212,164,94,0.55)',
                   transition: 'color 0.4s ease',
+                  fontWeight: isAct ? 500 : 400,
                 }}>
                   {r.num}
                 </span>
-                <span style={{
-                  fontSize: 11, letterSpacing: '0.02em',
-                  color: isAct ? 'rgba(245,237,224,0.92)' : 'rgba(245,237,224,0.32)',
+                <span className="nav-name" style={{
+                  fontSize: 13, letterSpacing: '0.01em',
+                  color: isAct ? '#f5ede0' : 'rgba(245,237,224,0.75)',
                   fontFamily: 'var(--r-serif)', fontStyle: 'italic',
+                  fontWeight: isAct ? 500 : 400,
                   transition: 'color 0.4s ease',
                   whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                   width: '100%',
                 }}>
                   {r.name}
+                </span>
+                <span className="nav-price" style={{
+                  fontSize: 10, letterSpacing: '0.18em',
+                  color: isAct ? '#d4a45e' : 'rgba(245,237,224,0.55)',
+                  textTransform: 'uppercase',
+                  transition: 'color 0.4s ease',
+                }}>
+                  от {r.price} PRB
                 </span>
               </button>
             );
