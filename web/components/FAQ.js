@@ -34,8 +34,8 @@ export default function FAQ() {
   return (
     <section id="faq" style={{
       background: `linear-gradient(180deg, ${BG_DARK} 0%, #0d0a07 100%)`,
-      paddingTop: 'clamp(90px,11vw,160px)',
-      paddingBottom: 'clamp(90px,11vw,160px)',
+      paddingTop: 'clamp(48px,6vw,80px)',
+      paddingBottom: 'clamp(48px,6vw,80px)',
       position: 'relative', overflow: 'hidden',
     }}>
       <style>{`
@@ -43,7 +43,7 @@ export default function FAQ() {
           from { opacity: 0; transform: translateY(10px); }
           to   { opacity: 1; transform: translateY(0); }
         }
-        .faq-grid { display: grid; gap: clamp(48px, 6vw, 96px); grid-template-columns: minmax(0, 360px) minmax(0, 1fr); align-items: start; }
+        .faq-grid { display: grid; gap: clamp(32px, 4vw, 56px); grid-template-columns: minmax(0, 280px) minmax(0, 1fr); align-items: start; }
         @media (max-width: 980px) {
           .faq-grid { grid-template-columns: 1fr !important; }
           .faq-sticky { position: relative !important; top: 0 !important; }
@@ -85,24 +85,23 @@ export default function FAQ() {
 
             <h2 style={{
               fontFamily: 'var(--r-serif)',
-              fontSize: 'clamp(2.4rem, 4.8vw, 4.4rem)',
-              fontWeight: 300, lineHeight: 1, letterSpacing: '-0.025em',
-              color: CREAM, margin: '0 0 22px',
+              fontSize: 'clamp(1.8rem, 3.2vw, 3rem)',
+              fontWeight: 300, lineHeight: 1.05, letterSpacing: '-0.025em',
+              color: CREAM, margin: '0 0 14px',
             }}>
-              Частые<br />
-              <em style={{ fontStyle: 'italic', color: GOLD }}>вопросы</em>
+              Частые <em style={{ fontStyle: 'italic', color: GOLD }}>вопросы</em>
             </h2>
 
             <p style={{
-              fontSize: 14, color: 'rgba(245,237,224,0.6)',
-              lineHeight: 1.8, maxWidth: 320,
-              margin: '0 0 32px',
+              fontSize: 13, color: 'rgba(245,237,224,0.55)',
+              lineHeight: 1.7, maxWidth: 280,
+              margin: '0 0 20px',
             }}>
-              Собрали ответы на главное. Не нашли свой вопрос — напишите напрямую, ответим за час.
+              Не нашли свой вопрос — напишите напрямую, ответим за час.
             </p>
 
             {/* Фильтры по категориям */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 0, marginBottom: 32, borderTop: '1px solid rgba(212,164,94,0.15)' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 0, marginBottom: 20, borderTop: '1px solid rgba(212,164,94,0.15)' }}>
               {CATS.map(c => {
                 const isAct = cat === c.id;
                 return (
@@ -110,7 +109,7 @@ export default function FAQ() {
                     style={{
                       background: 'transparent', border: 'none',
                       borderBottom: '1px solid rgba(212,164,94,0.15)',
-                      padding: '14px 0', cursor: isAct ? 'default' : 'pointer',
+                      padding: '10px 0', cursor: isAct ? 'default' : 'pointer',
                       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                       fontFamily: 'inherit', textAlign: 'left',
                       transition: 'all 0.3s ease', position: 'relative',
@@ -173,7 +172,7 @@ export default function FAQ() {
                   <button onClick={() => setOpen(isOpen ? null : faq._i)}
                     style={{
                       width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 22,
-                      padding: '24px 0', background: 'transparent', border: 'none',
+                      padding: '16px 0', background: 'transparent', border: 'none',
                       cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
                     }}>
                     <div style={{ display: 'flex', gap: 22, alignItems: 'center', flex: 1 }}>
@@ -186,7 +185,7 @@ export default function FAQ() {
                       </span>
                       <span style={{
                         fontFamily: 'var(--r-serif)',
-                        fontSize: isOpen ? 19 : 17,
+                        fontSize: isOpen ? 16 : 15,
                         fontStyle: isOpen ? 'italic' : 'normal',
                         fontWeight: 300,
                         color: isOpen ? CREAM : 'rgba(245,237,224,0.78)',
@@ -218,9 +217,9 @@ export default function FAQ() {
                     transition: 'max-height 0.45s cubic-bezier(0.16,1,0.3,1), opacity 0.35s ease',
                   }}>
                     <p style={{
-                      fontSize: 14.5, color: 'rgba(245,237,224,0.7)',
-                      lineHeight: 1.8, padding: '0 0 26px 50px',
-                      margin: 0, maxWidth: 640,
+                      fontSize: 13.5, color: 'rgba(245,237,224,0.7)',
+                      lineHeight: 1.75, padding: '0 0 16px 50px',
+                      margin: 0, maxWidth: 600,
                     }}>{faq.a}</p>
                   </div>
                 </div>
