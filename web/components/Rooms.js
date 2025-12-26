@@ -136,12 +136,12 @@ export default function Rooms() {
         {/* Основной контент */}
         <div key={tKey} style={{
           position: 'relative', zIndex: 2, flex: 1,
-          padding: 'clamp(100px,13vh,130px) clamp(48px,5vw,80px) clamp(28px,3vh,36px)',
-          display: 'flex', flexDirection: 'column', justifyContent: 'center',
+          padding: 'clamp(88px,11vh,112px) clamp(48px,5vw,80px) clamp(16px,2vh,24px)',
+          display: 'flex', flexDirection: 'column', justifyContent: 'flex-start',
         }}>
 
           {/* Верхняя метка */}
-          <div className="fu d1" style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 22 }}>
+          <div className="fu d1" style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
             <span style={{ fontSize: 9, letterSpacing: '0.38em', textTransform: 'uppercase', color: 'rgba(212,164,94,0.55)' }}>
               Каталог
             </span>
@@ -153,7 +153,7 @@ export default function Rooms() {
             fontFamily: 'var(--r-serif)', fontStyle: 'italic', fontWeight: 300,
             fontSize: 'clamp(2.8rem, 5vw, 5.2rem)', lineHeight: 0.95,
             letterSpacing: '-0.025em', color: '#f5ede0',
-            margin: '0 0 clamp(22px,3vh,32px)',
+            margin: '0 0 clamp(14px,2vh,22px)',
             perspective: '600px',
           }}>
             {letters.map((ch, i) => (
@@ -168,7 +168,7 @@ export default function Rooms() {
           <p className="fu d3" style={{
             fontSize: 14, color: 'rgba(202,187,169,0.62)',
             lineHeight: 1.85, maxWidth: 400,
-            margin: '0 0 clamp(28px,4vh,40px)', letterSpacing: '0.005em',
+            margin: '0 0 clamp(16px,2.5vh,28px)', letterSpacing: '0.005em',
           }}>
             {cur.desc}
           </p>
