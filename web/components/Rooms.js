@@ -59,8 +59,7 @@ export default function Rooms() {
     setPhoto(i);
   };
   const goContact = () => {
-    const el = document.getElementById('contact');
-    if (el) window.scrollTo({ top: el.offsetTop - 72, behavior: 'smooth' });
+    window.dispatchEvent(new CustomEvent('open-booking-modal'));
   };
 
   const cur = ROOMS[active];
@@ -148,14 +147,6 @@ export default function Rooms() {
             Каталог
           </span>
           <div style={{ width: 22, height: 1, background: 'rgba(212,164,94,0.3)' }} />
-          <span key={`cnt-${tKey}`} style={{
-            fontSize: 10, letterSpacing: '0.18em', color: 'rgba(245,237,224,0.4)',
-            fontFamily: 'var(--r-serif)', fontStyle: 'italic',
-            animation: 'numFlip 0.5s cubic-bezier(0.16,1,0.3,1) both',
-            display: 'inline-block',
-          }}>
-            {cur.num} / 04
-          </span>
         </div>
 
         {/* Основной контент */}
@@ -270,7 +261,6 @@ export default function Rooms() {
               onMouseEnter={e => {
                 if (!isAct) {
                   e.currentTarget.querySelector('.nav-line').style.transform = 'scaleX(1)';
-                  e.currentTarget.querySelector('.nav-num').style.color = 'rgba(212,164,94,0.85)';
                   e.currentTarget.querySelector('.nav-name').style.color = '#f5ede0';
                   e.currentTarget.querySelector('.nav-price').style.color = 'rgba(212,164,94,0.85)';
                 }
@@ -278,7 +268,6 @@ export default function Rooms() {
               onMouseLeave={e => {
                 if (!isAct) {
                   e.currentTarget.querySelector('.nav-line').style.transform = 'scaleX(0)';
-                  e.currentTarget.querySelector('.nav-num').style.color = 'rgba(212,164,94,0.55)';
                   e.currentTarget.querySelector('.nav-name').style.color = 'rgba(245,237,224,0.75)';
                   e.currentTarget.querySelector('.nav-price').style.color = 'rgba(245,237,224,0.55)';
                 }
@@ -291,14 +280,6 @@ export default function Rooms() {
                   transition: 'transform 0.5s cubic-bezier(0.16,1,0.3,1)',
                   boxShadow: isAct ? '0 0 12px rgba(212,164,94,0.5)' : 'none',
                 }} />
-                <span className="nav-num" style={{
-                  fontSize: 10, letterSpacing: '0.32em', fontFamily: 'var(--r-serif)',
-                  color: isAct ? '#d4a45e' : 'rgba(212,164,94,0.55)',
-                  transition: 'color 0.4s ease',
-                  fontWeight: isAct ? 500 : 400,
-                }}>
-                  {r.num}
-                </span>
                 <span className="nav-name" style={{
                   fontSize: 13, letterSpacing: '0.01em',
                   color: isAct ? '#f5ede0' : 'rgba(245,237,224,0.75)',
