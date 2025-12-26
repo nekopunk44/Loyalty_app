@@ -58,10 +58,6 @@ export default function Rooms() {
     if (i === photo) return;
     setPhoto(i);
   };
-  const goContact = () => {
-    window.dispatchEvent(new CustomEvent('open-booking-modal'));
-  };
-
   const cur = ROOMS[active];
   const letters = [...cur.name];
 
@@ -223,19 +219,6 @@ export default function Rooms() {
             ))}
           </div>
 
-          {/* CTA */}
-          <button className="fu d5" onClick={goContact} style={{
-            alignSelf: 'flex-start', padding: '14px 32px',
-            background: 'transparent', color: '#f5ede0',
-            border: '1px solid rgba(245,237,224,0.22)', borderRadius: 999,
-            fontSize: 10, letterSpacing: '0.24em', textTransform: 'uppercase',
-            fontFamily: 'inherit', cursor: 'pointer', transition: 'all 0.45s ease',
-            position: 'relative', overflow: 'hidden',
-          }}
-          onMouseEnter={e => { e.currentTarget.style.background = '#d4a45e'; e.currentTarget.style.color = '#080604'; e.currentTarget.style.borderColor = 'transparent'; e.currentTarget.style.letterSpacing = '0.3em'; }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#f5ede0'; e.currentTarget.style.borderColor = 'rgba(245,237,224,0.22)'; e.currentTarget.style.letterSpacing = '0.24em'; }}>
-            Забронировать формат →
-          </button>
         </div>
 
         {/* Нижняя навигация по номерам */}
