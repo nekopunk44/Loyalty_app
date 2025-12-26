@@ -137,7 +137,7 @@ export default function Rooms() {
         <div key={tKey} style={{
           position: 'relative', zIndex: 2, flex: 1,
           padding: 'clamp(28px,4vh,48px) clamp(48px,5vw,80px) clamp(16px,2vh,24px)',
-          display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+          display: 'flex', flexDirection: 'column', justifyContent: 'flex-start',
         }}>
 
           {/* Верхний блок: метка + название + описание */}
@@ -175,7 +175,7 @@ export default function Rooms() {
           </div>
 
           {/* Табличные характеристики с line-draw анимацией */}
-          <div style={{ maxWidth: 400 }}>
+          <div style={{ maxWidth: 400, marginTop: 'clamp(28px,4vh,48px)' }}>
             {[
               ['Формат', cur.format],
               ['Гостей', cur.guests],
