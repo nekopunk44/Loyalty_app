@@ -48,7 +48,10 @@ export default function Navbar() {
 
   const scrollTo = id => {
     const el = document.getElementById(id);
-    if (el) window.scrollTo({ top: el.offsetTop - 72, behavior: 'smooth' });
+    if (el) {
+      const top = el.getBoundingClientRect().top + window.scrollY - 72;
+      window.scrollTo({ top, behavior: 'smooth' });
+    }
     setOpen(false);
   };
 
