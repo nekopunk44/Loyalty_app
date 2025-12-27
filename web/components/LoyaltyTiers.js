@@ -33,8 +33,8 @@ export default function LoyaltyApp() {
           to   { opacity: 1; transform: translateY(0); }
         }
         @keyframes phoneFloat {
-          0%, 100% { transform: translateX(-32px) translateY(0) perspective(900px) rotateY(-14deg) rotateX(2deg); }
-          50%      { transform: translateX(-32px) translateY(-10px) perspective(900px) rotateY(-14deg) rotateX(2deg); }
+          0%, 100% { transform: translateY(0) perspective(900px) rotateY(-14deg) rotateX(2deg); }
+          50%      { transform: translateY(-10px) perspective(900px) rotateY(-14deg) rotateX(2deg); }
         }
         .loyalty-grid { display: grid; gap: clamp(32px, 4vw, 56px); grid-template-columns: minmax(0, 1fr) minmax(0, 320px); align-items: center; }
         @media (max-width: 980px) {
@@ -186,178 +186,137 @@ export default function LoyaltyApp() {
           </div>
 
           {/* ═══════════ RIGHT: PHONE + DOWNLOAD ═══════════ */}
-          <div className="loyalty-phone-wrap" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+          <div className="loyalty-phone-wrap" style={{ display: 'flex', justifyContent: 'center' }}>
 
-            {/* Phone mockup */}
-            <div style={{
-              position: 'relative',
-              animation: 'phoneFloat 8s ease-in-out infinite',
-            }}>
-              {/* Halo */}
-              <div style={{
-                position: 'absolute', top: '50%', left: '50%',
-                transform: 'translate(-50%, -50%)',
-                width: 260, height: 260, borderRadius: '50%',
-                background: `radial-gradient(circle, ${t.color}18 0%, transparent 70%)`,
-                pointerEvents: 'none',
-                animation: 'glowPulse 4s ease-in-out infinite',
-                transition: 'background 0.6s ease',
-              }} />
+            {/* Единый враппер — телефон + кнопки, сдвинут влево */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, transform: 'translateX(-60px)' }}>
 
-              <div style={{
-                position: 'relative',
-                width: 210, height: 390,
-                borderRadius: 42,
-                background: 'linear-gradient(160deg, #0c0a07 0%, #14110c 100%)',
-                border: '1px solid rgba(212,164,94,0.25)',
-                boxShadow: `0 50px 120px rgba(0,0,0,0.55), 0 0 0 1px rgba(245,237,224,0.04), 0 0 60px ${t.color}20`,
-                padding: 14,
-                display: 'flex', flexDirection: 'column',
-                overflow: 'hidden',
-                transition: 'box-shadow 0.6s ease',
-              }}>
-                {/* Notch */}
+              {/* Phone mockup */}
+              <div style={{ position: 'relative', animation: 'phoneFloat 8s ease-in-out infinite' }}>
+                {/* Halo */}
                 <div style={{
-                  position: 'absolute', top: 16, left: '50%', transform: 'translateX(-50%)',
-                  width: 86, height: 22, borderRadius: 11,
-                  background: '#000', zIndex: 3,
+                  position: 'absolute', top: '50%', left: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  width: 260, height: 260, borderRadius: '50%',
+                  background: `radial-gradient(circle, ${t.color}18 0%, transparent 70%)`,
+                  pointerEvents: 'none',
+                  animation: 'glowPulse 4s ease-in-out infinite',
+                  transition: 'background 0.6s ease',
                 }} />
 
-                {/* Screen */}
                 <div style={{
-                  flex: 1, borderRadius: 30,
-                  background: `linear-gradient(180deg, #0f0c08 0%, #0a0805 100%)`,
-                  padding: '46px 18px 20px',
-                  display: 'flex', flexDirection: 'column', alignItems: 'center',
-                  position: 'relative', overflow: 'hidden',
+                  position: 'relative', width: 210, height: 390, borderRadius: 42,
+                  background: 'linear-gradient(160deg, #0c0a07 0%, #14110c 100%)',
+                  border: '1px solid rgba(212,164,94,0.25)',
+                  boxShadow: `0 50px 120px rgba(0,0,0,0.55), 0 0 0 1px rgba(245,237,224,0.04), 0 0 60px ${t.color}20`,
+                  padding: 14, display: 'flex', flexDirection: 'column',
+                  overflow: 'hidden', transition: 'box-shadow 0.6s ease',
                 }}>
-                  {/* Subtle gold sheen */}
                   <div style={{
-                    position: 'absolute', top: 0, left: '-50%', width: '200%', height: 1,
-                    background: `linear-gradient(90deg, transparent, ${t.color}, transparent)`,
-                    opacity: 0.4,
+                    position: 'absolute', top: 16, left: '50%', transform: 'translateX(-50%)',
+                    width: 86, height: 22, borderRadius: 11, background: '#000', zIndex: 3,
                   }} />
 
-                  <VJMonogram size={56} mainColor="rgba(245,237,224,0.92)" accentColor={t.color} animate={false} />
-
-                  <div style={{ marginTop: 12, textAlign: 'center' }}>
-                    <div style={{ fontFamily: 'var(--r-serif)', fontSize: 13, color: '#f5ede0', letterSpacing: '0.06em' }}>
-                      Villa Jaconda
-                    </div>
-                    <div style={{ fontSize: 8, color: 'rgba(212,164,94,0.7)', letterSpacing: '0.28em', textTransform: 'uppercase', marginTop: 3 }}>
-                      Loyalty Card
-                    </div>
-                  </div>
-
-                  {/* Card */}
-                  <div key={active} style={{
-                    width: '100%', marginTop: 22, padding: '16px 14px',
-                    background: `linear-gradient(135deg, ${t.color}26 0%, ${t.color}0a 100%)`,
-                    border: `1px solid ${t.color}50`,
-                    borderRadius: 14,
-                    animation: 'tierFadeUp 0.45s cubic-bezier(0.16,1,0.3,1) both',
-                  }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                      <span style={{ fontSize: 8, letterSpacing: '0.28em', textTransform: 'uppercase', color: 'rgba(245,237,224,0.55)' }}>
-                        Уровень
-                      </span>
-                      <span style={{ fontFamily: 'var(--r-serif)', fontStyle: 'italic', fontSize: 13, color: t.color, fontWeight: 500 }}>
-                        {t.name}
-                      </span>
-                    </div>
-                    <div style={{ fontFamily: 'var(--r-serif)', fontSize: 26, color: '#f5ede0', lineHeight: 1, marginBottom: 4 }}>
-                      1 240<span style={{ fontSize: 11, color: t.color, marginLeft: 4 }}>PRB</span>
-                    </div>
-                    <div style={{ fontSize: 8, letterSpacing: '0.24em', color: 'rgba(245,237,224,0.45)', textTransform: 'uppercase' }}>
-                      Кешбек {t.cashback}
-                    </div>
-                  </div>
-
-                  {/* QR placeholder */}
                   <div style={{
-                    marginTop: 18,
-                    width: 64, height: 64, borderRadius: 8,
-                    background: 'rgba(245,237,224,0.06)',
-                    border: '1px solid rgba(245,237,224,0.1)',
-                    display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 1.5, padding: 6,
+                    flex: 1, borderRadius: 30,
+                    background: 'linear-gradient(180deg, #0f0c08 0%, #0a0805 100%)',
+                    padding: '46px 18px 20px',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center',
+                    position: 'relative', overflow: 'hidden',
                   }}>
-                    {Array.from({ length: 36 }).map((_, i) => (
-                      <div key={i} style={{
-                        background: ((i * 7 + 3) % 5) < 2 ? 'rgba(245,237,224,0.55)' : 'transparent',
-                        borderRadius: 1,
-                      }} />
-                    ))}
-                  </div>
+                    <div style={{
+                      position: 'absolute', top: 0, left: '-50%', width: '200%', height: 1,
+                      background: `linear-gradient(90deg, transparent, ${t.color}, transparent)`,
+                      opacity: 0.4,
+                    }} />
 
-                  {/* Bottom nav */}
-                  <div style={{ marginTop: 'auto', width: '100%', display: 'flex', justifyContent: 'space-around', paddingTop: 14, borderTop: '1px solid rgba(245,237,224,0.06)' }}>
-                    {['⌂', '◉', '⬡', '☰'].map((ic, i) => (
-                      <div key={i} style={{
-                        width: 26, height: 26, borderRadius: 7,
-                        background: i === 0 ? `${t.color}22` : 'transparent',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 12,
-                        color: i === 0 ? t.color : 'rgba(245,237,224,0.25)',
-                      }}>{ic}</div>
-                    ))}
+                    <VJMonogram size={56} mainColor="rgba(245,237,224,0.92)" accentColor={t.color} animate={false} />
+
+                    <div style={{ marginTop: 12, textAlign: 'center' }}>
+                      <div style={{ fontFamily: 'var(--r-serif)', fontSize: 13, color: '#f5ede0', letterSpacing: '0.06em' }}>Villa Jaconda</div>
+                      <div style={{ fontSize: 8, color: 'rgba(212,164,94,0.7)', letterSpacing: '0.28em', textTransform: 'uppercase', marginTop: 3 }}>Loyalty Card</div>
+                    </div>
+
+                    <div key={active} style={{
+                      width: '100%', marginTop: 22, padding: '16px 14px',
+                      background: `linear-gradient(135deg, ${t.color}26 0%, ${t.color}0a 100%)`,
+                      border: `1px solid ${t.color}50`, borderRadius: 14,
+                      animation: 'tierFadeUp 0.45s cubic-bezier(0.16,1,0.3,1) both',
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                        <span style={{ fontSize: 8, letterSpacing: '0.28em', textTransform: 'uppercase', color: 'rgba(245,237,224,0.55)' }}>Уровень</span>
+                        <span style={{ fontFamily: 'var(--r-serif)', fontStyle: 'italic', fontSize: 13, color: t.color, fontWeight: 500 }}>{t.name}</span>
+                      </div>
+                      <div style={{ fontFamily: 'var(--r-serif)', fontSize: 26, color: '#f5ede0', lineHeight: 1, marginBottom: 4 }}>
+                        1 240<span style={{ fontSize: 11, color: t.color, marginLeft: 4 }}>PRB</span>
+                      </div>
+                      <div style={{ fontSize: 8, letterSpacing: '0.24em', color: 'rgba(245,237,224,0.45)', textTransform: 'uppercase' }}>Кешбек {t.cashback}</div>
+                    </div>
+
+                    <div style={{
+                      marginTop: 18, width: 64, height: 64, borderRadius: 8,
+                      background: 'rgba(245,237,224,0.06)', border: '1px solid rgba(245,237,224,0.1)',
+                      display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 1.5, padding: 6,
+                    }}>
+                      {Array.from({ length: 36 }).map((_, i) => (
+                        <div key={i} style={{ background: ((i * 7 + 3) % 5) < 2 ? 'rgba(245,237,224,0.55)' : 'transparent', borderRadius: 1 }} />
+                      ))}
+                    </div>
+
+                    <div style={{ marginTop: 'auto', width: '100%', display: 'flex', justifyContent: 'space-around', paddingTop: 14, borderTop: '1px solid rgba(245,237,224,0.06)' }}>
+                      {['⌂', '◉', '⬡', '☰'].map((ic, i) => (
+                        <div key={i} style={{
+                          width: 26, height: 26, borderRadius: 7,
+                          background: i === 0 ? `${t.color}22` : 'transparent',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: 12, color: i === 0 ? t.color : 'rgba(245,237,224,0.25)',
+                        }}>{ic}</div>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            {/* Download links */}
-            <div style={{ width: '100%', maxWidth: 340 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10, justifyContent: 'center' }}>
-                <div style={{ width: 18, height: 1, background: '#d4a45e', opacity: 0.5 }} />
-                <span style={{ fontSize: 9, letterSpacing: '0.32em', textTransform: 'uppercase', color: 'rgba(212,164,94,0.7)' }}>
-                  Скачать приложение
-                </span>
-                <div style={{ width: 18, height: 1, background: '#d4a45e', opacity: 0.5 }} />
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {/* Download buttons — под телефоном, той же ширины */}
+              <div style={{ width: 220, display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <a href="#" style={{
-                  display: 'flex', alignItems: 'center', gap: 14,
-                  padding: '12px 18px',
-                  background: 'rgba(245,237,224,0.04)',
-                  border: '1px solid rgba(245,237,224,0.12)',
-                  borderRadius: 12,
-                  textDecoration: 'none',
-                  transition: 'all 0.3s ease',
+                  display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px',
+                  background: 'rgba(245,237,224,0.05)', border: '1px solid rgba(245,237,224,0.12)',
+                  borderRadius: 12, textDecoration: 'none', transition: 'all 0.3s ease',
                 }}
-                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(212,164,94,0.10)'; e.currentTarget.style.borderColor = 'rgba(212,164,94,0.45)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(245,237,224,0.04)'; e.currentTarget.style.borderColor = 'rgba(245,237,224,0.12)'; e.currentTarget.style.transform = 'translateY(0)'; }}>
-                  <svg width="26" height="26" viewBox="0 0 24 24" fill="rgba(245,237,224,0.92)">
-                    <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(212,164,94,0.10)'; e.currentTarget.style.borderColor = 'rgba(212,164,94,0.45)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(245,237,224,0.05)'; e.currentTarget.style.borderColor = 'rgba(245,237,224,0.12)'; }}>
+                  {/* Apple logo */}
+                  <svg width="22" height="22" viewBox="0 0 814 1000" fill="rgba(245,237,224,0.92)" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M788.1 340.9c-5.8 4.5-108.2 62.2-108.2 190.5 0 148.4 130.3 200.9 134.2 202.2-.6 3.2-20.7 71.9-68.7 141.9-42.8 61.6-87.5 123.1-155.5 123.1s-85.5-39.5-164-39.5c-76.5 0-103.7 40.8-165.9 40.8s-105-37.5-155.5-127.4C46 376.7 0 246.9 0 174.8 0 93.7 33.4 51.5 96.9 51.5c61.3 0 102.4 39.5 166.4 39.5 63.9 0 103.2-40.8 169.7-40.8 52.5 0 100.3 19.7 138.6 54.2 0 0-52.3 27.6-52.3 93.1 0 65.2 48.6 96.6 50.4 96.6l.4.1zm-174.5-209.9c31.4-37.4 54.5-88.1 54.5-138.8 0-7.1-.6-14.3-1.9-20.1-51.5 2-112.3 34.3-149.2 75.8-28.5 32.4-55.1 83.1-55.1 134.5 0 7.8 1.3 15.6 1.9 18.1 3.2.6 8.4 1.3 13.6 1.3 46.5 0 102.5-30.4 136.2-70.8z"/>
                   </svg>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 9, color: 'rgba(245,237,224,0.5)', letterSpacing: '0.18em', lineHeight: 1, textTransform: 'uppercase' }}>Скачать в</div>
-                    <div style={{ fontFamily: 'var(--r-serif)', fontSize: 16, color: '#f5ede0', lineHeight: 1.3 }}>App Store</div>
+                  <div>
+                    <div style={{ fontSize: 8, color: 'rgba(245,237,224,0.45)', letterSpacing: '0.16em', textTransform: 'uppercase', lineHeight: 1 }}>Скачать в</div>
+                    <div style={{ fontFamily: 'var(--r-serif)', fontSize: 15, color: '#f5ede0', lineHeight: 1.3 }}>App Store</div>
                   </div>
-                  <span style={{ color: '#d4a45e', fontSize: 16 }}>→</span>
                 </a>
 
                 <a href="#" style={{
-                  display: 'flex', alignItems: 'center', gap: 14,
-                  padding: '12px 18px',
-                  background: 'rgba(245,237,224,0.04)',
-                  border: '1px solid rgba(245,237,224,0.12)',
-                  borderRadius: 12,
-                  textDecoration: 'none',
-                  transition: 'all 0.3s ease',
+                  display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px',
+                  background: 'rgba(245,237,224,0.05)', border: '1px solid rgba(245,237,224,0.12)',
+                  borderRadius: 12, textDecoration: 'none', transition: 'all 0.3s ease',
                 }}
-                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(212,164,94,0.10)'; e.currentTarget.style.borderColor = 'rgba(212,164,94,0.45)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(245,237,224,0.04)'; e.currentTarget.style.borderColor = 'rgba(245,237,224,0.12)'; e.currentTarget.style.transform = 'translateY(0)'; }}>
-                  <svg width="26" height="26" viewBox="0 0 24 24" fill="rgba(245,237,224,0.92)">
-                    <path d="M3.18 23.76c.3.17.64.24.99.2l12.19-12.2L12.93 8.4 3.18 23.76zm17.49-10.4l-2.79-1.6-3.09 3.1 3.09 3.09 2.8-1.6c.8-.46.8-1.53-.01-1.99zM2.06 1.13C2.02 1.27 2 1.42 2 1.58v20.84c0 .16.02.31.06.45L14.28 12 2.06 1.13zm12.07 9.56l2.43-2.43-10.4-5.97a1.13 1.13 0 0 0-.96-.12l8.93 8.52z" />
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(212,164,94,0.10)'; e.currentTarget.style.borderColor = 'rgba(212,164,94,0.45)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(245,237,224,0.05)'; e.currentTarget.style.borderColor = 'rgba(245,237,224,0.12)'; }}>
+                  {/* Google Play logo — 4 цвета */}
+                  <svg width="22" height="22" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M3.18 23.76c.3.17.64.24.99.2l12.19-12.2-3.43-3.36-9.75 15.36z" fill="#EA4335"/>
+                    <path d="M20.68 10.37l-2.8-1.6-3.52 3.45 3.52 3.46 2.81-1.6c.8-.46.8-1.25-.01-1.71z" fill="#FBBC04"/>
+                    <path d="M2.06 1.13A1.07 1.07 0 0 0 2 1.58v20.84c0 .16.02.31.06.45L14.28 12 2.06 1.13z" fill="#4285F4"/>
+                    <path d="M16.36 12l-3.43-3.43L4.17.6a1.13 1.13 0 0 0-.99-.18L16.36 12z" fill="#34A853"/>
                   </svg>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 9, color: 'rgba(245,237,224,0.5)', letterSpacing: '0.18em', lineHeight: 1, textTransform: 'uppercase' }}>Доступно в</div>
-                    <div style={{ fontFamily: 'var(--r-serif)', fontSize: 16, color: '#f5ede0', lineHeight: 1.3 }}>Google Play</div>
+                  <div>
+                    <div style={{ fontSize: 8, color: 'rgba(245,237,224,0.45)', letterSpacing: '0.16em', textTransform: 'uppercase', lineHeight: 1 }}>Доступно в</div>
+                    <div style={{ fontFamily: 'var(--r-serif)', fontSize: 15, color: '#f5ede0', lineHeight: 1.3 }}>Google Play</div>
                   </div>
-                  <span style={{ color: '#d4a45e', fontSize: 16 }}>→</span>
                 </a>
               </div>
+
             </div>
           </div>
         </div>
