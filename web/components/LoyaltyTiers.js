@@ -189,7 +189,7 @@ export default function LoyaltyApp() {
           <div className="loyalty-phone-wrap" style={{ display: 'flex', justifyContent: 'center' }}>
 
             {/* Враппер: телефон слева, кнопки справа, всё сдвинуто влево */}
-            <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 20, transform: 'translateX(-40px)' }}>
+            <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 20, transform: 'translateX(-120px)' }}>
 
               {/* Phone mockup */}
               <div style={{ position: 'relative', animation: 'phoneFloat 8s ease-in-out infinite', flexShrink: 0 }}>
@@ -278,10 +278,6 @@ export default function LoyaltyApp() {
 
               {/* Download buttons — справа от телефона */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-                  <div style={{ width: 16, height: 1, background: '#d4a45e', opacity: 0.5 }} />
-                  <span style={{ fontSize: 8, letterSpacing: '0.28em', textTransform: 'uppercase', color: 'rgba(212,164,94,0.6)', whiteSpace: 'nowrap' }}>Скачать</span>
-                </div>
 
                 <a href="#" style={{
                   display: 'flex', alignItems: 'center', gap: 12, padding: '11px 16px',
