@@ -114,11 +114,14 @@ module.exports = function createStripeRouter({ isDbConnected }) {
         throw err;
       }
 
-      // Базовый URL приложения для return URL (deep-link)
-      // appScheme должен совпадать с app.json → expo.scheme
-      const appScheme = process.env.APP_SCHEME || 'villajaconda';
-      const successUrl = returnUrl || `${appScheme}://payment-success?topup=${topup.id}`;
-      const cancelUrl = `${appScheme}://payment-cancel?topup=${topup.id}`;
+      // Stripe требует HTTP(S) URL в success_url/cancel_url — deep-link не работает.
+      // Используем серверный return-эндпоинт; мобильный клиент параллельно опрашивает
+      // /session/:id и сам закроет Custom Tab через WebBrowser.dismissBrowser(),
+      // как только webhook отработает.
+      const apiBase = process.env.API_BASE_URL
+        || `${req.protocol}://${req.get('host')}`;
+      const successUrl = `${apiBase}/api/payments/stripe/return?status=success&topup=${topup.id}`;
+      const cancelUrl = `${apiBase}/api/payments/stripe/return?status=cancel&topup=${topup.id}`;
 
       const session = await stripe.checkout.sessions.create({
         mode: 'payment',
@@ -180,6 +183,73 @@ module.exports = function createStripeRouter({ isDbConnected }) {
         details: isDev() ? error.message : undefined,
       });
     }
+  });
+
+  /**
+   * GET /return — HTML-страница, на которую Stripe редиректит после оплаты.
+   * Мобильный клиент в этот момент уже опрашивает /session/:id и сам закроет
+   * Custom Tab через WebBrowser.dismissBrowser(), как только увидит paid/failed.
+   * Эта страница нужна только как «заглушка», чтобы Stripe не упал на пустом URL.
+   */
+  router.get('/return', (req, res) => {
+    const status = String(req.query.status || 'success');
+    const isSuccess = status === 'success';
+    const title = isSuccess ? 'Платёж завершён' : 'Платёж отменён';
+    const message = isSuccess
+      ? 'Оплата прошла успешно. Окно закроется автоматически и баланс обновится в приложении.'
+      : 'Платёж был отменён. Можете закрыть это окно и вернуться в приложение.';
+    const color = isSuccess ? '#10b981' : '#ef4444';
+    res.set('Content-Type', 'text/html; charset=utf-8');
+    res.status(200).send(`<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${title}</title>
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0b1220;
+      color: #f5f7fb;
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px;
+    }
+    .card {
+      background: #131c2e;
+      border-radius: 16px;
+      padding: 28px 24px;
+      max-width: 360px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+    }
+    .icon {
+      width: 64px; height: 64px;
+      border-radius: 32px;
+      background: ${color};
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 16px;
+      font-size: 32px; color: white;
+    }
+    h1 { font-size: 20px; margin: 0 0 8px; }
+    p  { font-size: 14px; color: #a3aed0; line-height: 1.5; margin: 0; }
+    .hint { font-size: 12px; color: #6b7691; margin-top: 16px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">${isSuccess ? '✓' : '×'}</div>
+    <h1>${title}</h1>
+    <p>${message}</p>
+    <div class="hint">Villa Jaconda Loyalty</div>
+  </div>
+  <script>
+    // На случай, если приложение не успеет закрыть Tab само — пробуем закрыть окно.
+    setTimeout(function () { try { window.close(); } catch (_) {} }, 1500);
+  </script>
+</body>
+</html>`);
   });
 
   /**
