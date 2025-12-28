@@ -36,7 +36,7 @@ export default function LoyaltyApp() {
           0%, 100% { transform: translateY(0) perspective(900px) rotateY(-14deg) rotateX(2deg); }
           50%      { transform: translateY(-10px) perspective(900px) rotateY(-14deg) rotateX(2deg); }
         }
-        .loyalty-grid { display: grid; gap: clamp(32px, 4vw, 56px); grid-template-columns: minmax(0, 1fr) minmax(0, 320px); align-items: center; }
+        .loyalty-grid { display: grid; gap: clamp(12px, 1.5vw, 20px); grid-template-columns: minmax(0, 1fr) minmax(0, 320px); align-items: center; }
         @media (max-width: 980px) {
           .loyalty-grid { grid-template-columns: 1fr !important; }
           .loyalty-phone-wrap { justify-self: center; }
@@ -189,7 +189,7 @@ export default function LoyaltyApp() {
           <div className="loyalty-phone-wrap" style={{ display: 'flex', justifyContent: 'center' }}>
 
             {/* Враппер: телефон слева, кнопки справа, всё сдвинуто влево */}
-            <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 20, transform: 'translateX(-120px)' }}>
+            <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 40, transform: 'translateX(-120px)' }}>
 
               {/* Phone mockup */}
               <div style={{ position: 'relative', animation: 'phoneFloat 8s ease-in-out infinite', flexShrink: 0 }}>
