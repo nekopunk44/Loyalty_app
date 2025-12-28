@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from './AuthContext';
@@ -7,6 +7,29 @@ import { apiCall } from '../utils/api';
 import { getApiUrl } from '../utils/apiUrl';
 
 const NotificationContext = createContext();
+
+// Категории уведомлений, отображаемые в NotificationCenter.
+// Используется и для фильтра в UI, и для подсчёта непрочитанных
+// в колокольчике, чтобы счётчик не расходился с тем, что видит пользователь.
+export const NOTIFICATION_CATEGORIES = {
+  payment: [
+    'paymentSuccess', 'paymentFailed', 'cashbackReceived', 'topup',
+    'balance_replenishment', 'user_balance_replenishment',
+  ],
+  booking: [
+    'newBooking', 'bookingConfirmed', 'bookingCompleted', 'bookingCancelled',
+    'bookingPending', 'new_booking', 'admin_event',
+  ],
+  system: [
+    'eventCreated', 'eventUpdated', 'eventDeleted',
+    'userAdded', 'userDeleted', 'userUpdated',
+    'reviewNotification', 'newReview', 'reviewReply',
+  ],
+};
+
+const ALL_DISPLAYED_TYPES = new Set(
+  Object.values(NOTIFICATION_CATEGORIES).flat()
+);
 
 // expo-notifications крашит Expo Go в SDK 53+ при самом импорте,
 // поэтому загружаем модуль только в development build / production
@@ -65,6 +88,18 @@ export const NotificationProvider = ({ children }) => {
         try {
           const notification = JSON.parse(dataLine.slice(5).trim());
           setNotifications(prev => [notification, ...prev]);
+          // OS-баннер на нативе. В Expo Go / web модуль не загружен — мягко пропускаем.
+          if (Notifications && notification?.title) {
+            Notifications.scheduleNotificationAsync({
+              content: {
+                title: notification.title,
+                body:  notification.message || '',
+                data:  notification.data || {},
+                sound: true,
+              },
+              trigger: null,
+            }).catch(() => { /* ignore */ });
+          }
         } catch (_) { /* ignore malformed event */ }
       }
 
@@ -127,7 +162,8 @@ export const NotificationProvider = ({ children }) => {
   const setupNotifications = async () => {
     try {
       if (!user?.id) return;
-      if (user?.role === 'admin') return;
+      // Раньше тут был ранний выход для админов — но админам тоже нужны push о новых
+      // бронированиях и платежах, поэтому SSE + push-token регистрируется и для них.
 
       try {
         const data = await apiCall(`${getApiUrl()}/notifications/${user.id}`);
@@ -150,7 +186,9 @@ export const NotificationProvider = ({ children }) => {
       connectSSE(user.id, authToken);
 
       // На web и Expo Go push notifications недоступны
-      if (typeof window !== 'undefined' || IS_EXPO_GO) return;
+      // ВАЖНО: typeof window !== 'undefined' истинно и в React Native (window — полифилл),
+      // поэтому проверяем Platform.OS === 'web' явно
+      if (Platform.OS === 'web' || IS_EXPO_GO) return;
 
       // Запрос разрешения на уведомления
       try {
@@ -200,7 +238,9 @@ export const NotificationProvider = ({ children }) => {
     }
   };
 
-  // Отправить уведомление
+  // Отправить уведомление (системный баннер OS).
+  // В Expo Go модуль не загружен — return early, баннера не будет.
+  // Чтобы получать OS-баннеры, нужен EAS / development build.
   const sendNotification = async (title, body, data = {}) => {
     if (!Notifications) return;
     try {
@@ -212,7 +252,7 @@ export const NotificationProvider = ({ children }) => {
           sound: true,
           badge: 1,
         },
-        trigger: { seconds: 1 },
+        trigger: null, // мгновенно
       });
     } catch (error) {
       console.error('Ошибка отправки уведомления:', error);
@@ -239,10 +279,17 @@ export const NotificationProvider = ({ children }) => {
     }
   };
 
-  // Вспомогательная функция для добавления уведомления
+  // Вспомогательная функция для добавления уведомления.
+  // Параллельно дёргает OS-баннер через sendNotification — в EAS Build это
+  // покажет системный баннер в шторке. В Expo Go останется только in-app колокол.
   const addNotification = async (notificationData) => {
     try {
       if (!user?.id) return;
+
+      // OS-баннер параллельно с записью на сервер (не блокирует)
+      if (notificationData.title) {
+        sendNotification(notificationData.title, notificationData.message, notificationData.data || {});
+      }
 
       const data = await apiCall(`${getApiUrl()}/notifications/${user.id}`, {
         method: 'POST',
@@ -499,7 +546,13 @@ export const NotificationProvider = ({ children }) => {
   };
 
   const getUnreadCount = () => {
-    return notifications.filter(n => !n.read).length;
+    // Считаем только те типы, которые реально отображаются в NotificationCenter.
+    // Без этого фильтра в счётчик попадали "сиротские" типы вроде eventCreated,
+    // которые админ создавал сам, а в центре их не видно — и колокольчик
+    // показывал, например, 5 при пустом списке.
+    return notifications.filter(
+      n => !n.read && ALL_DISPLAYED_TYPES.has(n.type)
+    ).length;
   };
 
   const toggleNotifications = async (enabled) => {

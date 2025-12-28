@@ -4,7 +4,7 @@ import {
   ScrollView, Modal, Animated, Easing, Dimensions, PanResponder,
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-import { useNotification } from '../../context/NotificationContext';
+import { useNotification, NOTIFICATION_CATEGORIES } from '../../context/NotificationContext';
 import { useTheme } from '../../context/ThemeContext';
 import { pluralize } from '../../utils/pluralize';
 
@@ -128,17 +128,13 @@ export default function NotificationCenter({ onClose, dragHandlers }) {
   const notificationTypes = [
     { id: 'payment', label: 'Платежи',      icon: 'payments' },
     { id: 'booking', label: 'Бронирования', icon: 'event-note' },
+    { id: 'system',  label: 'Система',      icon: 'settings' },
   ];
 
-  const filteredNotifications = useMemo(() => notifications.filter(n => {
-    if (filterType === 'payment')
-      return ['paymentSuccess','paymentFailed','cashbackReceived','topup',
-              'balance_replenishment','user_balance_replenishment'].includes(n.type);
-    if (filterType === 'booking')
-      return ['newBooking','bookingConfirmed','bookingCompleted','bookingCancelled',
-              'bookingPending','new_booking','admin_event'].includes(n.type);
-    return true;
-  }), [notifications, filterType]);
+  const filteredNotifications = useMemo(() => {
+    const allowed = NOTIFICATION_CATEGORIES[filterType] || [];
+    return notifications.filter(n => allowed.includes(n.type));
+  }, [notifications, filterType]);
 
   // ── styles ─────────────────────────────────────────────────────────────────
   const styles = useMemo(() => StyleSheet.create({
@@ -282,6 +278,7 @@ export default function NotificationCenter({ onClose, dragHandlers }) {
   const emptyConfig = {
     payment: { icon: 'account-balance-wallet', title: 'Платежей нет',    sub: 'Операции с балансом и кэшбек появятся здесь' },
     booking: { icon: 'event-note',             title: 'Бронирований нет', sub: 'Подтверждения и обновления появятся здесь' },
+    system:  { icon: 'settings',               title: 'Системных уведомлений нет', sub: 'События, действия с пользователями и отзывы появятся здесь' },
   };
 
   const renderItem = ({ item }) => {
