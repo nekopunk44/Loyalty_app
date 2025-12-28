@@ -23,6 +23,12 @@ const { verifyToken } = require('./middleware/auth');
 const { validate, schemas } = require('./validation');
 
 const app = express();
+
+// Доверяем первому proxy hop (Railway / Vercel / Heroku ставят X-Forwarded-For).
+// Без этого express-rate-limit падает с ERR_ERL_UNEXPECTED_X_FORWARDED_FOR,
+// и keyGenerator не может определить реальный IP клиента.
+app.set('trust proxy', 1);
+
 const PORT = process.env.PORT || 5002;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const DATABASE_URL = process.env.DATABASE_URL;
