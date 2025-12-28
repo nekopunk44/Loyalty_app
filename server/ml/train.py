@@ -22,11 +22,15 @@ from config import settings
 from data.loader import (
     load_active_events,
     load_churn_features,
+    load_daily_revenue,
+    load_recent_transactions,
     load_user_activity,
     load_user_event_matrix,
 )
 from data.synthetic import generate_synthetic_dataset
+from models.anomaly import AnomalyDetector
 from models.churn import ChurnClassifier
+from models.ltv import LTVRegressor
 from models.recommender import HybridRecommender
 from models.rfm import compute_rfm, recompute_segments
 
@@ -42,12 +46,14 @@ def train_all(use_synthetic: bool, n_users: int) -> dict:
         churn_df = ds.churn_features
         user_events = ds.user_events
         events = ds.events
+        transactions = ds.recent_transactions
     else:
         logger.info("Загружаю данные из БД")
         activity = load_user_activity()
         churn_df = load_churn_features()
         user_events = load_user_event_matrix()
         events = load_active_events()
+        transactions = load_recent_transactions(limit=2000)
 
     metrics: dict = {"trained_at": datetime.utcnow().isoformat() + "Z"}
 
@@ -92,6 +98,32 @@ def train_all(use_synthetic: bool, n_users: int) -> dict:
         rm.n_users, rm.n_events, rm.n_interactions,
     )
     recsys.save(settings.artifacts_dir / "recsys_v1.pkl")
+
+    # --- LTV ---
+    logger.info("Обучаю LTV-регрессор на %s пользователях", len(churn_df))
+    try:
+        ltv = LTVRegressor()
+        lm = ltv.fit(churn_df)
+        metrics["ltv"] = asdict(lm)
+        logger.info("LTV: R²=%.3f, MAE=%.0f PRB (%.1f%%)",
+                    lm.r2, lm.mae, lm.mae_pct)
+        ltv.save(settings.artifacts_dir / "ltv_v1.pkl")
+    except Exception as exc:
+        logger.warning("LTV-обучение пропущено: %s", exc)
+        metrics["ltv"] = {"error": str(exc)}
+
+    # --- Anomaly ---
+    logger.info("Обучаю IsolationForest на %s транзакциях", len(transactions))
+    try:
+        anomaly = AnomalyDetector(contamination=0.04)
+        am = anomaly.fit(transactions)
+        metrics["anomaly"] = asdict(am)
+        logger.info("Anomaly: contamination=%.2f, flagged=%s (%.1f%%)",
+                    am.contamination, am.n_flagged, am.flagged_share * 100)
+        anomaly.save(settings.artifacts_dir / "anomaly_v1.pkl")
+    except Exception as exc:
+        logger.warning("Anomaly-обучение пропущено: %s", exc)
+        metrics["anomaly"] = {"error": str(exc)}
 
     metrics_path = settings.artifacts_dir / "metrics.json"
     metrics_path.write_text(json.dumps(metrics, indent=2, ensure_ascii=False))
