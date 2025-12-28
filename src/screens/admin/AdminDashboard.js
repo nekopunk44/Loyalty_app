@@ -256,6 +256,33 @@ export default function AdminDashboard({ navigation }) {
         </View>
       </View>
 
+      {/* ── ML: панель риска оттока ── */}
+      <TouchableOpacity
+        activeOpacity={0.85}
+        onPress={() => navigation.navigate('AdminChurnRisk')}
+        style={[styles.panel, {
+          backgroundColor: theme.colors.cardBg,
+          borderColor: `${AMBER}50`,
+          borderLeftWidth: 4,
+          borderLeftColor: AMBER,
+        }]}
+      >
+        <View style={styles.sectionHeader}>
+          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Риск оттока клиентов</Text>
+          <View style={[styles.aiChip, { backgroundColor: `${AMBER}20`, borderColor: `${AMBER}50` }]}>
+            <MaterialIcons name="auto-awesome" size={14} color={AMBER} />
+            <Text style={[styles.aiChipText, { color: AMBER }]}>ML</Text>
+          </View>
+        </View>
+        <Text style={[styles.sectionHint, { color: theme.colors.textSecondary, marginTop: 2 }]}>
+          Прогноз ухода клиентов от градиентного бустинга. Откройте таблицу — отправьте ретеншн-предложение по группе риска.
+        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10, gap: 6 }}>
+          <Text style={{ fontSize: 12, fontWeight: '700', color: AMBER }}>Открыть панель</Text>
+          <MaterialIcons name="arrow-forward" size={14} color={AMBER} />
+        </View>
+      </TouchableOpacity>
+
       {/* ── Business pulse panel ── */}
       <View style={[styles.panel, { backgroundColor: theme.colors.cardBg, borderColor: theme.colors.border }]}>
         <View style={styles.sectionHeader}>

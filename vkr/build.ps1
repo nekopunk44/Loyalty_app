@@ -1,22 +1,24 @@
-﻿# build.ps1 — сборка ВКР из Markdown-файлов в .docx со стилями по ГОСТ.
-# Использование: powershell -ExecutionPolicy Bypass -File .\build.ps1
-# Требования: Windows + Microsoft Word с поддержкой COM.
+# Fast build of thesis markdown files into DOCX via HTML + Word COM.
+# Usage: powershell -ExecutionPolicy Bypass -File .\build.ps1
 
 $ErrorActionPreference = 'Stop'
+
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $buildDir = Join-Path $root 'build'
-if (-not (Test-Path $buildDir)) { New-Item -ItemType Directory -Path $buildDir | Out-Null }
+if (-not (Test-Path $buildDir)) {
+    New-Item -ItemType Directory -Path $buildDir | Out-Null
+}
 
 $fullMdPath = Join-Path $root '99_full.md'
+$htmlPath = Join-Path $buildDir 'VKR_Villa_Jaconda.html'
 $docxPath = Join-Path $buildDir 'VKR_Villa_Jaconda.docx'
 
-# 1. Конкатенация .md-файлов в порядке 00_ → 08_ ----------------------------------
 $parts = Get-ChildItem -Path $root -Filter '*.md' |
     Where-Object { $_.Name -match '^\d{2}_' -and $_.Name -ne '99_full.md' } |
     Sort-Object Name
 
 if ($parts.Count -eq 0) {
-    Write-Error "Не найдены файлы вида NN_*.md в $root"
+    Write-Error "No NN_*.md files found in $root"
     exit 1
 }
 
@@ -26,289 +28,241 @@ foreach ($p in $parts) {
     [void]$buf.AppendLine()
 }
 [System.IO.File]::WriteAllText($fullMdPath, $buf.ToString(), [System.Text.UTF8Encoding]::new($false))
-Write-Host "Собран $fullMdPath ($($parts.Count) файлов)" -ForegroundColor Cyan
+Write-Host "Built $fullMdPath ($($parts.Count) parts)" -ForegroundColor Cyan
 
-# 2. Запуск Word COM ----------------------------------------------------------------
+function Convert-InlineMarkdownToHtml {
+    param([string]$text)
+
+    if ($null -eq $text) { return '' }
+
+    $placeholders = @{}
+    $script:codeCounter = 0
+
+    $text = [regex]::Replace($text, '`([^`]+)`', {
+        param($m)
+        $key = "__CODE_$script:codeCounter`__"
+        $placeholders[$key] = '<code>' + [System.Net.WebUtility]::HtmlEncode($m.Groups[1].Value) + '</code>'
+        $script:codeCounter++
+        return $key
+    })
+
+    $encoded = [System.Net.WebUtility]::HtmlEncode($text)
+    $encoded = [regex]::Replace($encoded, '\*\*([^*]+)\*\*', '<strong>$1</strong>')
+    $encoded = [regex]::Replace($encoded, '\*([^*]+)\*', '<em>$1</em>')
+    $encoded = [regex]::Replace($encoded, '~~([^~]+)~~', '<span style="text-decoration: line-through;">$1</span>')
+
+    foreach ($key in $placeholders.Keys) {
+        $encoded = $encoded.Replace($key, $placeholders[$key])
+    }
+
+    return $encoded
+}
+
+function Parse-TableRow {
+    param([string]$line)
+    return $line -split '\|' | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' }
+}
+
+function Is-TableSeparator {
+    param([string]$line)
+    return $line -match '^\|[\s\-\|:]+\|$'
+}
+
+function Flush-TableHtml {
+    param(
+        [System.Text.StringBuilder]$html,
+        [System.Collections.Generic.List[string[]]]$tableRows
+    )
+
+    if ($tableRows.Count -eq 0) { return }
+
+    [void]$html.AppendLine('<table>')
+    for ($r = 0; $r -lt $tableRows.Count; $r++) {
+        $tag = if ($r -eq 0) { 'th' } else { 'td' }
+        [void]$html.AppendLine('<tr>')
+        foreach ($cell in $tableRows[$r]) {
+            [void]$html.AppendLine("<$tag>" + (Convert-InlineMarkdownToHtml $cell) + "</$tag>")
+        }
+        [void]$html.AppendLine('</tr>')
+    }
+    [void]$html.AppendLine('</table>')
+    $tableRows.Clear()
+}
+
+function Close-ListIfNeeded {
+    param([System.Text.StringBuilder]$htmlRef, [ref]$modeRef)
+
+    if ($modeRef.Value -eq 'ul') {
+        [void]$htmlRef.AppendLine('</ul>')
+        $modeRef.Value = ''
+    } elseif ($modeRef.Value -eq 'ol') {
+        [void]$htmlRef.AppendLine('</ol>')
+        $modeRef.Value = ''
+    }
+}
+
+$html = New-Object System.Text.StringBuilder
+[void]$html.AppendLine('<!DOCTYPE html>')
+[void]$html.AppendLine('<html lang="ru">')
+[void]$html.AppendLine('<head>')
+[void]$html.AppendLine('<meta charset="utf-8">')
+[void]$html.AppendLine('<title>VKR Villa Jaconda</title>')
+[void]$html.AppendLine('<style>')
+[void]$html.AppendLine('@page { size: A4; margin: 20mm 10mm 20mm 30mm; }')
+[void]$html.AppendLine('body { font-family: "Times New Roman", serif; font-size: 14pt; line-height: 1.5; }')
+[void]$html.AppendLine('p { margin: 0 0 8pt 0; text-align: justify; text-indent: 1.25cm; }')
+[void]$html.AppendLine('h1 { font-size: 14pt; font-weight: bold; text-transform: uppercase; text-align: center; page-break-before: always; margin: 0 0 20pt 0; }')
+[void]$html.AppendLine('h1:first-of-type { page-break-before: auto; }')
+[void]$html.AppendLine('h2 { font-size: 14pt; font-weight: bold; text-align: center; margin: 12pt 0 8pt 0; }')
+[void]$html.AppendLine('h3 { font-size: 14pt; font-weight: bold; text-align: left; margin: 8pt 0 6pt 0; }')
+[void]$html.AppendLine('ul, ol { margin: 0 0 8pt 1.25cm; padding-left: 0.6cm; }')
+[void]$html.AppendLine('li { margin: 0 0 4pt 0; }')
+[void]$html.AppendLine('table { width: 100%; border-collapse: collapse; margin: 8pt 0; font-size: 12pt; }')
+[void]$html.AppendLine('th, td { border: 1px solid #000; padding: 4pt 6pt; vertical-align: top; text-align: left; }')
+[void]$html.AppendLine('th { font-weight: bold; }')
+[void]$html.AppendLine('pre { font-family: "Courier New", monospace; font-size: 10pt; white-space: pre-wrap; margin: 8pt 0; }')
+[void]$html.AppendLine('code { font-family: "Courier New", monospace; font-size: 11pt; }')
+[void]$html.AppendLine('p.caption { font-size: 12pt; text-align: center; text-indent: 0; margin: 4pt 0 8pt 0; }')
+[void]$html.AppendLine('p.center { text-align: center; text-indent: 0; }')
+[void]$html.AppendLine('img.figure { display: block; margin: 8pt auto 4pt auto; max-width: 14cm; height: auto; }')
+[void]$html.AppendLine('</style>')
+[void]$html.AppendLine('</head>')
+[void]$html.AppendLine('<body>')
+
+$lines = [System.IO.File]::ReadAllLines($fullMdPath, [System.Text.Encoding]::UTF8)
+$tableRows = [System.Collections.Generic.List[string[]]]::new()
+$inCode = $false
+$codeLang = ''
+$listMode = ''
+
+foreach ($raw in $lines) {
+    $line = $raw.TrimEnd()
+
+    if ($line -match '^```(.*)$') {
+        Flush-TableHtml $html $tableRows
+        Close-ListIfNeeded $html ([ref]$listMode)
+
+        if ($inCode) {
+            if ($codeLang -ne '') {
+                [void]$html.AppendLine('</pre>')
+            }
+            $inCode = $false
+            $codeLang = ''
+        } else {
+            $inCode = $true
+            $codeLang = $matches[1].Trim()
+            if ($codeLang -ne '') {
+                [void]$html.AppendLine('<pre>')
+            }
+        }
+        continue
+    }
+
+    if ($inCode) {
+        if ($codeLang -ne '') {
+            [void]$html.AppendLine([System.Net.WebUtility]::HtmlEncode($line))
+        }
+        continue
+    }
+
+    if ($line -match '!\[([^\]]*)\]\(assets/([^)]+)\)') {
+        Flush-TableHtml $html $tableRows
+        Close-ListIfNeeded $html ([ref]$listMode)
+        $captionText = $matches[1]
+        $imgFile = $matches[2]
+        $imgFullPath = Join-Path $root "assets\$imgFile"
+
+        if (Test-Path $imgFullPath) {
+            $imgUri = [System.Uri]::new($imgFullPath).AbsoluteUri
+            [void]$html.AppendLine('<p class="center"><img class="figure" src="' + $imgUri + '" alt="' + [System.Net.WebUtility]::HtmlEncode($captionText) + '"></p>')
+            [void]$html.AppendLine('<p class="caption">' + [System.Net.WebUtility]::HtmlEncode($captionText) + '</p>')
+        } else {
+            [void]$html.AppendLine('<p>[Image missing: ' + [System.Net.WebUtility]::HtmlEncode($imgFile) + ']</p>')
+        }
+        continue
+    }
+
+    if ($line -match '^\|') {
+        Close-ListIfNeeded $html ([ref]$listMode)
+        if (-not (Is-TableSeparator $line)) {
+            $tableRows.Add((Parse-TableRow $line))
+        }
+        continue
+    }
+
+    Flush-TableHtml $html $tableRows
+
+    if ([string]::IsNullOrWhiteSpace($line)) {
+        Close-ListIfNeeded $html ([ref]$listMode)
+        continue
+    }
+
+    if ($line -match '^# (.+)$') {
+        Close-ListIfNeeded $html ([ref]$listMode)
+        [void]$html.AppendLine('<h1>' + (Convert-InlineMarkdownToHtml $matches[1]) + '</h1>')
+        continue
+    }
+    if ($line -match '^## (.+)$') {
+        Close-ListIfNeeded $html ([ref]$listMode)
+        [void]$html.AppendLine('<h2>' + (Convert-InlineMarkdownToHtml $matches[1]) + '</h2>')
+        continue
+    }
+    if ($line -match '^### (.+)$') {
+        Close-ListIfNeeded $html ([ref]$listMode)
+        [void]$html.AppendLine('<h3>' + (Convert-InlineMarkdownToHtml $matches[1]) + '</h3>')
+        continue
+    }
+    if ($line -match '^[-*] (.+)$') {
+        if ($listMode -ne 'ul') {
+            Close-ListIfNeeded $html ([ref]$listMode)
+            [void]$html.AppendLine('<ul>')
+            $listMode = 'ul'
+        }
+        [void]$html.AppendLine('<li>' + (Convert-InlineMarkdownToHtml $matches[1]) + '</li>')
+        continue
+    }
+    if ($line -match '^(\d+)\. (.+)$') {
+        if ($listMode -ne 'ol') {
+            Close-ListIfNeeded $html ([ref]$listMode)
+            [void]$html.AppendLine('<ol>')
+            $listMode = 'ol'
+        }
+        [void]$html.AppendLine('<li>' + (Convert-InlineMarkdownToHtml $matches[2]) + '</li>')
+        continue
+    }
+
+    Close-ListIfNeeded $html ([ref]$listMode)
+
+    $plain = $line.Trim()
+    [void]$html.AppendLine('<p>' + (Convert-InlineMarkdownToHtml $plain) + '</p>')
+}
+
+Flush-TableHtml $html $tableRows
+Close-ListIfNeeded $html ([ref]$listMode)
+[void]$html.AppendLine('</body>')
+[void]$html.AppendLine('</html>')
+
+[System.IO.File]::WriteAllText($htmlPath, $html.ToString(), [System.Text.UTF8Encoding]::new($false))
+Write-Host "Built $htmlPath" -ForegroundColor Cyan
+
 $word = New-Object -ComObject Word.Application
 $word.Visible = $false
-$word.DisplayAlerts = 0  # wdAlertsNone
+$word.DisplayAlerts = 0
+$word.ScreenUpdating = $false
 
 try {
-    $doc = $word.Documents.Add()
+    $doc = $word.Documents.Open([string]$htmlPath, $false, $true)
 
-    # 2.1 Параметры страницы (ГОСТ 2.105: левое 30 мм, правое 10 мм, верх/низ 20 мм)
     $pageSetup = $doc.PageSetup
     $pageSetup.TopMargin    = $word.CentimetersToPoints(2.0)
     $pageSetup.BottomMargin = $word.CentimetersToPoints(2.0)
     $pageSetup.LeftMargin   = $word.CentimetersToPoints(3.0)
     $pageSetup.RightMargin  = $word.CentimetersToPoints(1.0)
 
-    $wdStyleNormal   = -1
-    $wdStyleHeading1 = -2
-    $wdStyleHeading2 = -3
-    $wdStyleHeading3 = -4
-
-    # Межстрочный интервал 1,5 (wdLineSpace1pt5 = 1)
-    $wdLineSpace1pt5       = 1
-    $wdAlignLeft           = 0
-    $wdAlignCenter         = 1
-    $wdAlignJustify        = 3
-
-    $normal = $doc.Styles.Item($wdStyleNormal)
-    $normal.Font.Name = 'Times New Roman'
-    $normal.Font.Size = 14
-    $normal.Font.Bold = $false
-    $normal.Font.Italic = $false
-    $normal.ParagraphFormat.LineSpacingRule = $wdLineSpace1pt5   # межстрочный 1,5
-    $normal.ParagraphFormat.Alignment = $wdAlignJustify          # по ширине
-    $normal.ParagraphFormat.FirstLineIndent = $word.CentimetersToPoints(1.25)
-    $normal.ParagraphFormat.SpaceBefore = 0
-    $normal.ParagraphFormat.SpaceAfter  = 0
-
-    # Таблица 3.1 методички: оба заголовка — 14pt жирный, по центру, 1,5 интервал
-    # Heading1 (глава): до=0pt после=20pt AllCaps=ДА новая страница
-    # Heading2 (параграф): до=12pt после=8pt AllCaps=НЕТ
-    # Heading3 (подпункт): до=8pt  после=6pt AllCaps=НЕТ
-    $headingConfigs = @(
-        @{ Id = $wdStyleHeading1; Size = 14; AllCaps = $true;  Align = $wdAlignCenter; SpaceBefore = 0;  SpaceAfter = 20; PageBreak = $true  },
-        @{ Id = $wdStyleHeading2; Size = 14; AllCaps = $false; Align = $wdAlignCenter; SpaceBefore = 12; SpaceAfter = 8;  PageBreak = $false },
-        @{ Id = $wdStyleHeading3; Size = 14; AllCaps = $false; Align = $wdAlignLeft;   SpaceBefore = 8;  SpaceAfter = 6;  PageBreak = $false }
-    )
-    foreach ($cfg in $headingConfigs) {
-        $s = $doc.Styles.Item($cfg.Id)
-        $s.Font.Name   = 'Times New Roman'
-        $s.Font.Size   = $cfg.Size
-        $s.Font.Bold   = $true
-        $s.Font.Italic = $false
-        $s.Font.AllCaps = $cfg.AllCaps
-        $s.Font.Color  = 0
-        $s.ParagraphFormat.Alignment       = $cfg.Align
-        $s.ParagraphFormat.FirstLineIndent = 0
-        $s.ParagraphFormat.SpaceBefore     = $cfg.SpaceBefore
-        $s.ParagraphFormat.SpaceAfter      = $cfg.SpaceAfter
-        $s.ParagraphFormat.LineSpacingRule = $wdLineSpace1pt5
-        $s.ParagraphFormat.PageBreakBefore = $cfg.PageBreak
-    }
-
-    # 3. Вспомогательные функции ---------------------------------------------------
-
-    function Strip-Markdown {
-        param([string]$text)
-        # Убираем **bold**, *italic*, `code`, ~~strike~~
-        $text = $text -replace '`[^`]+`', { $args[0].Value -replace '`', '' }
-        $text = $text -replace '\*\*([^*]+)\*\*', '$1'
-        $text = $text -replace '\*([^*]+)\*', '$1'
-        $text = $text -replace '~~([^~]+)~~', '$1'
-        return $text.Trim()
-    }
-
-    function Add-Para {
-        param([string]$text, [int]$styleId = -1)
-        $sel = $word.Selection
-        $sel.Style = $doc.Styles.Item($styleId)
-        $sel.TypeText((Strip-Markdown $text))
-        $sel.TypeParagraph()
-    }
-
-    # Разбить строку таблицы вида "| a | b | c |" на массив ячеек
-    function Parse-TableRow {
-        param([string]$line)
-        $cells = $line -split '\|' | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' }
-        return $cells
-    }
-
-    # Проверить, является ли строка разделителем таблицы (|---|---|)
-    function Is-TableSeparator {
-        param([string]$line)
-        return $line -match '^\|[\s\-\|:]+\|$'
-    }
-
-    # Создать таблицу Word из собранных строк
-    function Flush-Table {
-        param([System.Collections.Generic.List[string[]]]$tableRows)
-        if ($tableRows.Count -eq 0) { return }
-
-        $colCount = ($tableRows | ForEach-Object { $_.Count } | Measure-Object -Maximum).Maximum
-        $rowCount = $tableRows.Count
-
-        $sel = $word.Selection
-
-        # Добавить абзац-разрыв перед таблицей если нужно
-        $tbl = $doc.Tables.Add($sel.Range, $rowCount, $colCount)
-        $tbl.Borders.Enable = $true
-
-        # Стиль текста в таблице — Times New Roman 12pt, одиночный интервал
-        $tbl.Range.Font.Name = 'Times New Roman'
-        $tbl.Range.Font.Size = 12
-        $tbl.Range.ParagraphFormat.LineSpacingRule = 0   # wdLineSpaceSingle
-        $tbl.Range.ParagraphFormat.SpaceBefore = 2
-        $tbl.Range.ParagraphFormat.SpaceAfter = 2
-        $tbl.Range.ParagraphFormat.FirstLineIndent = 0
-        $tbl.Range.ParagraphFormat.Alignment = 0         # wdAlignParagraphLeft
-
-        for ($r = 0; $r -lt $rowCount; $r++) {
-            $cells = $tableRows[$r]
-            # Жирный шрифт для заголовочной строки
-            if ($r -eq 0) {
-                $tbl.Rows.Item(1).Range.Font.Bold = $true
-            }
-            for ($c = 0; $c -lt $cells.Count; $c++) {
-                $cellText = Strip-Markdown $cells[$c]
-                $tbl.Cell($r + 1, $c + 1).Range.Text = $cellText
-            }
-        }
-
-        # Переместить курсор после таблицы
-        $sel.SetRange($tbl.Range.End, $tbl.Range.End)
-        $sel.TypeParagraph()
-
-        $tableRows.Clear()
-    }
-
-    # 4. Парсинг markdown и запись --------------------------------------------------
-    $lines = [System.IO.File]::ReadAllLines($fullMdPath, [System.Text.Encoding]::UTF8)
-
-    $tableRows = [System.Collections.Generic.List[string[]]]::new()
-    $inCode = $false
-    $codeLang = ''
-
-    # Вставка PNG-изображения в Word
-    function Insert-Image {
-        param([string]$imgPath, [string]$captionText)
-        $sel = $word.Selection
-        # Убедимся что курсор на новой строке
-        $sel.Style = $doc.Styles.Item($wdStyleNormal)
-        $sel.ParagraphFormat.Alignment = 1  # wdAlignParagraphCenter
-        $sel.ParagraphFormat.FirstLineIndent = 0
-        try {
-            $shape = $sel.InlineShapes.AddPicture($imgPath, $false, $true)
-            # Масштабируем до ширины полосы ~14 см
-            $maxWPt = $word.CentimetersToPoints(14)
-            if ($shape.Width -gt $maxWPt) {
-                $ratio = $maxWPt / $shape.Width
-                $shape.Width  = $maxWPt
-                $shape.Height = $shape.Height * $ratio
-            }
-        } catch {
-            $sel.TypeText("[Изображение: $imgPath]")
-        }
-        $sel.TypeParagraph()
-        # Подпись к рисунку — Times New Roman 12pt, по центру, без курсива (методичка п.4)
-        $sel.Style = $doc.Styles.Item($wdStyleNormal)
-        $sel.Font.Italic = $false
-        $sel.Font.Bold   = $false
-        $sel.Font.Size   = 12
-        $sel.ParagraphFormat.Alignment       = $wdAlignCenter
-        $sel.ParagraphFormat.FirstLineIndent = 0
-        $sel.TypeText($captionText)
-        $sel.TypeParagraph()
-        # Сбросить на Normal
-        $sel.Font.Size   = 14
-        $sel.ParagraphFormat.Alignment       = $wdAlignJustify
-        $sel.ParagraphFormat.FirstLineIndent = $word.CentimetersToPoints(1.25)
-    }
-
-    foreach ($raw in $lines) {
-        $line = $raw.TrimEnd()
-
-        # Блоки кода ```lang...``` — отслеживаем язык
-        if ($line -match '^```(.*)$') {
-            if ($tableRows.Count -gt 0) { Flush-Table $tableRows }
-            if ($inCode) {
-                $inCode = $false; $codeLang = ''
-            } else {
-                $inCode = $true; $codeLang = $matches[1].Trim()
-            }
-            continue
-        }
-
-        # Встроенные изображения ![caption](assets/fig_x_x.png)
-        if ($line -match '!\[([^\]]*)\]\(assets/([^)]+)\)') {
-            if ($tableRows.Count -gt 0) { Flush-Table $tableRows }
-            $captionText = $matches[1]
-            $imgFile     = $matches[2]
-            $imgFullPath = Join-Path $root "assets\$imgFile"
-            if (Test-Path $imgFullPath) {
-                Insert-Image -imgPath $imgFullPath -captionText $captionText
-            } else {
-                Add-Para -text "[$captionText — файл не найден: $imgFile]" -styleId $wdStyleNormal
-            }
-            continue
-        }
-
-        if ($inCode) {
-            # Пропускаем диаграммы-заглушки без языка (чистый ```...```)
-            # Код с языком (```javascript, ```python) — выводим Courier New
-            if ($codeLang -ne '') {
-                $sel = $word.Selection
-                $sel.Style = $doc.Styles.Item($wdStyleNormal)
-                $sel.Font.Name = 'Courier New'
-                $sel.Font.Size = 10
-                $sel.TypeText($line)
-                $sel.TypeParagraph()
-                $sel.Font.Name = 'Times New Roman'
-                $sel.Font.Size = 14
-            }
-            continue
-        }
-
-        # Таблицы
-        if ($line -match '^\|') {
-            if (-not (Is-TableSeparator $line)) {
-                $tableRows.Add((Parse-TableRow $line))
-            }
-            continue
-        }
-
-        # Если накоплены строки таблицы — вывести её перед следующим блоком
-        if ($tableRows.Count -gt 0) { Flush-Table $tableRows }
-
-        if ([string]::IsNullOrWhiteSpace($line)) {
-            continue
-        }
-        elseif ($line -match '^# (.+)$') {
-            Add-Para -text $matches[1] -styleId $wdStyleHeading1
-        }
-        elseif ($line -match '^## (.+)$') {
-            Add-Para -text $matches[1] -styleId $wdStyleHeading2
-        }
-        elseif ($line -match '^### (.+)$') {
-            Add-Para -text $matches[1] -styleId $wdStyleHeading3
-        }
-        elseif ($line -match '^[-*] (.+)$') {
-            Add-Para -text ('— ' + $matches[1]) -styleId $wdStyleNormal
-        }
-        elseif ($line -match '^(\d+)\. (.+)$') {
-            Add-Para -text ($matches[1] + '. ' + $matches[2]) -styleId $wdStyleNormal
-        }
-        elseif ((Strip-Markdown $line) -match '^(Таблица|Листинг)\s+\d') {
-            # Заголовок таблицы/листинга — 12pt по центру без отступа (методичка п.4)
-            $sel = $word.Selection
-            $sel.Style = $doc.Styles.Item($wdStyleNormal)
-            $sel.Font.Size   = 12
-            $sel.Font.Bold   = $false
-            $sel.Font.Italic = $false
-            $sel.ParagraphFormat.Alignment       = $wdAlignCenter
-            $sel.ParagraphFormat.FirstLineIndent = 0
-            $sel.TypeText((Strip-Markdown $line))
-            $sel.TypeParagraph()
-            $sel.Font.Size   = 14
-            $sel.ParagraphFormat.Alignment       = $wdAlignJustify
-            $sel.ParagraphFormat.FirstLineIndent = $word.CentimetersToPoints(1.25)
-        }
-        else {
-            Add-Para -text $line -styleId $wdStyleNormal
-        }
-    }
-
-    # Дочистить таблицу если файл заканчивается таблицей
-    if ($tableRows.Count -gt 0) { Flush-Table $tableRows }
-
-    # 5. Сохранение в .docx ----------------------------------------------------------
     $wdFormatDocumentDefault = 16
     $doc.SaveAs([string]$docxPath, $wdFormatDocumentDefault)
     $doc.Close($false)
-    Write-Host "Готов $docxPath" -ForegroundColor Green
+    Write-Host "Built $docxPath" -ForegroundColor Green
 }
 finally {
     $word.Quit()

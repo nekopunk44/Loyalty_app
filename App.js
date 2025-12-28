@@ -36,6 +36,7 @@ import AdminFinanceDashboard from './src/screens/admin/AdminFinanceDashboard';
 import AdminEvents from './src/screens/admin/AdminEvents';
 import AdminStats from './src/screens/admin/AdminStats';
 import AdminUsers from './src/screens/admin/AdminUsers';
+import AdminChurnRisk from './src/screens/admin/AdminChurnRisk';
 
 Sentry.init({
   dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
@@ -411,6 +412,11 @@ function AdminStack() {
       <Stack.Screen
         name="AdminTabs"
         component={AdminTabs}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="AdminChurnRisk"
+        component={AdminChurnRisk}
         options={{ headerShown: false }}
       />
     </Stack.Navigator>

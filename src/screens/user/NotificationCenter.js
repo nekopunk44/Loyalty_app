@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  ScrollView, Modal, Animated, Easing, Dimensions,
+  ScrollView, Modal, Animated, Easing, Dimensions, PanResponder,
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { useNotification } from '../../context/NotificationContext';
@@ -12,7 +12,7 @@ const NAVY   = '#063B5C';
 const TEAL   = '#14B8A6';
 const SCREEN_H = Dimensions.get('window').height;
 
-export default function NotificationCenter({ onClose }) {
+export default function NotificationCenter({ onClose, dragHandlers }) {
   const { notifications, markAsRead, deleteNotification } = useNotification();
   const { theme } = useTheme();
   const colors = theme.colors;
@@ -40,6 +40,25 @@ export default function NotificationCenter({ onClose }) {
       useNativeDriver: true,
     }).start(({ finished }) => { if (finished) setDetailMounted(false); });
   };
+
+  const detailPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, g) => g.dy > 4 && Math.abs(g.dy) > Math.abs(g.dx),
+      onPanResponderMove: (_, g) => {
+        if (g.dy > 0) detailAnim.setValue(Math.max(0, 1 - g.dy / (SCREEN_H * 0.8)));
+      },
+      onPanResponderRelease: (_, g) => {
+        if (g.dy > 110 || g.vy > 0.8) {
+          closeDetail();
+        } else {
+          Animated.spring(detailAnim, {
+            toValue: 1, useNativeDriver: true, tension: 80, friction: 12,
+          }).start();
+        }
+      },
+    })
+  ).current;
 
   // ── helpers ────────────────────────────────────────────────────────────────
   const getIcon = (type) => {
@@ -109,7 +128,6 @@ export default function NotificationCenter({ onClose }) {
   const notificationTypes = [
     { id: 'payment', label: 'Платежи',      icon: 'payments' },
     { id: 'booking', label: 'Бронирования', icon: 'event-note' },
-    { id: 'review',  label: 'Отзывы',       icon: 'star' },
   ];
 
   const filteredNotifications = useMemo(() => notifications.filter(n => {
@@ -119,8 +137,6 @@ export default function NotificationCenter({ onClose }) {
     if (filterType === 'booking')
       return ['newBooking','bookingConfirmed','bookingCompleted','bookingCancelled',
               'bookingPending','new_booking','admin_event'].includes(n.type);
-    if (filterType === 'review')
-      return ['reviewNotification','newReview','reviewReply'].includes(n.type);
     return true;
   }), [notifications, filterType]);
 
@@ -129,10 +145,13 @@ export default function NotificationCenter({ onClose }) {
     root: { flex: 1, backgroundColor: colors.background },
 
     // handle + header (matches booking modal)
+    handleArea: {
+      paddingTop: 10, paddingBottom: 6,
+      alignItems: 'center',
+    },
     handle: {
       width: 46, height: 5, borderRadius: 3,
       backgroundColor: colors.border,
-      alignSelf: 'center', marginTop: 10, marginBottom: 4,
     },
     header: {
       flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
@@ -149,15 +168,15 @@ export default function NotificationCenter({ onClose }) {
     // filter pills
     filterRow: {
       flexDirection: 'row', paddingHorizontal: 20,
-      paddingBottom: 12, gap: 8,
+      paddingBottom: 14, gap: 10,
     },
     pill: {
       flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-      gap: 5, paddingVertical: 8, borderRadius: 20,
+      gap: 8, paddingVertical: 12, paddingHorizontal: 14, borderRadius: 24,
       borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.cardBg,
     },
     pillActive: { borderColor: TEAL, backgroundColor: `${TEAL}12` },
-    pillText: { fontSize: 11, fontWeight: '700', color: colors.textSecondary },
+    pillText: { fontSize: 14, fontWeight: '700', color: colors.textSecondary },
     pillTextActive: { color: TEAL },
 
     // list
@@ -212,10 +231,12 @@ export default function NotificationCenter({ onClose }) {
       shadowColor: NAVY, shadowOffset: { width: 0, height: -10 },
       shadowOpacity: 0.18, shadowRadius: 24, elevation: 18,
     },
+    dHandleArea: {
+      alignItems: 'center', paddingTop: 10, paddingBottom: 6,
+    },
     dHandle: {
       width: 46, height: 5, borderRadius: 3,
       backgroundColor: colors.border,
-      alignSelf: 'center', marginTop: 10, marginBottom: 4,
     },
     dHeader: {
       flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
@@ -259,9 +280,8 @@ export default function NotificationCenter({ onClose }) {
   }), [colors]);
 
   const emptyConfig = {
-    payment: { icon: 'account-balance-wallet', title: 'Платежей нет',      sub: 'Операции с балансом и кэшбек появятся здесь' },
-    booking: { icon: 'event-note',             title: 'Бронирований нет',   sub: 'Подтверждения и обновления появятся здесь' },
-    review:  { icon: 'star-outline',           title: 'Отзывов нет',        sub: 'Новые отзывы и ответы появятся здесь' },
+    payment: { icon: 'account-balance-wallet', title: 'Платежей нет',    sub: 'Операции с балансом и кэшбек появятся здесь' },
+    booking: { icon: 'event-note',             title: 'Бронирований нет', sub: 'Подтверждения и обновления появятся здесь' },
   };
 
   const renderItem = ({ item }) => {
@@ -328,8 +348,10 @@ export default function NotificationCenter({ onClose }) {
   return (
     <View style={styles.root}>
 
-      {/* Handle */}
-      <View style={styles.handle} />
+      {/* Handle (drag to dismiss) */}
+      <View {...(dragHandlers || {})} style={styles.handleArea}>
+        <View style={styles.handle} />
+      </View>
 
       {/* Header */}
       <View style={styles.header}>
@@ -381,6 +403,7 @@ export default function NotificationCenter({ onClose }) {
           visible={detailMounted}
           animationType="none"
           transparent
+          statusBarTranslucent
           onRequestClose={closeDetail}
         >
           <View style={styles.detailOverlay}>
@@ -398,7 +421,9 @@ export default function NotificationCenter({ onClose }) {
                 },
               ]}
             >
-              <View style={styles.dHandle} />
+              <View {...detailPanResponder.panHandlers} style={styles.dHandleArea}>
+                <View style={styles.dHandle} />
+              </View>
               <View style={styles.dHeader}>
                 <View style={styles.dTitleBlock}>
                   <Text style={[styles.dEyebrow, { color: noteColor }]}>{getTitle(selectedNote.type)}</Text>

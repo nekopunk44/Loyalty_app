@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal, Animated, Easing, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, Animated, Easing, Dimensions, PanResponder } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { useNotification } from '../../context/NotificationContext';
 import NotificationCenter from '../../screens/user/NotificationCenter';
@@ -9,15 +9,15 @@ const SHEET_H  = SCREEN_H * 0.88;
 
 export default function NotificationBell({ color = '#fff' }) {
   const [mounted, setMounted] = useState(false);
-  const sheetAnim = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(SHEET_H)).current;
   const { getUnreadCount } = useNotification();
   const unread = getUnreadCount();
 
   const open = () => {
-    sheetAnim.setValue(0);
+    translateY.setValue(SHEET_H);
     setMounted(true);
-    Animated.timing(sheetAnim, {
-      toValue: 1,
+    Animated.timing(translateY, {
+      toValue: 0,
       duration: 360,
       easing: Easing.bezier(0.22, 1, 0.36, 1),
       useNativeDriver: true,
@@ -25,8 +25,8 @@ export default function NotificationBell({ color = '#fff' }) {
   };
 
   const close = () => {
-    Animated.timing(sheetAnim, {
-      toValue: 0,
+    Animated.timing(translateY, {
+      toValue: SHEET_H,
       duration: 280,
       easing: Easing.bezier(0.4, 0, 0.2, 1),
       useNativeDriver: true,
@@ -34,6 +34,28 @@ export default function NotificationBell({ color = '#fff' }) {
       if (finished) setMounted(false);
     });
   };
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, g) => g.dy > 4 && Math.abs(g.dy) > Math.abs(g.dx),
+      onPanResponderMove: (_, g) => {
+        if (g.dy > 0) translateY.setValue(g.dy);
+      },
+      onPanResponderRelease: (_, g) => {
+        if (g.dy > 110 || g.vy > 0.8) {
+          close();
+        } else {
+          Animated.spring(translateY, {
+            toValue: 0,
+            useNativeDriver: true,
+            tension: 80,
+            friction: 12,
+          }).start();
+        }
+      },
+    })
+  ).current;
 
   return (
     <>
@@ -50,6 +72,7 @@ export default function NotificationBell({ color = '#fff' }) {
         visible={mounted}
         animationType="none"
         transparent
+        statusBarTranslucent
         onRequestClose={close}
       >
         <View style={styles.overlay}>
@@ -59,16 +82,11 @@ export default function NotificationBell({ color = '#fff' }) {
               styles.sheet,
               {
                 height: SHEET_H,
-                transform: [{
-                  translateY: sheetAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [SHEET_H, 0],
-                  }),
-                }],
+                transform: [{ translateY }],
               },
             ]}
           >
-            <NotificationCenter onClose={close} />
+            <NotificationCenter onClose={close} dragHandlers={panResponder.panHandlers} />
           </Animated.View>
         </View>
       </Modal>

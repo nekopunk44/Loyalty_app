@@ -383,16 +383,27 @@ export function EventProvider({ children }) {
     }
   };
 
-  const refreshEvents = async () => {
+  const refreshEvents = async (options = {}) => {
+    const { personalized = false, k } = options;
     try {
-      const freshEvents = await getAllEvents();
+      const result = await getAllEvents(personalized ? { personalized: true, k } : {});
+      const freshEvents = Array.isArray(result) ? result : (result?.events || []);
+      const meta = Array.isArray(result)
+        ? { personalized: false }
+        : {
+            personalized: Boolean(result?.personalized),
+            reason: result?.reason,
+            fallbackUsed: Boolean(result?.fallbackUsed),
+          };
       if (Array.isArray(freshEvents) && freshEvents.length > 0) {
         const normalizedEvents = freshEvents.map(e => normalizeEvent(e));
         setEvents(normalizedEvents);
         saveToStorage(normalizedEvents);
       }
+      return meta;
     } catch (error) {
       console.error('EventContext: Ошибка при обновлении событий:', error);
+      return { personalized: false, reason: 'network_error' };
     }
   };
 

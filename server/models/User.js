@@ -78,6 +78,11 @@ const User = sequelize.define('User', {
     type: DataTypes.STRING(512),
     allowNull: true,
   },
+  birthDate: {
+    type: DataTypes.DATEONLY,
+    allowNull: true,
+    comment: 'Дата рождения (YYYY-MM-DD). Используется для бонуса в день рождения.',
+  },
 }, {
   timestamps: false,
   tableName: 'users',

@@ -13,8 +13,10 @@ import {
   Dimensions,
   ActivityIndicator,
   Animated,
+  PanResponder,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { spacing, borderRadius } from '../../constants/theme';
 import { useTheme } from '../../context/ThemeContext';
@@ -26,6 +28,8 @@ import { BookingCalendar } from '../../components/booking/BookingCalendar';
 import PropertyCard from '../../components/booking/PropertyCard';
 import BookingCard from '../../components/booking/BookingCard';
 import CancelConfirmModal from '../../components/booking/CancelConfirmModal';
+import HouseRulesGate from '../../components/booking/HouseRulesGate';
+import { RULES_SIGN_KEY } from '../../constants/houseRules';
 import { apiPost, apiGet, apiCall, API_ENDPOINTS } from '../../utils/api';
 import { getApiUrl } from '../../utils/apiUrl';
 import { properties as mockProperties } from '../../constants/properties';
@@ -195,7 +199,8 @@ export default function BookingScreen({ navigation }) {
     emptyStateSubtext: { fontSize: 13, color: colors.textSecondary, textAlign: 'center', lineHeight: 19 },
     modalContainer: { flex: 1, backgroundColor: 'rgba(6, 18, 30, 0.42)', justifyContent: 'flex-end' },
     modalContent: { height: BOOKING_SHEET_HEIGHT, width: '100%', alignSelf: 'stretch', backgroundColor: colors.background, borderTopLeftRadius: 30, borderTopRightRadius: 30, overflow: 'hidden', shadowColor: NAVY, shadowOffset: { width: 0, height: -10 }, shadowOpacity: 0.18, shadowRadius: 24, elevation: 18 },
-    modalHandle: { width: 46, height: 5, borderRadius: 3, backgroundColor: colors.border, alignSelf: 'center', marginTop: 10, marginBottom: 4 },
+    modalHandleArea: { alignItems: 'center', paddingTop: 10, paddingBottom: 6 },
+    modalHandle: { width: 46, height: 5, borderRadius: 3, backgroundColor: colors.border },
     modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 14, backgroundColor: colors.background },
     modalTitle: { fontSize: 20, fontWeight: '900', color: colors.text },
     modalCloseBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.cardBg, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border },
@@ -257,7 +262,27 @@ export default function BookingScreen({ navigation }) {
   });
   const [cancelConfirmVisible, setCancelConfirmVisible] = useState(false);
   const [cancelBookingId, setCancelBookingId] = useState(null);
+  const [rulesGateVisible, setRulesGateVisible] = useState(false);
   const bookingSheetAnim = useRef(new Animated.Value(1)).current;
+  const closeBookingModalRef = useRef(null);
+  const bookingPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, g) => g.dy > 4 && Math.abs(g.dy) > Math.abs(g.dx),
+      onPanResponderMove: (_, g) => {
+        if (g.dy > 0) bookingSheetAnim.setValue(Math.min(1, g.dy / (BOOKING_SHEET_HEIGHT + 40)));
+      },
+      onPanResponderRelease: (_, g) => {
+        if (g.dy > 110 || g.vy > 0.8) {
+          closeBookingModalRef.current?.();
+        } else {
+          Animated.spring(bookingSheetAnim, {
+            toValue: 0, useNativeDriver: useNative, tension: 80, friction: 12,
+          }).start();
+        }
+      },
+    })
+  ).current;
 
   // Кэш для занятых дат (чтобы не делать повторные запросы)
   const bookedDatesCache = React.useRef(new Map());
@@ -390,6 +415,7 @@ export default function BookingScreen({ navigation }) {
       });
     });
   };
+  closeBookingModalRef.current = closeBookingModal;
 
   const loadBookedDates = async (propertyId) => {
     if (currentLoadingPropertyId.current === propertyId) return;
@@ -534,6 +560,22 @@ export default function BookingScreen({ navigation }) {
       return;
     }
 
+    try {
+      const signed = await AsyncStorage.getItem(RULES_SIGN_KEY);
+      if (!signed) {
+        setRulesGateVisible(true);
+        return;
+      }
+    } catch (_) {
+      setRulesGateVisible(true);
+      return;
+    }
+
+    submitBookingInternal();
+  };
+
+  const submitBookingInternal = async () => {
+    const nights = calculateNights();
     setBookingLoading(true);
 
     try {
@@ -786,7 +828,9 @@ export default function BookingScreen({ navigation }) {
                 },
               ]}
             >
-              <View style={styles.modalHandle} />
+              <View {...bookingPanResponder.panHandlers} style={styles.modalHandleArea}>
+                <View style={styles.modalHandle} />
+              </View>
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>{'\u0411\u0440\u043e\u043d\u0438\u0440\u043e\u0432\u0430\u043d\u0438\u0435'}</Text>
                 <TouchableOpacity
@@ -1150,6 +1194,15 @@ export default function BookingScreen({ navigation }) {
         bookings={bookings}
         onClose={() => setCancelConfirmVisible(false)}
         onConfirm={handleConfirmCancel}
+      />
+
+      <HouseRulesGate
+        visible={rulesGateVisible}
+        onClose={() => setRulesGateVisible(false)}
+        onSigned={() => {
+          setRulesGateVisible(false);
+          submitBookingInternal();
+        }}
       />
     </View>
   );

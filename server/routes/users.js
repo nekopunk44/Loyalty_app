@@ -40,6 +40,7 @@ const PUBLIC_USER_ATTRS = [
   'role',
   'membershipLevel',
   'loyaltyPoints',
+  'birthDate',
   'createdAt',
 ];
 
@@ -152,6 +153,7 @@ module.exports = function createUsersRouter({ isDbConnected }) {
           role: user.role,
           membershipLevel: user.membershipLevel,
           loyaltyPoints: user.loyaltyPoints,
+          birthDate: user.birthDate || null,
           walletBalance: balance,
           balance,
           totalBookings: bookingsCount,
@@ -195,7 +197,7 @@ module.exports = function createUsersRouter({ isDbConnected }) {
 
       // role и membershipLevel изменяет только администратор
       const isAdmin = req.role === 'admin';
-      const allowedFields = ['displayName', 'avatar', 'phone', 'address'];
+      const allowedFields = ['displayName', 'avatar', 'phone', 'address', 'birthDate'];
       if (isAdmin) allowedFields.push('role', 'membershipLevel');
 
       const updateData = {};
@@ -221,6 +223,7 @@ module.exports = function createUsersRouter({ isDbConnected }) {
           role: user.role,
           membershipLevel: user.membershipLevel,
           loyaltyPoints: user.loyaltyPoints,
+          birthDate: user.birthDate || null,
         },
         message: 'Профиль успешно обновлён',
       });

@@ -808,16 +808,30 @@ const translateEventStatus = (status) => {
   return statusMap[status] || status;
 };
 
-export const getAllEvents = async () => {
+export const getAllEvents = async (options = {}) => {
+  const { personalized = false, k } = options;
   try {
-    const data = await apiCall(`${getApiUrl()}/events`);
+    const qs = personalized
+      ? `?personalized=true${k ? `&k=${k}` : ''}`
+      : '';
+    const data = await apiCall(`${getApiUrl()}/events${qs}`);
     const events = (data.events || []).map(event => ({
       ...event,
       status: translateEventStatus(event.status),
     }));
+    if (personalized) {
+      return {
+        events,
+        personalized: Boolean(data.personalized),
+        reason: data.reason,
+        fallbackUsed: Boolean(data.fallback_used),
+      };
+    }
     return events;
   } catch (error) {
-    return [];
+    return personalized
+      ? { events: [], personalized: false, reason: 'network_error' }
+      : [];
   }
 };
 

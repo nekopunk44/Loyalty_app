@@ -27,7 +27,14 @@ const {
   verifyToken, verifyAdmin, canAccessBooking, requireOwnerOrAdmin,
 } = require('../middleware/auth');
 const { validate, schemas } = require('../validation');
-const { CASHBACK_RATES, DEFAULT_CASHBACK_RATE } = require('../config/loyalty');
+const { CASHBACK_RATES, BIRTHDAY_MULTIPLIER, DEFAULT_CASHBACK_RATE } = require('../config/loyalty');
+
+const isBirthday = (birthDate) => {
+  if (!birthDate) return false;
+  const today = new Date();
+  const bd = new Date(birthDate);
+  return bd.getMonth() === today.getMonth() && bd.getDate() === today.getDate();
+};
 
 const isDev = () => (process.env.NODE_ENV || 'development') === 'development';
 
@@ -418,9 +425,11 @@ module.exports = function createBookingsRouter({ isDbConnected }) {
       }
 
       // Рассчитываем кэшбек внутри транзакции
-      const membershipLevel = user?.membershipLevel || 'Bronze';
-      const cashbackRate    = CASHBACK_RATES[membershipLevel] ?? DEFAULT_CASHBACK_RATE;
-      const cashbackAmount  = parseFloat((bookingPrice * cashbackRate).toFixed(2));
+      const membershipLevel   = user?.membershipLevel || 'Bronze';
+      const cashbackRate      = CASHBACK_RATES[membershipLevel] ?? DEFAULT_CASHBACK_RATE;
+      const birthdayToday     = isBirthday(user?.birthDate);
+      const birthdayMult      = birthdayToday ? (BIRTHDAY_MULTIPLIER[membershipLevel] ?? 1) : 1;
+      const cashbackAmount    = parseFloat((bookingPrice * cashbackRate * birthdayMult).toFixed(2));
 
       const balanceBefore      = parseFloat(currentBalance.toFixed(2));
       const balanceAfterDebit  = parseFloat((currentBalance - bookingPrice).toFixed(2));
@@ -452,7 +461,7 @@ module.exports = function createBookingsRouter({ isDbConnected }) {
         bookingId:    booking.id,
         type:         'credit',
         amount:       cashbackAmount,
-        description:  `Кэшбек ${Math.round(cashbackRate * 100)}% за бронирование #${booking.id} (уровень: ${membershipLevel})`,
+        description:  `Кэшбек ${Math.round(cashbackRate * 100)}%${birthdayToday ? ` ×${birthdayMult} (День рождения!)` : ''} за бронирование #${booking.id} (уровень: ${membershipLevel})`,
         balanceBefore: balanceAfterDebit,
         balanceAfter:  balanceAfterCashback,
       }, { transaction: txn });
@@ -505,6 +514,8 @@ module.exports = function createBookingsRouter({ isDbConnected }) {
           rate:                `${Math.round(cashbackRate * 100)}%`,
           membershipLevel,
           amount:              cashbackAmount,
+          birthdayBonus:       birthdayToday,
+          multiplier:          birthdayMult,
           balanceAfterCashback,
         },
       });
