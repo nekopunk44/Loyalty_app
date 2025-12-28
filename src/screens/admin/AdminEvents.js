@@ -495,97 +495,133 @@ export default function AdminEvents() {
               // Новые локальные события (local_*) показываются без задержки, старые с задержкой
               const isNewEvent = typeof event.id === 'string' && event.id.startsWith('local_');
               const delay = isNewEvent ? 0 : (200 + index * 50);
+              const eventColor = event.color || theme.colors.primary;
+              const statusColor = getStatusColor(event.status);
+              const typeLabel = event.eventType
+                ? (eventTypes.find(t => t.value === event.eventType)?.label || event.eventType)
+                : null;
+              const isDone = event.status === 'completed';
+
               return (
                 <FadeInCard key={event.id} delay={delay}>
-                  <TouchableOpacity 
-                    style={[styles.eventCard, { borderLeftColor: event.color || theme.colors.primary, borderLeftWidth: 5, backgroundColor: theme.colors.cardBg }]}
+                  <TouchableOpacity
+                    style={[
+                      styles.eventCard,
+                      {
+                        backgroundColor: theme.colors.cardBg,
+                        borderColor: theme.colors.border,
+                      },
+                    ]}
+                    activeOpacity={0.85}
                     onPress={() => handleOpenModal(event)}
                   >
-                    {/* Top Bar with Status and Actions */}
+                    {/* Header: type chip + status dot + actions */}
                     <View style={styles.eventHeader}>
-                      <View style={[styles.statusBadge, { backgroundColor: getStatusColor(event.status) }]}>
-                        <MaterialIcons 
-                          name={
-                            event.status === 'active' || event.status === 'Активный' ? 'check-circle' : 
-                            event.status === 'upcoming' || event.status === 'Скоро' ? 'schedule' : 'done'
-                          } 
-                          size={14} 
-                          color="#fff" 
-                        />
-                        <Text style={styles.statusText}>{getStatusLabel(event.status)}</Text>
-                      </View>
-                      
-                      {/* Type badge */}
-                      {event.eventType && (
-                        <View style={[styles.typeBadge, { backgroundColor: event.color || theme.colors.primary }]}>
-                          <Text style={styles.typeText}>
-                            {eventTypes.find(t => t.value === event.eventType)?.label || event.eventType}
+                      <View style={styles.eventHeaderLeft}>
+                        {typeLabel && (
+                          <View style={[
+                            styles.typeChip,
+                            { backgroundColor: `${eventColor}1A`, borderColor: `${eventColor}55` },
+                          ]}>
+                            <Text style={[styles.typeChipText, { color: eventColor }]} numberOfLines={1}>
+                              {typeLabel}
+                            </Text>
+                          </View>
+                        )}
+                        <View style={styles.statusInline}>
+                          <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+                          <Text style={[styles.statusInlineText, { color: theme.colors.textSecondary }]}>
+                            {getStatusLabel(event.status)}
                           </Text>
                         </View>
-                      )}
-                      
+                      </View>
+
                       <View style={styles.eventActions}>
-                        <TouchableOpacity onPress={() => handleToggleStatus(event)} style={styles.quickActionBtn}>
+                        <TouchableOpacity
+                          onPress={() => handleToggleStatus(event)}
+                          hitSlop={6}
+                          style={styles.iconAction}
+                        >
                           <MaterialIcons
-                            name={event.status === 'completed' ? 'play-arrow' : 'check'}
-                            size={18}
-                            color={event.status === 'completed' ? theme.colors.primary : theme.colors.success}
+                            name={isDone ? 'replay' : 'check'}
+                            size={16}
+                            color={isDone ? theme.colors.primary : theme.colors.success}
                           />
                         </TouchableOpacity>
-                        <TouchableOpacity onPress={() => handleDuplicateEvent(event)} style={styles.quickActionBtn}>
-                          <MaterialIcons name="content-copy" size={18} color={theme.colors.textSecondary} />
+                        <TouchableOpacity
+                          onPress={() => handleDuplicateEvent(event)}
+                          hitSlop={6}
+                          style={styles.iconAction}
+                        >
+                          <MaterialIcons name="content-copy" size={16} color={theme.colors.textSecondary} />
                         </TouchableOpacity>
-                        <TouchableOpacity onPress={() => handleOpenModal(event)}>
-                          <MaterialIcons name="edit" size={20} color={theme.colors.primary} />
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={() => handleDeleteEvent(event.id)}>
-                          <MaterialIcons name="delete" size={20} color={theme.colors.accent} />
+                        <TouchableOpacity
+                          onPress={() => handleDeleteEvent(event.id)}
+                          hitSlop={6}
+                          style={styles.iconAction}
+                        >
+                          <MaterialIcons name="delete-outline" size={18} color={'#EF4444'} />
                         </TouchableOpacity>
                       </View>
                     </View>
 
-                    {/* Event Title and Description */}
+                    {/* Title + description */}
                     <View style={styles.eventContent}>
-                      <Text style={[styles.eventTitle, { color: theme.colors.text }]}>{event.title}</Text>
-                      <Text style={[styles.eventDescription, { color: theme.colors.textSecondary }]} numberOfLines={2}>{event.description}</Text>
+                      <Text style={[styles.eventTitle, { color: theme.colors.text }]} numberOfLines={1}>
+                        {event.title}
+                      </Text>
+                      {!!event.description && (
+                        <Text
+                          style={[styles.eventDescription, { color: theme.colors.textSecondary }]}
+                          numberOfLines={2}
+                        >
+                          {event.description}
+                        </Text>
+                      )}
                     </View>
 
-                    {/* Event Stats */}
-                    <View style={styles.eventStats}>
-                      <View style={[styles.statBlock, { backgroundColor: theme.colors.background }]}>
-                        <MaterialIcons name="group" size={16} color={theme.colors.primary} />
-                        <View>
-                          <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Участники</Text>
-                          <Text style={[styles.statValue, { color: theme.colors.text }]}>{event.participants || event.participantsCount || 0}</Text>
-                        </View>
+                    {/* Meta line: participants · period · access */}
+                    <View style={styles.metaRow}>
+                      <View style={styles.metaItem}>
+                        <MaterialIcons name="group" size={13} color={theme.colors.textSecondary} />
+                        <Text style={[styles.metaText, { color: theme.colors.text }]}>
+                          {event.participants || event.participantsCount || 0}
+                        </Text>
                       </View>
-
-                      <View style={[styles.statBlock, { backgroundColor: theme.colors.background }]}>
-                        <MaterialIcons name="calendar-today" size={16} color={theme.colors.accent} />
-                        <View style={{flex: 1}}>
-                          <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Период</Text>
-                          <Text style={[styles.statValue, { color: theme.colors.text }]} numberOfLines={1} ellipsizeMode="tail">
-                            {event.startDate && event.endDate ? `${event.startDate} - ${event.endDate}` : (event.startDate || event.endDate || '-')}
-                          </Text>
-                        </View>
+                      <Text style={[styles.metaSep, { color: theme.colors.textSecondary }]}>·</Text>
+                      <View style={[styles.metaItem, { flexShrink: 1 }]}>
+                        <MaterialIcons name="calendar-today" size={13} color={theme.colors.textSecondary} />
+                        <Text
+                          style={[styles.metaText, { color: theme.colors.text }]}
+                          numberOfLines={1}
+                        >
+                          {event.startDate && event.endDate
+                            ? `${event.startDate} – ${event.endDate}`
+                            : (event.startDate || event.endDate || '—')}
+                        </Text>
                       </View>
-
-                      <View style={[styles.statBlock, { backgroundColor: theme.colors.background }]}>
-                        <MaterialIcons name="shield" size={16} color={theme.colors.secondary} />
-                        <View style={{flex: 1}}>
-                          <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Доступ</Text>
-                          <Text style={[styles.statValue, { color: theme.colors.text }]} numberOfLines={1} ellipsizeMode="tail">
-                            {getAllowedUsersLabel(event.allowedUsers)}
-                          </Text>
-                        </View>
+                      <Text style={[styles.metaSep, { color: theme.colors.textSecondary }]}>·</Text>
+                      <View style={[styles.metaItem, { flexShrink: 1 }]}>
+                        <MaterialIcons name="shield" size={13} color={theme.colors.textSecondary} />
+                        <Text
+                          style={[styles.metaText, { color: theme.colors.text }]}
+                          numberOfLines={1}
+                        >
+                          {getAllowedUsersLabel(event.allowedUsers)}
+                        </Text>
                       </View>
                     </View>
 
-                    {/* Prize */}
-                    {event.prize && (
+                    {/* Prize footer */}
+                    {!!event.prize && (
                       <View style={[styles.prizeSection, { borderTopColor: theme.colors.border }]}>
-                        <MaterialIcons name="card-giftcard" size={18} color={theme.colors.success} />
-                        <Text style={[styles.prizeText, { color: theme.colors.success }]}>{event.prize}</Text>
+                        <MaterialIcons name="card-giftcard" size={15} color={theme.colors.success} />
+                        <Text
+                          style={[styles.prizeText, { color: theme.colors.success }]}
+                          numberOfLines={1}
+                        >
+                          {event.prize}
+                        </Text>
                       </View>
                     )}
                   </TouchableOpacity>
@@ -859,6 +895,7 @@ const styles = StyleSheet.create({
   content: {
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.md,
+    paddingBottom: 130,
   },
   header: {
     flexDirection: 'row',
@@ -915,57 +952,67 @@ const styles = StyleSheet.create({
   eventCard: {
     backgroundColor: colors.cardBg,
     borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    elevation: 2,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   eventHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.md,
+    marginBottom: 8,
     gap: spacing.sm,
   },
-  statusBadge: {
+  eventHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 4,
-    borderRadius: borderRadius.md,
-  },
-  statusText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  typeBadge: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 4,
-    borderRadius: borderRadius.md,
+    gap: 8,
     flex: 1,
+    minWidth: 0,
   },
-  typeText: {
+  typeChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    borderWidth: 1,
+    maxWidth: '60%',
+  },
+  typeChipText: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  statusInline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    flexShrink: 1,
+  },
+  statusDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+  },
+  statusInlineText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#fff',
-    textAlign: 'center',
   },
   eventActions: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    gap: 4,
     alignItems: 'center',
   },
-  quickActionBtn: {
-    padding: 2,
+  iconAction: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   eventContent: {
-    marginBottom: spacing.md,
+    marginBottom: 8,
   },
   eventTitle: {
     fontSize: 15,
@@ -973,49 +1020,46 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   eventDescription: {
-    fontSize: 13,
+    fontSize: 12,
     color: colors.textSecondary,
-    marginTop: spacing.sm,
+    marginTop: 2,
+    lineHeight: 16,
   },
-  eventStats: {
+  metaRow: {
     flexDirection: 'row',
-    gap: spacing.sm,
-    marginBottom: spacing.md,
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'nowrap',
   },
-  statBlock: {
-    flex: 1,
+  metaItem: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.background,
-    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    gap: 4,
   },
-  statLabel: {
+  metaText: {
     fontSize: 11,
-    color: colors.textSecondary,
-    fontWeight: '500',
+    fontWeight: '600',
+    color: colors.text,
   },
-  statValue: {
+  metaSep: {
     fontSize: 11,
     fontWeight: '700',
-    color: colors.text,
-    marginTop: 2,
-    flex: 1,
+    opacity: 0.5,
   },
   prizeSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    paddingTop: spacing.md,
+    gap: 6,
+    paddingTop: 8,
+    marginTop: 8,
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
   prizeText: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '700',
     color: colors.success,
+    flex: 1,
   },
   emptyState: {
     alignItems: 'center',

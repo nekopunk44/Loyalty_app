@@ -615,7 +615,7 @@ export default function AdminStats() {
           <View style={{ flex: 1 }}>
             <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>AI-прогноз LTV</Text>
             <Text style={[styles.ltvHint, { color: theme.colors.textSecondary }]}>
-              Топ клиентов по предсказанной годовой ценности (gradient boosting)
+              Топ клиентов по предсказанной годовой ценности
             </Text>
           </View>
           <View style={[styles.ltvBadge, { backgroundColor: '#8B5CF615' }]}>
