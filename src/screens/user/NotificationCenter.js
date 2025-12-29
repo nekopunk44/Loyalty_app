@@ -163,16 +163,17 @@ export default function NotificationCenter({ onClose, dragHandlers }) {
 
     // filter pills
     filterRow: {
-      flexDirection: 'row', paddingHorizontal: 20,
-      paddingBottom: 14, gap: 10,
+      flexDirection: 'row', paddingHorizontal: 16,
+      paddingBottom: 12, gap: 6,
     },
     pill: {
       flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-      gap: 8, paddingVertical: 12, paddingHorizontal: 14, borderRadius: 24,
-      borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.cardBg,
+      gap: 5, paddingVertical: 8, paddingHorizontal: 8, borderRadius: 999,
+      borderWidth: 1, borderColor: colors.border, backgroundColor: colors.cardBg,
+      minWidth: 0,
     },
     pillActive: { borderColor: TEAL, backgroundColor: `${TEAL}12` },
-    pillText: { fontSize: 14, fontWeight: '700', color: colors.textSecondary },
+    pillText: { fontSize: 12, fontWeight: '700', color: colors.textSecondary, flexShrink: 1 },
     pillTextActive: { color: TEAL },
 
     // list
@@ -369,7 +370,14 @@ export default function NotificationCenter({ onClose, dragHandlers }) {
             onPress={() => setFilterType(t.id)}
           >
             <MaterialIcons name={t.icon} size={13} color={filterType === t.id ? TEAL : colors.textSecondary} />
-            <Text style={[styles.pillText, filterType === t.id && styles.pillTextActive]}>{t.label}</Text>
+            <Text
+              style={[styles.pillText, filterType === t.id && styles.pillTextActive]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.85}
+            >
+              {t.label}
+            </Text>
           </TouchableOpacity>
         ))}
       </View>
