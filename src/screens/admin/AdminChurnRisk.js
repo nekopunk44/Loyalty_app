@@ -15,11 +15,30 @@ import {
   ActivityIndicator,
   RefreshControl,
   Animated,
+  Easing,
 } from 'react-native';
+import Svg, { Defs, LinearGradient, Stop, Path, Circle } from 'react-native-svg';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { useTheme } from '../../context/ThemeContext';
 import { apiCall } from '../../utils/api';
 import { getApiUrl } from '../../utils/apiUrl';
+
+// Premium "command center" palette — independent of theme.
+const HERO = {
+  bg:        '#0B1426',
+  bgLayer:   '#10203A',
+  cardLine:  'rgba(255,255,255,0.08)',
+  ink:       '#F8FAFC',
+  inkDim:    '#94A3B8',
+  inkFaint:  '#64748B',
+  trackBg:   'rgba(255,255,255,0.06)',
+};
+
+const RISK_HUES = {
+  high:   '#F87171',
+  medium: '#FBBF24',
+  low:    '#34D399',
+};
 
 const RISK_FILTERS = [
   { id: 'all',    label: 'Все',     icon: 'list' },
@@ -30,20 +49,126 @@ const RISK_FILTERS = [
 
 const formatPct = (p) => `${Math.round((Number(p) || 0) * 100)}%`;
 
+/**
+ * Semicircle gauge with green→amber→red gradient stroke.
+ * Fill proportional to `percent` (0–100).
+ */
+function GaugeArc({ percent, size = 220 }) {
+  const stroke = 16;
+  const r = (size - stroke) / 2 - 4;
+  const cx = size / 2;
+  const cy = size / 2 + 6;
+  const arcLen = Math.PI * r;
+  const safePct = Math.min(100, Math.max(0, percent));
+  const filled = (arcLen * safePct) / 100;
+  const path = `M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`;
+  const height = cy + stroke / 2 + 4;
+
+  // needle position along the arc (angle from -180° to 0°)
+  const angle = Math.PI + (Math.PI * safePct) / 100; // π → 2π
+  const tipR = r;
+  const tipX = cx + tipR * Math.cos(angle);
+  const tipY = cy + tipR * Math.sin(angle);
+
+  return (
+    <Svg width={size} height={height}>
+      <Defs>
+        <LinearGradient id="gaugeGrad" x1="0" y1="0" x2={size} y2="0" gradientUnits="userSpaceOnUse">
+          <Stop offset="0"    stopColor={RISK_HUES.low} />
+          <Stop offset="0.55" stopColor={RISK_HUES.medium} />
+          <Stop offset="1"    stopColor={RISK_HUES.high} />
+        </LinearGradient>
+        <LinearGradient id="gaugeGlow" x1="0" y1="0" x2={size} y2="0" gradientUnits="userSpaceOnUse">
+          <Stop offset="0"    stopColor={RISK_HUES.low}    stopOpacity="0.4" />
+          <Stop offset="0.55" stopColor={RISK_HUES.medium} stopOpacity="0.4" />
+          <Stop offset="1"    stopColor={RISK_HUES.high}   stopOpacity="0.4" />
+        </LinearGradient>
+      </Defs>
+      {/* Background track */}
+      <Path
+        d={path}
+        stroke={HERO.trackBg}
+        strokeWidth={stroke}
+        strokeLinecap="round"
+        fill="none"
+      />
+      {/* Soft glow underlay */}
+      {filled > 0 && (
+        <Path
+          d={path}
+          stroke="url(#gaugeGlow)"
+          strokeWidth={stroke + 8}
+          strokeLinecap="round"
+          fill="none"
+          strokeDasharray={`${filled} ${arcLen}`}
+          opacity={0.55}
+        />
+      )}
+      {/* Foreground filled arc */}
+      <Path
+        d={path}
+        stroke="url(#gaugeGrad)"
+        strokeWidth={stroke}
+        strokeLinecap="round"
+        fill="none"
+        strokeDasharray={`${filled} ${arcLen}`}
+      />
+      {/* Needle tip dot */}
+      <Circle cx={tipX} cy={tipY} r={6} fill="#fff" />
+      <Circle cx={tipX} cy={tipY} r={3.5} fill={HERO.bg} />
+    </Svg>
+  );
+}
+
+/**
+ * Horizontal probability strip showing where `prob` (0–1) falls
+ * on the global low→high gradient.
+ */
+function ProbStrip({ prob, height = 4 }) {
+  const safe = Math.min(1, Math.max(0, prob));
+  return (
+    <View style={{ width: '100%', height, justifyContent: 'center' }}>
+      <Svg width="100%" height={height}>
+        <Defs>
+          <LinearGradient id="stripGrad" x1="0" y1="0" x2="1" y2="0">
+            <Stop offset="0"   stopColor={RISK_HUES.low}    stopOpacity="0.3" />
+            <Stop offset="0.5" stopColor={RISK_HUES.medium} stopOpacity="0.3" />
+            <Stop offset="1"   stopColor={RISK_HUES.high}   stopOpacity="0.3" />
+          </LinearGradient>
+        </Defs>
+        <Path
+          d={`M 0 ${height / 2} L 100% ${height / 2}`}
+          stroke="url(#stripGrad)"
+          strokeWidth={height}
+          strokeLinecap="round"
+          fill="none"
+        />
+      </Svg>
+      {/* Position marker */}
+      <View
+        pointerEvents="none"
+        style={{
+          position: 'absolute',
+          left: `${safe * 100}%`,
+          top: -3,
+          width: 2,
+          height: height + 6,
+          marginLeft: -1,
+          backgroundColor: prob >= 0.5 ? RISK_HUES.high : prob >= 0.3 ? RISK_HUES.medium : RISK_HUES.low,
+          borderRadius: 1,
+        }}
+      />
+    </View>
+  );
+}
+
 export default function AdminChurnRisk({ navigation }) {
   const { theme } = useTheme();
   const colors = theme.colors;
 
-  const riskColor = (risk) => {
-    if (risk === 'high')   return colors.danger;
-    if (risk === 'medium') return colors.warning;
-    return colors.success;
-  };
-  const riskLabel = (risk) => {
-    if (risk === 'high')   return 'высокий';
-    if (risk === 'medium') return 'средний';
-    return 'низкий';
-  };
+  const riskHue = (risk) => RISK_HUES[risk] || RISK_HUES.low;
+  const riskLabel = (risk) =>
+    risk === 'high' ? 'высокий' : risk === 'medium' ? 'средний' : 'низкий';
 
   const [items, setItems] = useState([]);
   const [meta, setMeta] = useState(null);
@@ -52,6 +177,7 @@ export default function AdminChurnRisk({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const pulseAnim = useRef(new Animated.Value(0)).current;
 
   const fetchData = useCallback(async (riskFilter) => {
     try {
@@ -76,9 +202,19 @@ export default function AdminChurnRisk({ navigation }) {
     setLoading(true);
     fetchData(filter).finally(() => {
       setLoading(false);
-      Animated.timing(fadeAnim, { toValue: 1, duration: 250, useNativeDriver: true }).start();
+      Animated.timing(fadeAnim, { toValue: 1, duration: 280, useNativeDriver: true }).start();
     });
   }, [filter, fetchData]);
+
+  // "Model active" pulsing dot
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 0, duration: 900, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      ])
+    ).start();
+  }, [pulseAnim]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -94,32 +230,49 @@ export default function AdminChurnRisk({ navigation }) {
   }, [items, meta]);
 
   const total = counts.high + counts.medium + counts.low;
-  const pct = (n) => (total > 0 ? Math.max(2, (n / total) * 100) : 0);
+  // Weighted risk index: high=1.0, medium=0.5, low=0
+  const riskIndex = total > 0
+    ? Math.round(((counts.high * 1.0 + counts.medium * 0.5) / total) * 100)
+    : 0;
+
+  // Spotlight: most at-risk user with probability ≥ 0.6
+  const spotlight = useMemo(() => {
+    const sorted = [...items].sort((a, b) => (b.probability || 0) - (a.probability || 0));
+    const top = sorted[0];
+    return top && top.probability >= 0.6 ? top : null;
+  }, [items]);
 
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
   const renderItem = ({ item }) => {
-    const rc = riskColor(item.risk);
+    const hue = riskHue(item.risk);
     const initial = (item.displayName || item.email || '?').trim().charAt(0).toUpperCase();
     return (
       <View style={[styles.row, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
-        <View style={[styles.avatar, { backgroundColor: `${rc}1F`, borderColor: `${rc}55` }]}>
-          <Text style={[styles.avatarText, { color: rc }]}>{initial}</Text>
-        </View>
-        <View style={styles.rowInfo}>
-          <Text style={[styles.rowName, { color: colors.text }]} numberOfLines={1}>
-            {item.displayName || 'Без имени'}
-          </Text>
-          <Text style={[styles.rowEmail, { color: colors.textSecondary }]} numberOfLines={1}>
-            {item.email || '—'}
-            {item.membershipLevel ? ` · ${item.membershipLevel}` : ''}
-          </Text>
-        </View>
-        <View style={[styles.riskPill, { backgroundColor: `${rc}14`, borderColor: `${rc}55` }]}>
-          <View style={[styles.riskPillDot, { backgroundColor: rc }]} />
-          <View>
-            <Text style={[styles.riskPct, { color: rc }]}>{formatPct(item.probability)}</Text>
-            <Text style={[styles.riskLabel, { color: rc }]}>{riskLabel(item.risk)}</Text>
+        <View style={[styles.rowAccent, { backgroundColor: hue }]} />
+        <View style={styles.rowContent}>
+          <View style={styles.rowTopLine}>
+            <View style={[styles.avatar, { backgroundColor: `${hue}1F`, borderColor: `${hue}55` }]}>
+              <Text style={[styles.avatarText, { color: hue }]}>{initial}</Text>
+            </View>
+            <View style={styles.rowInfo}>
+              <Text style={[styles.rowName, { color: colors.text }]} numberOfLines={1}>
+                {item.displayName || 'Без имени'}
+              </Text>
+              <Text style={[styles.rowEmail, { color: colors.textSecondary }]} numberOfLines={1}>
+                {item.email || '—'}
+                {item.membershipLevel ? ` · ${item.membershipLevel}` : ''}
+              </Text>
+            </View>
+            <View style={styles.rowRight}>
+              <Text style={[styles.rowPct, { color: hue }]}>{formatPct(item.probability)}</Text>
+              <Text style={[styles.rowRiskLabel, { color: colors.textSecondary }]}>
+                {riskLabel(item.risk)}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.rowStripWrap}>
+            <ProbStrip prob={item.probability || 0} />
           </View>
         </View>
       </View>
@@ -153,175 +306,242 @@ export default function AdminChurnRisk({ navigation }) {
             Риск оттока
           </Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]} numberOfLines={1}>
-            {meta?.scanned
-              ? `${meta.scanned} активных за ${meta.windowDays || 90} дн`
-              : 'ML-прогноз по активным клиентам'}
+            ML-прогноз по активным клиентам
           </Text>
         </View>
-        <View style={[styles.mlBadge, { backgroundColor: `${colors.primary}1F`, borderColor: `${colors.primary}55` }]}>
-          <MaterialIcons name="auto-awesome" size={11} color={colors.primary} />
-          <Text style={[styles.mlBadgeText, { color: colors.primary }]}>ML</Text>
-        </View>
       </View>
 
-      {/* Hero card with stats strip + distribution bar */}
-      <View style={[styles.heroCard, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
-        <View style={styles.statsStrip}>
-          <View style={styles.statsCell}>
-            <View style={styles.statsValueRow}>
-              <View style={[styles.statsDot, { backgroundColor: colors.danger }]} />
-              <Text style={[styles.statsValue, { color: colors.text }]}>{counts.high}</Text>
+      <FlatList
+        data={items}
+        keyExtractor={(it) => String(it.userId)}
+        renderItem={renderItem}
+        contentContainerStyle={{ paddingBottom: 130 }}
+        ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[colors.primary]}
+            tintColor={colors.primary}
+          />
+        }
+        ListHeaderComponent={
+          <View>
+            {/* === Hero: command center === */}
+            <View style={styles.heroCard}>
+              <View style={styles.heroLayer} pointerEvents="none" />
+
+              {/* Model status badge */}
+              <View style={styles.heroTopRow}>
+                <View style={styles.modelStatus}>
+                  <View style={styles.statusDotWrap}>
+                    <Animated.View
+                      style={[
+                        styles.statusDotPulse,
+                        {
+                          opacity: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.15, 0.55] }),
+                          transform: [
+                            {
+                              scale: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 2.2] }),
+                            },
+                          ],
+                        },
+                      ]}
+                    />
+                    <View style={styles.statusDot} />
+                  </View>
+                  <Text style={styles.modelStatusText}>MODEL ACTIVE</Text>
+                </View>
+                <Text style={styles.scanCount}>
+                  {meta?.scanned ? `${meta.scanned} clients · ${meta.windowDays || 90}d` : 'live scan'}
+                </Text>
+              </View>
+
+              {/* Gauge */}
+              <View style={styles.gaugeWrap}>
+                <GaugeArc percent={riskIndex} size={240} />
+                <View style={styles.gaugeCenter} pointerEvents="none">
+                  <Text style={styles.gaugeBig}>
+                    {riskIndex}
+                    <Text style={styles.gaugeBigUnit}>%</Text>
+                  </Text>
+                  <Text style={styles.gaugeCaption}>Churn Risk Index</Text>
+                </View>
+              </View>
+
+              {/* Risk chips */}
+              <View style={styles.heroChipsRow}>
+                <View style={[styles.heroChip, { borderColor: `${RISK_HUES.high}66`, backgroundColor: `${RISK_HUES.high}1A` }]}>
+                  <View style={[styles.chipDot, { backgroundColor: RISK_HUES.high }]} />
+                  <Text style={[styles.chipValue, { color: HERO.ink }]}>{counts.high}</Text>
+                  <Text style={[styles.chipLabel, { color: HERO.inkDim }]}>высокий</Text>
+                </View>
+                <View style={[styles.heroChip, { borderColor: `${RISK_HUES.medium}66`, backgroundColor: `${RISK_HUES.medium}1A` }]}>
+                  <View style={[styles.chipDot, { backgroundColor: RISK_HUES.medium }]} />
+                  <Text style={[styles.chipValue, { color: HERO.ink }]}>{counts.medium}</Text>
+                  <Text style={[styles.chipLabel, { color: HERO.inkDim }]}>средний</Text>
+                </View>
+                <View style={[styles.heroChip, { borderColor: `${RISK_HUES.low}66`, backgroundColor: `${RISK_HUES.low}1A` }]}>
+                  <View style={[styles.chipDot, { backgroundColor: RISK_HUES.low }]} />
+                  <Text style={[styles.chipValue, { color: HERO.ink }]}>{counts.low}</Text>
+                  <Text style={[styles.chipLabel, { color: HERO.inkDim }]}>низкий</Text>
+                </View>
+              </View>
             </View>
-            <Text style={[styles.statsLabel, { color: colors.textSecondary }]}>Высокий</Text>
-          </View>
 
-          <View style={[styles.statsDivider, { backgroundColor: colors.border }]} />
-
-          <View style={styles.statsCell}>
-            <View style={styles.statsValueRow}>
-              <View style={[styles.statsDot, { backgroundColor: colors.warning }]} />
-              <Text style={[styles.statsValue, { color: colors.text }]}>{counts.medium}</Text>
-            </View>
-            <Text style={[styles.statsLabel, { color: colors.textSecondary }]}>Средний</Text>
-          </View>
-
-          <View style={[styles.statsDivider, { backgroundColor: colors.border }]} />
-
-          <View style={styles.statsCell}>
-            <View style={styles.statsValueRow}>
-              <View style={[styles.statsDot, { backgroundColor: colors.success }]} />
-              <Text style={[styles.statsValue, { color: colors.text }]}>{counts.low}</Text>
-            </View>
-            <Text style={[styles.statsLabel, { color: colors.textSecondary }]}>Низкий</Text>
-          </View>
-
-          <View style={[styles.statsDivider, { backgroundColor: colors.border }]} />
-
-          <View style={styles.statsCell}>
-            <View style={styles.statsValueRow}>
-              <MaterialIcons name="people" size={13} color={colors.textSecondary} />
-              <Text style={[styles.statsValue, { color: colors.text }]}>{total}</Text>
-            </View>
-            <Text style={[styles.statsLabel, { color: colors.textSecondary }]}>Всего</Text>
-          </View>
-        </View>
-
-        {/* Distribution bar */}
-        <View style={[styles.distBar, { backgroundColor: colors.background }]}>
-          {total > 0 ? (
-            <>
-              {counts.high   > 0 && <View style={{ width: `${pct(counts.high)}%`,   backgroundColor: colors.danger }} />}
-              {counts.medium > 0 && <View style={{ width: `${pct(counts.medium)}%`, backgroundColor: colors.warning }} />}
-              {counts.low    > 0 && <View style={{ width: `${pct(counts.low)}%`,    backgroundColor: colors.success }} />}
-            </>
-          ) : (
-            <View style={{ flex: 1, backgroundColor: colors.border }} />
-          )}
-        </View>
-      </View>
-
-      {/* Filter pills */}
-      <View style={styles.filters}>
-        {RISK_FILTERS.map((rf) => {
-          const active = filter === rf.id;
-          return (
-            <TouchableOpacity
-              key={rf.id}
-              style={[
-                styles.filterPill,
+            {/* === Spotlight: top at-risk user === */}
+            {spotlight && (
+              <View style={[
+                styles.spotlightCard,
                 {
-                  backgroundColor: active ? `${colors.primary}14` : colors.cardBg,
-                  borderColor: active ? `${colors.primary}80` : colors.border,
+                  backgroundColor: colors.cardBg,
+                  borderColor: `${RISK_HUES.high}55`,
                 },
-              ]}
-              onPress={() => setFilter(rf.id)}
-              activeOpacity={0.85}
-            >
-              <MaterialIcons
-                name={rf.icon}
-                size={13}
-                color={active ? colors.primary : colors.textSecondary}
-              />
-              <Text
-                style={[
-                  styles.filterText,
-                  { color: active ? colors.primary : colors.textSecondary },
-                ]}
-                numberOfLines={1}
-              >
-                {rf.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+              ]}>
+                <View style={[styles.spotlightStripe, { backgroundColor: RISK_HUES.high }]} />
+                <View style={styles.spotlightInner}>
+                  <View style={styles.spotlightHeader}>
+                    <MaterialIcons name="warning-amber" size={14} color={RISK_HUES.high} />
+                    <Text style={[styles.spotlightLabel, { color: RISK_HUES.high }]}>
+                      ГЛАВНАЯ УГРОЗА
+                    </Text>
+                  </View>
+                  <View style={styles.spotlightRow}>
+                    <View style={[
+                      styles.spotlightAvatar,
+                      { backgroundColor: `${RISK_HUES.high}1F`, borderColor: `${RISK_HUES.high}66` },
+                    ]}>
+                      <Text style={[styles.spotlightAvatarText, { color: RISK_HUES.high }]}>
+                        {(spotlight.displayName || spotlight.email || '?').trim().charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={[styles.spotlightName, { color: colors.text }]} numberOfLines={1}>
+                        {spotlight.displayName || 'Без имени'}
+                      </Text>
+                      <Text style={[styles.spotlightEmail, { color: colors.textSecondary }]} numberOfLines={1}>
+                        {spotlight.email || '—'}
+                        {spotlight.membershipLevel ? ` · ${spotlight.membershipLevel}` : ''}
+                      </Text>
+                    </View>
+                    <View style={styles.spotlightPctBlock}>
+                      <Text style={[styles.spotlightPct, { color: RISK_HUES.high }]}>
+                        {formatPct(spotlight.probability)}
+                      </Text>
+                      <Text style={[styles.spotlightPctLabel, { color: colors.textSecondary }]}>
+                        вероятность
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.spotlightStripWrap}>
+                    <ProbStrip prob={spotlight.probability || 0} height={5} />
+                  </View>
+                </View>
+              </View>
+            )}
 
-      {error === 'ml_unavailable' ? (
-        <View style={styles.empty}>
-          <View style={[styles.emptyIconWrap, { backgroundColor: `${colors.warning}1F` }]}>
-            <MaterialIcons name="cloud-off" size={28} color={colors.warning} />
+            {/* === Filter chips === */}
+            <View style={styles.filters}>
+              {RISK_FILTERS.map((rf) => {
+                const active = filter === rf.id;
+                return (
+                  <TouchableOpacity
+                    key={rf.id}
+                    style={[
+                      styles.filterPill,
+                      {
+                        backgroundColor: active ? `${colors.primary}14` : colors.cardBg,
+                        borderColor: active ? `${colors.primary}80` : colors.border,
+                      },
+                    ]}
+                    onPress={() => setFilter(rf.id)}
+                    activeOpacity={0.85}
+                  >
+                    <MaterialIcons
+                      name={rf.icon}
+                      size={13}
+                      color={active ? colors.primary : colors.textSecondary}
+                    />
+                    <Text
+                      style={[
+                        styles.filterText,
+                        { color: active ? colors.primary : colors.textSecondary },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {rf.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* Section label + count */}
+            {items.length > 0 && (
+              <View style={styles.listHeaderRow}>
+                <Text style={[styles.listHeaderLabel, { color: colors.textSecondary }]}>
+                  Клиенты
+                </Text>
+                <Text style={[styles.listHeaderCount, { color: colors.textSecondary }]}>
+                  {items.length}
+                </Text>
+              </View>
+            )}
           </View>
-          <Text style={[styles.emptyTitle, { color: colors.text }]}>
-            ML-сервис временно недоступен
-          </Text>
-          <Text style={[styles.emptyHint, { color: colors.textSecondary }]}>
-            Прогноз оттока вернётся, как только сервис восстановит работу. Это не влияет на остальные функции системы.
-          </Text>
-          <TouchableOpacity
-            style={[styles.retryBtn, { backgroundColor: colors.primary }]}
-            onPress={onRefresh}
-            activeOpacity={0.85}
-          >
-            <MaterialIcons name="refresh" size={16} color="#fff" />
-            <Text style={styles.retryText}>Повторить</Text>
-          </TouchableOpacity>
-        </View>
-      ) : error === 'fetch_error' ? (
-        <View style={styles.empty}>
-          <View style={[styles.emptyIconWrap, { backgroundColor: `${colors.danger}1F` }]}>
-            <MaterialIcons name="error-outline" size={28} color={colors.danger} />
-          </View>
-          <Text style={[styles.emptyTitle, { color: colors.text }]}>
-            Не удалось загрузить данные
-          </Text>
-          <TouchableOpacity
-            style={[styles.retryBtn, { backgroundColor: colors.primary }]}
-            onPress={onRefresh}
-            activeOpacity={0.85}
-          >
-            <MaterialIcons name="refresh" size={16} color="#fff" />
-            <Text style={styles.retryText}>Повторить</Text>
-          </TouchableOpacity>
-        </View>
-      ) : items.length === 0 ? (
-        <View style={styles.empty}>
-          <View style={[styles.emptyIconWrap, { backgroundColor: `${colors.success}1F` }]}>
-            <MaterialIcons name="sentiment-satisfied" size={28} color={colors.success} />
-          </View>
-          <Text style={[styles.emptyTitle, { color: colors.text }]}>
-            В этом сегменте пусто
-          </Text>
-          <Text style={[styles.emptyHint, { color: colors.textSecondary }]}>
-            Попробуйте сменить фильтр риска.
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          data={items}
-          keyExtractor={(it) => String(it.userId)}
-          renderItem={renderItem}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 130 }}
-          ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              colors={[colors.primary]}
-              tintColor={colors.primary}
-            />
-          }
-        />
-      )}
+        }
+        ListEmptyComponent={
+          error === 'ml_unavailable' ? (
+            <View style={styles.empty}>
+              <View style={[styles.emptyIconWrap, { backgroundColor: `${colors.warning}1F` }]}>
+                <MaterialIcons name="cloud-off" size={28} color={colors.warning} />
+              </View>
+              <Text style={[styles.emptyTitle, { color: colors.text }]}>
+                ML-сервис временно недоступен
+              </Text>
+              <Text style={[styles.emptyHint, { color: colors.textSecondary }]}>
+                Прогноз оттока вернётся, как только сервис восстановит работу. Это не влияет на остальные функции системы.
+              </Text>
+              <TouchableOpacity
+                style={[styles.retryBtn, { backgroundColor: colors.primary }]}
+                onPress={onRefresh}
+                activeOpacity={0.85}
+              >
+                <MaterialIcons name="refresh" size={16} color="#fff" />
+                <Text style={styles.retryText}>Повторить</Text>
+              </TouchableOpacity>
+            </View>
+          ) : error === 'fetch_error' ? (
+            <View style={styles.empty}>
+              <View style={[styles.emptyIconWrap, { backgroundColor: `${colors.danger}1F` }]}>
+                <MaterialIcons name="error-outline" size={28} color={colors.danger} />
+              </View>
+              <Text style={[styles.emptyTitle, { color: colors.text }]}>
+                Не удалось загрузить данные
+              </Text>
+              <TouchableOpacity
+                style={[styles.retryBtn, { backgroundColor: colors.primary }]}
+                onPress={onRefresh}
+                activeOpacity={0.85}
+              >
+                <MaterialIcons name="refresh" size={16} color="#fff" />
+                <Text style={styles.retryText}>Повторить</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.empty}>
+              <View style={[styles.emptyIconWrap, { backgroundColor: `${colors.success}1F` }]}>
+                <MaterialIcons name="sentiment-satisfied" size={28} color={colors.success} />
+              </View>
+              <Text style={[styles.emptyTitle, { color: colors.text }]}>
+                В этом сегменте пусто
+              </Text>
+              <Text style={[styles.emptyHint, { color: colors.textSecondary }]}>
+                Попробуйте сменить фильтр риска.
+              </Text>
+            </View>
+          )
+        }
+      />
     </Animated.View>
   );
 }
@@ -336,7 +556,7 @@ const makeStyles = (colors) => StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingTop: 14,
-    paddingBottom: 12,
+    paddingBottom: 8,
     gap: 10,
   },
   backBtn: {
@@ -346,46 +566,181 @@ const makeStyles = (colors) => StyleSheet.create({
   },
   title: { fontSize: 19, fontWeight: '800' },
   subtitle: { fontSize: 12, fontWeight: '500', marginTop: 2 },
-  mlBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
-  mlBadgeText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
 
+  /* === HERO === */
   heroCard: {
     marginHorizontal: 16,
-    marginBottom: 10,
+    marginTop: 6,
+    marginBottom: 12,
+    backgroundColor: HERO.bg,
+    borderRadius: 20,
+    paddingHorizontal: 18,
+    paddingTop: 14,
+    paddingBottom: 14,
+    overflow: 'hidden',
     borderWidth: 1,
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingTop: 6,
-    paddingBottom: 12,
+    borderColor: HERO.cardLine,
   },
-  statsStrip: {
+  heroLayer: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: HERO.bgLayer,
+    opacity: 0.5,
+    borderRadius: 20,
+  },
+  heroTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
+    justifyContent: 'space-between',
+    marginBottom: 6,
   },
-  statsCell: { flex: 1, alignItems: 'center' },
-  statsValueRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  statsDot: { width: 6, height: 6, borderRadius: 3 },
-  statsValue: { fontSize: 16, fontWeight: '800' },
-  statsLabel: { fontSize: 10, fontWeight: '600', marginTop: 2, letterSpacing: 0.2 },
-  statsDivider: { width: 1, height: 24, opacity: 0.6 },
-
-  distBar: {
+  modelStatus: {
     flexDirection: 'row',
-    height: 6,
-    borderRadius: 3,
-    overflow: 'hidden',
-    marginTop: 6,
+    alignItems: 'center',
+    gap: 8,
+  },
+  statusDotWrap: {
+    width: 10,
+    height: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: RISK_HUES.low,
+  },
+  statusDotPulse: {
+    position: 'absolute',
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: RISK_HUES.low,
+  },
+  modelStatusText: {
+    color: HERO.ink,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1.5,
+  },
+  scanCount: {
+    color: HERO.inkFaint,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.6,
   },
 
+  gaugeWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: -4,
+  },
+  gaugeCenter: {
+    position: 'absolute',
+    top: 50,
+    alignItems: 'center',
+  },
+  gaugeBig: {
+    color: HERO.ink,
+    fontSize: 52,
+    fontWeight: '900',
+    letterSpacing: -2,
+    lineHeight: 56,
+  },
+  gaugeBigUnit: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: HERO.inkDim,
+    letterSpacing: 0,
+  },
+  gaugeCaption: {
+    color: HERO.inkDim,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+    marginTop: 2,
+  },
+
+  heroChipsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 12,
+  },
+  heroChip: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    gap: 8,
+  },
+  chipDot: { width: 6, height: 6, borderRadius: 3 },
+  chipValue: { fontSize: 16, fontWeight: '800', letterSpacing: -0.4 },
+  chipLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginLeft: 'auto',
+  },
+
+  /* === SPOTLIGHT === */
+  spotlightCard: {
+    marginHorizontal: 16,
+    marginBottom: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    flexDirection: 'row',
+    overflow: 'hidden',
+  },
+  spotlightStripe: {
+    width: 4,
+  },
+  spotlightInner: {
+    flex: 1,
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    paddingBottom: 14,
+  },
+  spotlightHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 10,
+  },
+  spotlightLabel: {
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 1.2,
+  },
+  spotlightRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  spotlightAvatar: {
+    width: 46, height: 46, borderRadius: 23,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1,
+  },
+  spotlightAvatarText: { fontSize: 18, fontWeight: '800' },
+  spotlightName: { fontSize: 15, fontWeight: '800' },
+  spotlightEmail: { fontSize: 11, fontWeight: '500', marginTop: 2 },
+  spotlightPctBlock: { alignItems: 'flex-end' },
+  spotlightPct: { fontSize: 22, fontWeight: '900', letterSpacing: -0.8, lineHeight: 24 },
+  spotlightPctLabel: {
+    fontSize: 9,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    marginTop: 2,
+  },
+  spotlightStripWrap: { marginTop: 12 },
+
+  /* === FILTERS === */
   filters: {
     flexDirection: 'row',
     paddingHorizontal: 16,
@@ -407,13 +762,41 @@ const makeStyles = (colors) => StyleSheet.create({
   },
   filterText: { fontSize: 11, fontWeight: '700' },
 
-  row: {
+  /* === LIST === */
+  listHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingBottom: 8,
+  },
+  listHeaderLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+  },
+  listHeaderCount: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  row: {
+    flexDirection: 'row',
+    marginHorizontal: 16,
     borderRadius: 14,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
     borderWidth: 1,
+    overflow: 'hidden',
+  },
+  rowAccent: { width: 3 },
+  rowContent: {
+    flex: 1,
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 10,
+  },
+  rowTopLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 10,
   },
   avatar: {
@@ -425,32 +808,26 @@ const makeStyles = (colors) => StyleSheet.create({
   rowInfo: { flex: 1, minWidth: 0 },
   rowName: { fontSize: 14, fontWeight: '700' },
   rowEmail: { fontSize: 11, fontWeight: '500', marginTop: 2 },
-
-  riskPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
-    borderWidth: 1,
-    minWidth: 86,
-  },
-  riskPillDot: { width: 8, height: 8, borderRadius: 4 },
-  riskPct: { fontSize: 14, fontWeight: '900', lineHeight: 16 },
-  riskLabel: {
+  rowRight: { alignItems: 'flex-end', minWidth: 60 },
+  rowPct: { fontSize: 16, fontWeight: '900', letterSpacing: -0.4, lineHeight: 18 },
+  rowRiskLabel: {
     fontSize: 9,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.4,
-    marginTop: 1,
+    marginTop: 2,
+  },
+  rowStripWrap: {
+    marginTop: 10,
+    marginLeft: 50,
   },
 
+  /* === EMPTY === */
   empty: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 32,
+    paddingVertical: 40,
     gap: 4,
   },
   emptyIconWrap: {
