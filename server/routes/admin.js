@@ -409,7 +409,20 @@ module.exports = function createAdminRouter({ isDbConnected }) {
       const userIds = activeRows.map((r) => r.userId).filter(Boolean);
 
       if (userIds.length === 0) {
-        return res.status(200).json({ success: true, items: [], total: 0 });
+        // Нет активных пользователей в окне — это не «ML offline».
+        // Возвращаем нулевую мету, чтобы фронт показал спокойное состояние, а не off-state.
+        return res.status(200).json({
+          success: true,
+          items: [],
+          total: 0,
+          meta: {
+            windowDays,
+            scanned: 0,
+            predicted: 0,
+            failed: 0,
+            counts: { high: 0, medium: 0, low: 0 },
+          },
+        });
       }
 
       const mlClient = require('../services/mlClient');
