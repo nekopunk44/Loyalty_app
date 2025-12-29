@@ -167,13 +167,13 @@ export default function NotificationCenter({ onClose, dragHandlers }) {
       paddingBottom: 12, gap: 6,
     },
     pill: {
-      flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-      gap: 5, paddingVertical: 8, paddingHorizontal: 8, borderRadius: 999,
+      flexGrow: 1, flexShrink: 1, flexBasis: 0,
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+      gap: 4, paddingVertical: 8, paddingHorizontal: 6, borderRadius: 999,
       borderWidth: 1, borderColor: colors.border, backgroundColor: colors.cardBg,
-      minWidth: 0,
     },
     pillActive: { borderColor: TEAL, backgroundColor: `${TEAL}12` },
-    pillText: { fontSize: 12, fontWeight: '700', color: colors.textSecondary, flexShrink: 1 },
+    pillText: { fontSize: 11, fontWeight: '700', color: colors.textSecondary, flexShrink: 1 },
     pillTextActive: { color: TEAL },
 
     // list
@@ -373,8 +373,7 @@ export default function NotificationCenter({ onClose, dragHandlers }) {
             <Text
               style={[styles.pillText, filterType === t.id && styles.pillTextActive]}
               numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.85}
+              ellipsizeMode="tail"
             >
               {t.label}
             </Text>
