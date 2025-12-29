@@ -3,13 +3,13 @@
  *   GET    /:userId/stream                    — SSE-поток новых уведомлений
  *   GET    /:userId                           — уведомления пользователя
  *   POST   /:userId                           — создать уведомление
- *   PATCH  /:userId/:notificationId           — отметить как прочитанное
+ *   PATCH  /:userId/read-all                  — пометить все непрочитанные как прочитанные
+ *   PATCH  /:userId/:notificationId           — отметить одно как прочитанное
  *   DELETE /:userId/:notificationId           — удалить конкретное
  *   DELETE /:userId                           — удалить все
  *
- * ВАЖНО: DELETE /:userId/:notificationId объявлен до DELETE /:userId,
- * хотя Express корректно различает эти паттерны по числу сегментов.
- * Порядок сохранён для ясности намерений.
+ * ВАЖНО: PATCH /:userId/read-all объявлен ДО PATCH /:userId/:notificationId,
+ * иначе `read-all` попал бы в notificationId.
  */
 const express = require('express');
 
@@ -118,7 +118,11 @@ module.exports = function createNotificationsRouter({ isDbConnected }) {
         return res.status(503).json({ success: false, error: 'База данных не подключена' });
       }
 
-      await User.update({ pushToken }, { where: { id: userId } });
+      // userId здесь — внешний строковый идентификатор (User.userId), не PK
+      const [updated] = await User.update({ pushToken }, { where: { userId } });
+      if (!updated) {
+        return res.status(404).json({ success: false, error: 'Пользователь не найден' });
+      }
       return res.status(200).json({ success: true });
     } catch (error) {
       logger.error('push-token save error', { error: error.message });
@@ -151,8 +155,8 @@ module.exports = function createNotificationsRouter({ isDbConnected }) {
       // SSE для онлайн-клиентов
       pushNotificationToUser(userId, notification);
 
-      // Expo Push для офлайн-устройств
-      const user = await User.findByPk(userId, { attributes: ['pushToken'] });
+      // Expo Push для офлайн-устройств (userId — строковый внешний ID, не PK)
+      const user = await User.findOne({ where: { userId }, attributes: ['pushToken'] });
       if (user?.pushToken) {
         sendExpoPush(user.pushToken, title, message, data || {}).catch(() => {});
       }
@@ -163,6 +167,33 @@ module.exports = function createNotificationsRouter({ isDbConnected }) {
       return res.status(500).json({
         success: false,
         error: 'Ошибка при создании уведомления',
+        details: isDev() ? error.message : undefined,
+      });
+    }
+  });
+
+  /**
+   * PATCH /:userId/read-all — пометить все непрочитанные как прочитанные.
+   * Один запрос вместо N — экономит время при большом списке уведомлений.
+   */
+  router.patch('/:userId/read-all', verifyToken, requireOwnerOrAdmin, async (req, res) => {
+    try {
+      const { userId } = req.params;
+
+      if (!isDbConnected()) {
+        return res.status(503).json({ success: false, error: 'База данных не подключена' });
+      }
+
+      const [updated] = await Notification.update(
+        { read: true },
+        { where: { userId, read: false } }
+      );
+      return res.status(200).json({ success: true, updated });
+    } catch (error) {
+      logger.error('notifications read-all error', { error: error.message });
+      return res.status(500).json({
+        success: false,
+        error: 'Ошибка при отметке всех уведомлений',
         details: isDev() ? error.message : undefined,
       });
     }

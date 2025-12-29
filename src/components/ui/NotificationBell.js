@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, Animated, Easing, Dimensions, PanResponder } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { useNotification } from '../../context/NotificationContext';
+import { useTheme } from '../../context/ThemeContext';
 import NotificationCenter from '../../screens/user/NotificationCenter';
 
 const SCREEN_H = Dimensions.get('window').height;
@@ -11,6 +12,7 @@ export default function NotificationBell({ color = '#fff' }) {
   const [mounted, setMounted] = useState(false);
   const translateY = useRef(new Animated.Value(SHEET_H)).current;
   const { getUnreadCount } = useNotification();
+  const { theme } = useTheme();
   const unread = getUnreadCount();
 
   const open = () => {
@@ -82,6 +84,7 @@ export default function NotificationBell({ color = '#fff' }) {
               styles.sheet,
               {
                 height: SHEET_H,
+                backgroundColor: theme.colors.background,
                 transform: [{ translateY }],
               },
             ]}
@@ -111,11 +114,10 @@ const styles = StyleSheet.create({
   },
   sheet: {
     width: '100%',
-    backgroundColor: '#fff',
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     overflow: 'hidden',
-    shadowColor: '#063B5C',
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: -10 },
     shadowOpacity: 0.18,
     shadowRadius: 24,
