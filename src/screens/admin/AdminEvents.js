@@ -861,14 +861,14 @@ export default function AdminEvents() {
 
               {/* === Секция: Тип === */}
               <Text style={[styles.sectionLabel, { color: theme.colors.textSecondary, marginTop: 18 }]}>Тип события</Text>
-              <View style={styles.chipGrid}>
+              <View style={styles.tileGrid3}>
                 {eventTypes.map((type) => {
                   const active = formData.eventType === type.value;
                   return (
                     <TouchableOpacity
                       key={type.value}
                       style={[
-                        styles.selectChip,
+                        styles.tile,
                         {
                           backgroundColor: active ? `${type.color}1F` : theme.colors.background,
                           borderColor: active ? type.color : theme.colors.border,
@@ -879,12 +879,12 @@ export default function AdminEvents() {
                     >
                       <MaterialIcons
                         name={type.icon}
-                        size={14}
+                        size={16}
                         color={active ? type.color : theme.colors.textSecondary}
                       />
                       <Text
                         style={[
-                          styles.selectChipText,
+                          styles.tileText,
                           { color: active ? type.color : theme.colors.text },
                         ]}
                         numberOfLines={1}
@@ -898,40 +898,84 @@ export default function AdminEvents() {
 
               {/* === Секция: Доступ === */}
               <Text style={[styles.sectionLabel, { color: theme.colors.textSecondary, marginTop: 18 }]}>Доступ</Text>
-              <View style={styles.chipGrid}>
-                {userTypes.map((type) => {
-                  const active = formData.allowedUsers === type.value;
-                  return (
-                    <TouchableOpacity
-                      key={type.value}
-                      style={[
-                        styles.selectChip,
-                        {
-                          backgroundColor: active ? `${type.color}1F` : theme.colors.background,
-                          borderColor: active ? type.color : theme.colors.border,
-                        },
-                      ]}
-                      activeOpacity={0.85}
-                      onPress={() => setFormData({ ...formData, allowedUsers: type.value })}
-                    >
-                      <MaterialIcons
-                        name={type.icon}
-                        size={14}
-                        color={active ? type.color : theme.colors.textSecondary}
-                      />
-                      <Text
+              {(() => {
+                const allOption = userTypes.find(t => t.value === 'all');
+                const levelOptions = userTypes.filter(t => t.value !== 'all');
+                const allActive = formData.allowedUsers === 'all';
+
+                return (
+                  <>
+                    {allOption && (
+                      <TouchableOpacity
                         style={[
-                          styles.selectChipText,
-                          { color: active ? type.color : theme.colors.text },
+                          styles.wideTile,
+                          {
+                            backgroundColor: allActive ? `${allOption.color}1F` : theme.colors.background,
+                            borderColor: allActive ? allOption.color : theme.colors.border,
+                          },
                         ]}
-                        numberOfLines={1}
+                        activeOpacity={0.85}
+                        onPress={() => setFormData({ ...formData, allowedUsers: 'all' })}
                       >
-                        {type.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
+                        <View style={styles.wideTileLeft}>
+                          <View style={[styles.wideTileIcon, { backgroundColor: `${allOption.color}22` }]}>
+                            <MaterialIcons name={allOption.icon} size={16} color={allOption.color} />
+                          </View>
+                          <View style={{ flex: 1, minWidth: 0 }}>
+                            <Text style={[styles.wideTileTitle, { color: allActive ? allOption.color : theme.colors.text }]}>
+                              Все пользователи
+                            </Text>
+                            <Text style={[styles.wideTileHint, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+                              Событие видно всем уровням
+                            </Text>
+                          </View>
+                        </View>
+                        <MaterialIcons
+                          name={allActive ? 'radio-button-checked' : 'radio-button-unchecked'}
+                          size={20}
+                          color={allActive ? allOption.color : theme.colors.textSecondary}
+                        />
+                      </TouchableOpacity>
+                    )}
+
+                    <View style={styles.tileGrid2}>
+                      {levelOptions.map((type) => {
+                        const active = formData.allowedUsers === type.value;
+                        return (
+                          <TouchableOpacity
+                            key={type.value}
+                            style={[
+                              styles.tile,
+                              styles.tileHalf,
+                              {
+                                backgroundColor: active ? `${type.color}1F` : theme.colors.background,
+                                borderColor: active ? type.color : theme.colors.border,
+                              },
+                            ]}
+                            activeOpacity={0.85}
+                            onPress={() => setFormData({ ...formData, allowedUsers: type.value })}
+                          >
+                            <MaterialIcons
+                              name={type.icon}
+                              size={16}
+                              color={active ? type.color : theme.colors.textSecondary}
+                            />
+                            <Text
+                              style={[
+                                styles.tileText,
+                                { color: active ? type.color : theme.colors.text },
+                              ]}
+                              numberOfLines={1}
+                            >
+                              {type.label}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </>
+                );
+              })()}
             </ScrollView>
 
             {/* Sticky footer */}
@@ -1428,23 +1472,71 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  chipGrid: {
+  tileGrid3: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
+    gap: 8,
   },
-  selectChip: {
+  tileGrid2: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  tile: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 999,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 12,
     borderWidth: 1,
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: '30%',
+    minWidth: 0,
   },
-  selectChipText: {
+  tileHalf: {
+    flexBasis: '47%',
+  },
+  tileText: {
     fontSize: 12,
     fontWeight: '700',
+    flexShrink: 1,
+  },
+  wideTile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 8,
+    gap: 10,
+  },
+  wideTileLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+    minWidth: 0,
+  },
+  wideTileIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  wideTileTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  wideTileHint: {
+    fontSize: 11,
+    fontWeight: '500',
+    marginTop: 1,
   },
   modalFooter: {
     flexDirection: 'row',
