@@ -25,7 +25,6 @@ import { apiCall } from '../../utils/api';
 const NAVY  = '#063B5C';
 const NAVY2 = '#0B5C7A';
 const TEAL  = '#14B8A6';
-const TEAL2 = '#0F766E';
 const AMBER = '#F59E0B';
 const RED   = '#DC2626';
 const GREEN = '#10B981';
