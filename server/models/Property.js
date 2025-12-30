@@ -13,6 +13,13 @@ const Property = sequelize.define('Property', {
   description: DataTypes.TEXT,
   price: DataTypes.STRING,
   priceNumber: DataTypes.INTEGER,
+  depositAmount: {
+    type: DataTypes.DECIMAL(12, 2),
+    field: 'deposit_amount',
+    defaultValue: 0,
+    allowNull: false,
+    comment: 'Фиксированный депозит для бронирования (PRB).',
+  },
   rooms: DataTypes.INTEGER,
   guests: DataTypes.INTEGER,
   amenities: {

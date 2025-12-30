@@ -322,6 +322,39 @@ const connectDB = async () => {
         ON auction_bids (user_id) WHERE status = 'active';
     `);
 
+    // Sprint A ВКР: гибридная оплата (deposit + remaining). Источник —
+    // migrations/014_deposit_flow.sql. Всё идемпотентно.
+    await sequelize.query(`
+      ALTER TABLE properties
+        ADD COLUMN IF NOT EXISTS deposit_amount DECIMAL(12,2) DEFAULT 0 NOT NULL;
+    `);
+    // ALTER TYPE ... ADD VALUE IF NOT EXISTS не работает внутри транзакции.
+    // sequelize.query без { transaction } выполняется autocommit, поэтому ОК.
+    // Каждое значение отдельным statement — IF NOT EXISTS защищает от повторов.
+    await sequelize.query(`ALTER TYPE enum_bookings_status ADD VALUE IF NOT EXISTS 'pending_payment';`);
+    await sequelize.query(`ALTER TYPE enum_bookings_status ADD VALUE IF NOT EXISTS 'expired';`);
+    await sequelize.query(`
+      ALTER TABLE bookings
+        ADD COLUMN IF NOT EXISTS deposit_amount           DECIMAL(12,2),
+        ADD COLUMN IF NOT EXISTS deposit_paid_at          TIMESTAMP WITH TIME ZONE,
+        ADD COLUMN IF NOT EXISTS remaining_amount         DECIMAL(12,2),
+        ADD COLUMN IF NOT EXISTS remaining_paid_at        TIMESTAMP WITH TIME ZONE,
+        ADD COLUMN IF NOT EXISTS remaining_payment_method TEXT,
+        ADD COLUMN IF NOT EXISTS payment_deadline         TIMESTAMP WITH TIME ZONE,
+        ADD COLUMN IF NOT EXISTS cashback_amount          DECIMAL(12,2) DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS cashback_credited_at     TIMESTAMP WITH TIME ZONE,
+        ADD COLUMN IF NOT EXISTS cashback_reverted_at     TIMESTAMP WITH TIME ZONE;
+    `);
+    await sequelize.query(`
+      CREATE INDEX IF NOT EXISTS idx_bookings_payment_deadline
+        ON bookings (payment_deadline) WHERE status = 'pending_payment';
+    `);
+    // Дефолтные депозиты для существующих property (idempotent: только если 0).
+    await sequelize.query(`UPDATE properties SET deposit_amount = 1000 WHERE id = 1 AND deposit_amount = 0;`);
+    await sequelize.query(`UPDATE properties SET deposit_amount = 800  WHERE id = 2 AND deposit_amount = 0;`);
+    await sequelize.query(`UPDATE properties SET deposit_amount = 500  WHERE id = 3 AND deposit_amount = 0;`);
+    await sequelize.query(`UPDATE properties SET deposit_amount = 2500 WHERE id = 4 AND deposit_amount = 0;`);
+
     logger.info('Миграции схемы применены');
 
     // Идемпотентный sync номеров под клиентский src/constants/properties.js.
@@ -467,6 +500,7 @@ const listenWithRetry = (retries = 10) => {
 const mlJobs = require('./services/mlJobs');
 const mlProcess = require('./services/mlProcess');
 const auctionJobs = require('./services/auctionJobs');
+const bookingJobs = require('./services/bookingJobs');
 
 const startServer = async () => {
   try {
@@ -475,14 +509,15 @@ const startServer = async () => {
     mlProcess.start();
     mlJobs.start();
     auctionJobs.start();
+    bookingJobs.start();
   } catch (error) {
     logger.error('Server startup failed', { error: error.message, stack: error.stack });
     process.exit(1);
   }
 };
 
-process.on('SIGTERM', () => { mlProcess.stop(); mlJobs.stop(); auctionJobs.stop(); });
-process.on('SIGINT', () => { mlProcess.stop(); mlJobs.stop(); auctionJobs.stop(); });
+process.on('SIGTERM', () => { mlProcess.stop(); mlJobs.stop(); auctionJobs.stop(); bookingJobs.stop(); });
+process.on('SIGINT',  () => { mlProcess.stop(); mlJobs.stop(); auctionJobs.stop(); bookingJobs.stop(); });
 
 startServer();
 
