@@ -32,17 +32,17 @@ export const BookingService = {
         }
       }
 
+      // userId сервер берёт из JWT (req.userId) — в теле не отправляем,
+      // т.к. zod-схема .strict() и неизвестное поле даёт «Ошибка валидации»
       const response = await apiCall(API_ENDPOINTS.BOOKINGS.CREATE, {
         method: 'POST',
         body: JSON.stringify({
           propertyId: bookingData.propertyId?.toString() || '',
-          userId: userId,
           checkInDate: bookingData.checkInDate || '',
           checkOutDate: bookingData.checkOutDate || '',
           guests: parseInt(bookingData.guests) || 1,
           notes: bookingData.notes || '',
           totalPrice: totalPrice,
-          // Дополнительные услуги
           saunaHours: parseInt(bookingData.saunaHours) || 0,
           kitchenware: bookingData.kitchenware || false,
         }),
@@ -115,22 +115,41 @@ export const BookingService = {
   },
 
   /**
-   * Подтвердить платеж и активировать бронирование
+   * Оплатить депозит (Sprint A ВКР: pending_payment → confirmed).
+   * Депозит списывается с карты лояльности и кредитуется AdminWallet.
    */
-  confirmPayment: async (bookingId) => {
+  payDeposit: async (bookingId) => {
     try {
       const response = await apiCall(
-        API_ENDPOINTS.BOOKINGS.CONFIRM_PAYMENT(bookingId),
+        API_ENDPOINTS.BOOKINGS.PAY_DEPOSIT(bookingId),
+        { method: 'POST' },
+      );
+      if (response.success) return response;
+      throw new Error(response.error || 'Failed to pay deposit');
+    } catch (error) {
+      console.error('Failed to pay deposit:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Оплатить остаток (confirmed → completed). method: 'card' | 'cash'.
+   *   card — списать остаток с LoyaltyCard, кэшбэк со всей суммы.
+   *   cash — без списания (приём на месте); кэшбэк только с депозита.
+   */
+  payRemaining: async (bookingId, method) => {
+    try {
+      const response = await apiCall(
+        API_ENDPOINTS.BOOKINGS.PAY_REMAINING(bookingId),
         {
           method: 'POST',
-        }
+          body:   JSON.stringify({ method }),
+        },
       );
-      if (response.success) {
-        return response.booking;
-      }
-      throw new Error(response.error || 'Failed to confirm payment');
+      if (response.success) return response;
+      throw new Error(response.error || 'Failed to pay remaining');
     } catch (error) {
-      console.error('Failed to confirm payment:', error);
+      console.error('Failed to pay remaining:', error);
       throw error;
     }
   },

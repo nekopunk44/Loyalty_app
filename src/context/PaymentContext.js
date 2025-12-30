@@ -203,39 +203,48 @@ export const PaymentProvider = ({ children }) => {
   };
 
   // ==================== Booking Payment ====================
+  // Sprint A ВКР: гибридная оплата через два эндпоинта.
+  //   payDeposit   — списывает депозит, бронь становится confirmed.
+  //   payRemaining — оплачивает остаток (card → списать, cash → не списывать),
+  //                   бронь становится completed, начисляется кэшбэк.
 
-  const payBookingFromCard = async (bookingId, userId) => {
+  const payDeposit = async (bookingId) => {
     setIsProcessing(true);
     setPaymentError('');
-
     try {
-      const data = await apiCall(`${getApiUrl()}/bookings/${bookingId}/pay-from-card`, {
+      const data = await apiCall(`${getApiUrl()}/bookings/${bookingId}/pay-deposit`, {
         method: 'POST',
-        body: JSON.stringify({ userId }),
       });
-
       if (data.error) throw new Error(data.error);
-
-      setCardBalance(data.newBalance);
-
-      const payment = {
-        id: data.paymentId,
-        bookingId,
-        userId,
-        amount: data.payment.amount,
-        method: 'loyalty_card',
-        status: 'completed',
-        timestamp: new Date().toISOString(),
-      };
-
-      const updated = [payment, ...payments];
-      setPayments(updated);
-      await AsyncStorage.setItem('@payments', JSON.stringify(updated));
-
+      if (typeof data.payment?.balanceAfter === 'number') {
+        setCardBalance(data.payment.balanceAfter);
+      }
       return data;
     } catch (error) {
-      setPaymentError(error.message || 'Ошибка при оплате');
-      console.error('❌ Error in payBookingFromCard:', error);
+      setPaymentError(error.message || 'Ошибка при оплате депозита');
+      console.error('❌ Error in payDeposit:', error);
+      throw error;
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const payRemaining = async (bookingId, method) => {
+    setIsProcessing(true);
+    setPaymentError('');
+    try {
+      const data = await apiCall(`${getApiUrl()}/bookings/${bookingId}/pay-remaining`, {
+        method: 'POST',
+        body: JSON.stringify({ method }),
+      });
+      if (data.error) throw new Error(data.error);
+      if (typeof data.payment?.balanceAfter === 'number') {
+        setCardBalance(data.payment.balanceAfter);
+      }
+      return data;
+    } catch (error) {
+      setPaymentError(error.message || 'Ошибка при оплате остатка');
+      console.error('❌ Error in payRemaining:', error);
       throw error;
     } finally {
       setIsProcessing(false);
@@ -314,7 +323,8 @@ export const PaymentProvider = ({ children }) => {
       getCardBalance,
       getTransactionHistory,
       getTopUpHistory,
-      payBookingFromCard,
+      payDeposit,
+      payRemaining,
       getBookingPaymentStatus,
       processPayment,
       processPayPalPayment,

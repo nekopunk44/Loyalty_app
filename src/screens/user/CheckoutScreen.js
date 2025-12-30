@@ -18,13 +18,14 @@ import { useBookings } from '../../context/BookingContext';
 import { useNotification } from '../../context/NotificationContext';
 import { usePayment } from '../../context/PaymentContext';
 import BookingService from '../../services/BookingService';
+import PropertyService from '../../services/PropertyService';
 
 export default function CheckoutScreen({ route, navigation }) {
   const { theme } = useTheme();
   const { user } = useAuth();
   const { refreshBookings } = useBookings();
   const { notifyNewBooking, notifyPaymentSuccess, notifyAdminEvent } = useNotification();
-  const { payBookingFromCard, getCardBalance, cardBalance, setCardBalance } = usePayment();
+  const { payDeposit, getCardBalance, cardBalance, setCardBalance } = usePayment();
 
   const [_balance, setBalance] = useState(0);
   const [loadingBalance, setLoadingBalance] = useState(true);
@@ -32,6 +33,8 @@ export default function CheckoutScreen({ route, navigation }) {
   const [insufficientFunds, setInsufficientFunds] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [bookingInfo, setBookingInfo] = useState(null);
+  // Sprint A: депозит — это всё, что списывается сейчас. Остаток — после заезда.
+  const [depositAmount, setDepositAmount] = useState(0);
 
   // Get booking data from route params
   const bookingData = route.params || {
@@ -47,9 +50,11 @@ export default function CheckoutScreen({ route, navigation }) {
     kitchenware: false,
   };
 
-  // Загружаем баланс карты лояльности при загрузке экрана
+  const remainingAmount = Math.max(0, (bookingData.amount || 0) - depositAmount);
+
+  // Загружаем баланс карты лояльности + депозит объекта.
   useEffect(() => {
-    const loadBalance = async () => {
+    const loadCheckoutContext = async () => {
       if (!user?.id) {
         setLoadingBalance(false);
         return;
@@ -57,33 +62,42 @@ export default function CheckoutScreen({ route, navigation }) {
 
       try {
         setLoadingBalance(true);
-        const data = await getCardBalance(user.id);
-        setBalance(data.balance);
-        setCardBalance(data.balance);
-        setInsufficientFunds(data.balance < bookingData.amount);
+
+        const [cardData, property] = await Promise.all([
+          getCardBalance(user.id),
+          PropertyService.getPropertyById(bookingData.propertyId || '1').catch(() => null),
+        ]);
+
+        setBalance(cardData.balance);
+        setCardBalance(cardData.balance);
+
+        // Депозит = snapshot из Property. Если поле отсутствует/нулевое (legacy)
+        // — депозит = весь totalPrice (юзер платит сразу).
+        const rawDeposit = parseFloat(property?.depositAmount) || 0;
+        const effectiveDeposit = rawDeposit > 0
+          ? Math.min(rawDeposit, bookingData.amount || 0)
+          : (bookingData.amount || 0);
+        setDepositAmount(effectiveDeposit);
+
+        setInsufficientFunds(cardData.balance < effectiveDeposit);
       } catch (error) {
-        console.error('❌ Ошибка загрузки баланса:', error);
+        console.error('❌ Ошибка загрузки данных оплаты:', error);
+        // Если property не загрузился — fallback к полной оплате.
+        setDepositAmount(bookingData.amount || 0);
         setInsufficientFunds(true);
       } finally {
         setLoadingBalance(false);
       }
     };
 
-    loadBalance();
-  }, [user?.id, bookingData.amount]);
+    loadCheckoutContext();
+  }, [user?.id, bookingData.amount, bookingData.propertyId]);
 
   const handleConfirmBooking = async () => {
     if (insufficientFunds) {
-      Alert.alert('❌ Ошибка', 'Недостаточно средств на карте лояльности', [
-        {
-          text: 'Пополнить карту',
-          onPress: () => {
-            navigation.navigate('CardTopUp');
-          },
-        },
-        {
-          text: 'Отмена',
-        },
+      Alert.alert('❌ Ошибка', `Недостаточно средств для оплаты депозита (${depositAmount} PRB)`, [
+        { text: 'Пополнить карту', onPress: () => navigation.navigate('CardTopUp') },
+        { text: 'Отмена' },
       ]);
       return;
     }
@@ -92,56 +106,56 @@ export default function CheckoutScreen({ route, navigation }) {
       setIsProcessing(true);
       const userId = user?.id || bookingData.userId;
 
-      // Шаг 1: Создаем бронирование (статус: pending, деньги НЕ списываются)
+      // Шаг 1: Создаём бронирование (status='pending_payment', deadline +12ч).
       const booking = await BookingService.createBooking({
         propertyId: bookingData.propertyId || '1',
-        userId: userId,
+        userId,
         checkInDate: bookingData.checkIn,
         checkOutDate: bookingData.checkOut,
-        guests: bookingData.guests || 1,
-        notes: bookingData.notes || `Бронирование через мобильное приложение`,
-        totalPrice: bookingData.amount || 0,
-        // Дополнительные услуги
-        saunaHours: bookingData.saunaHours || 0,
+        guests:      bookingData.guests || 1,
+        notes:       bookingData.notes || 'Бронирование через мобильное приложение',
+        totalPrice:  bookingData.amount || 0,
+        saunaHours:  bookingData.saunaHours || 0,
         kitchenware: bookingData.kitchenware || false,
       });
-      
-      // Шаг 2: Оплачиваем бронирование с карты лояльности
-      const paymentResult = await payBookingFromCard(booking.id, userId);
 
-      // Обновляем баланс
-      setBalance(paymentResult.newBalance);
-      setCardBalance(paymentResult.newBalance);
+      // Шаг 2: Оплачиваем депозит → status='confirmed'.
+      const depositResult = await payDeposit(booking.id);
+      const balanceAfter   = depositResult?.payment?.balanceAfter ?? cardBalance;
+      const actualDeposit  = depositResult?.payment?.amount        ?? depositAmount;
+      const remainingDue   = depositResult?.payment?.remainingAmount ?? remainingAmount;
 
-      // Отправляем уведомления
+      setBalance(balanceAfter);
+      setCardBalance(balanceAfter);
+
+      // Уведомления.
       await notifyNewBooking(bookingData.serviceType, user?.name || 'Пользователь', bookingData.checkIn, bookingData.checkOut);
-      await notifyPaymentSuccess(bookingData.amount, 'карта лояльности');
-      
-      // Уведомляем администратора о новом бронировании
+      await notifyPaymentSuccess(actualDeposit, 'карта лояльности (депозит)');
+
       await notifyAdminEvent('new_booking', {
-        guestName: user?.name || 'Пользователь',
+        guestName:    user?.name || 'Пользователь',
         propertyName: bookingData.serviceType,
-        checkIn: bookingData.checkIn,
-        checkOut: bookingData.checkOut,
-        guests: bookingData.guests || 1,
-        amount: bookingData.amount,
-        bookingId: booking.id,
-        saunaHours: bookingData.saunaHours || 0,
-        kitchenware: bookingData.kitchenware || false,
+        checkIn:      bookingData.checkIn,
+        checkOut:     bookingData.checkOut,
+        guests:       bookingData.guests || 1,
+        amount:       bookingData.amount,
+        bookingId:    booking.id,
+        saunaHours:   bookingData.saunaHours || 0,
+        kitchenware:  bookingData.kitchenware || false,
       });
 
-      // Обновляем список бронирований в контексте
       await refreshBookings();
 
-      // Сохраняем информацию о бронировании и показываем красивый modal
       setBookingInfo({
-        id: booking.id,
+        id:           booking.id,
         propertyName: bookingData.serviceType,
-        checkIn: bookingData.checkIn,
-        checkOut: bookingData.checkOut,
-        guests: bookingData.guests || 1,
-        amount: bookingData.amount,
-        newBalance: paymentResult.newBalance,
+        checkIn:      bookingData.checkIn,
+        checkOut:     bookingData.checkOut,
+        guests:       bookingData.guests || 1,
+        totalAmount:  bookingData.amount,
+        deposit:      actualDeposit,
+        remaining:    remainingDue,
+        newBalance:   balanceAfter,
       });
       setShowSuccessModal(true);
     } catch (error) {
@@ -274,41 +288,43 @@ export default function CheckoutScreen({ route, navigation }) {
       backgroundColor: 'rgba(0, 0, 0, 0.6)',
       justifyContent: 'center',
       alignItems: 'center',
+      paddingVertical: spacing.xl,
     },
     successModalScroll: {
       flexGrow: 1,
       justifyContent: 'center',
       alignItems: 'center',
-      paddingVertical: spacing.xl,
+      paddingVertical: spacing.lg,
+      width: '100%',
     },
     successModal: {
       backgroundColor: theme.colors.cardBg,
       borderRadius: borderRadius.xl,
-      padding: spacing.xl,
+      padding: spacing.lg,
       width: '85%',
-      maxHeight: '90%',
     },
     checkmarkContainer: {
       alignItems: 'center',
-      marginBottom: spacing.lg,
+      marginBottom: spacing.md,
     },
     successTitle: {
       color: theme.colors.text,
-      fontSize: 22,
+      fontSize: 20,
       fontWeight: '700',
       textAlign: 'center',
-      marginBottom: spacing.lg,
+      marginBottom: spacing.md,
     },
     bookingDetailsCard: {
       backgroundColor: theme.colors.background,
       borderRadius: borderRadius.md,
-      padding: spacing.lg,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.sm,
       marginBottom: spacing.lg,
     },
     detailRow: {
       flexDirection: 'row',
       alignItems: 'flex-start',
-      paddingVertical: spacing.md,
+      paddingVertical: spacing.sm,
     },
     detailRowBorder: {
       borderBottomWidth: 1,
@@ -396,6 +412,33 @@ export default function CheckoutScreen({ route, navigation }) {
           </View>
         </View>
 
+        {/* Payment Split: deposit (сейчас) + остаток (до заезда) */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Порядок оплаты</Text>
+
+          <View style={styles.row}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.value}>Депозит (сейчас)</Text>
+              <Text style={[styles.label, { marginTop: 2 }]}>списывается с карты лояльности</Text>
+            </View>
+            <Text style={styles.totalValue}>PRB {depositAmount.toLocaleString('ru-RU')}</Text>
+          </View>
+
+          <View style={[styles.row, styles.lastRow]}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.value}>Остаток (до заезда)</Text>
+              <Text style={[styles.label, { marginTop: 2 }]}>
+                {remainingAmount > 0 ? 'картой приложения или наличными при заезде' : 'нет — депозит покрывает всю сумму'}
+              </Text>
+            </View>
+            <Text style={styles.value}>PRB {remainingAmount.toLocaleString('ru-RU')}</Text>
+          </View>
+
+          <Text style={{ color: theme.colors.textSecondary, fontSize: 11, marginTop: spacing.sm, lineHeight: 16 }}>
+            Оплатите депозит в течение 12 часов после создания брони, иначе слот освобождается.
+          </Text>
+        </View>
+
         {/* Loyalty Card Balance */}
         <View style={[styles.section, { backgroundColor: insufficientFunds ? '#FEE4E4' : '#E8F5E9', borderLeftWidth: 4, borderLeftColor: insufficientFunds ? '#FF6B6B' : '#4CAF50' }]}>
           <View style={styles.balanceRow}>
@@ -419,9 +462,9 @@ export default function CheckoutScreen({ route, navigation }) {
 
           {insufficientFunds && (
             <View style={{ marginTop: spacing.lg, paddingTop: spacing.lg, borderTopWidth: 1, borderTopColor: '#FFB3B3' }}>
-              <Text style={{ color: '#FF6B6B', fontSize: 13, lineHeight: 20, fontWeight: '600', marginBottom: spacing.sm }}>⚠️ Недостаточно средств</Text>
+              <Text style={{ color: '#FF6B6B', fontSize: 13, lineHeight: 20, fontWeight: '600', marginBottom: spacing.sm }}>⚠️ Недостаточно средств для депозита</Text>
               <Text style={{ color: '#D32F2F', fontSize: 12, lineHeight: 18 }}>
-                Требуется: {bookingData.amount.toLocaleString('ru-RU')}PRB{'\n'}Доступно: {cardBalance.toLocaleString('ru-RU')}PRB{'\n'}Не хватает: {(bookingData.amount - cardBalance).toLocaleString('ru-RU')}PRB
+                Требуется на депозит: {depositAmount.toLocaleString('ru-RU')}PRB{'\n'}Доступно: {cardBalance.toLocaleString('ru-RU')}PRB{'\n'}Не хватает: {(depositAmount - cardBalance).toLocaleString('ru-RU')}PRB
               </Text>
             </View>
           )}
@@ -479,7 +522,9 @@ export default function CheckoutScreen({ route, navigation }) {
                 <MaterialCommunityIcons name="check-circle" size={80} color="#4CAF50" />
               </View>
 
-              <Text style={styles.successTitle}>Бронирование подтверждено!</Text>
+              <Text style={styles.successTitle}>
+                {bookingInfo?.remaining > 0 ? 'Депозит принят, бронь подтверждена!' : 'Бронирование оплачено!'}
+              </Text>
 
               {bookingInfo && (
                 <>
@@ -519,15 +564,30 @@ export default function CheckoutScreen({ route, navigation }) {
                     <View style={[styles.detailRow, styles.detailRowBorder]}>
                       <MaterialIcons name="payments" size={20} color="#FF9800" />
                       <View style={styles.detailContent}>
-                        <Text style={styles.detailLabel}>Оплачено</Text>
-                        <Text style={[styles.detailValue, { color: '#FF6B00' }]}>{bookingInfo.amount.toLocaleString('ru-RU')} PRB</Text>
+                        <Text style={styles.detailLabel}>Депозит оплачен</Text>
+                        <Text style={[styles.detailValue, { color: '#FF6B00' }]}>{bookingInfo.deposit.toLocaleString('ru-RU')} PRB</Text>
                       </View>
                     </View>
+
+                    {bookingInfo.remaining > 0 && (
+                      <View style={[styles.detailRow, styles.detailRowBorder]}>
+                        <MaterialIcons name="schedule" size={20} color="#1976D2" />
+                        <View style={styles.detailContent}>
+                          <Text style={styles.detailLabel}>Остаток до заезда</Text>
+                          <Text style={[styles.detailValue, { color: '#1976D2' }]}>
+                            {bookingInfo.remaining.toLocaleString('ru-RU')} PRB
+                          </Text>
+                          <Text style={[styles.detailLabel, { marginTop: 2 }]}>
+                            картой приложения или наличными при заезде
+                          </Text>
+                        </View>
+                      </View>
+                    )}
 
                     <View style={styles.detailRow}>
                       <MaterialIcons name="account-balance-wallet" size={20} color="#4CAF50" />
                       <View style={styles.detailContent}>
-                        <Text style={styles.detailLabel}>Остаток на карте</Text>
+                        <Text style={styles.detailLabel}>Баланс карты</Text>
                         <Text style={[styles.detailValue, { color: '#4CAF50' }]}>{bookingInfo.newBalance.toLocaleString('ru-RU')} PRB</Text>
                       </View>
                     </View>
