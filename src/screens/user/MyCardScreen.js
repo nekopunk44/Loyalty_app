@@ -105,6 +105,7 @@ export default function ProfileScreen() {
   const colors = theme.colors;
 
   const [balance, setBalance]     = useState(0);
+  const [lockedBalance, setLockedBalance] = useState(0);
   const [_loading, setLoading]    = useState(true);
   const [accrued, setAccrued]     = useState(0);
   const [cardFlipped, setCardFlipped] = useState(false);
@@ -209,9 +210,11 @@ export default function ProfileScreen() {
       setLoading(true);
       const card = await LoyaltyCardService.getCard(user.id);
       setBalance(card.balance || 0);
+      setLockedBalance(parseFloat(card.lockedBalance) || 0);
       setAccrued(parseFloat(card.totalEarned) || 0);
     } catch (e) {
       setBalance(user?.loyaltyBalance || user?.balance || 0);
+      setLockedBalance(0);
       setAccrued(user?.totalEarned || 0);
     } finally {
       loadingCardRef.current = false;
@@ -519,6 +522,21 @@ export default function ProfileScreen() {
                 <Text style={[S.cashFooterValue, { color: colors.text }]}>{balance} PRB</Text>
               </View>
             </View>
+            {lockedBalance > 0 && (
+              <View style={[S.cashFooter, { backgroundColor: colors.background, marginTop: 8 }]}>
+                <View style={S.cashFooterItem}>
+                  <Text style={[S.cashFooterLabel, { color: colors.textSecondary }]}>В ставках</Text>
+                  <Text style={[S.cashFooterValue, { color: '#F59E0B' }]}>{lockedBalance} PRB</Text>
+                </View>
+                <View style={[S.cashFooterDivider, { backgroundColor: colors.border }]} />
+                <View style={S.cashFooterItem}>
+                  <Text style={[S.cashFooterLabel, { color: colors.textSecondary }]}>Доступно</Text>
+                  <Text style={[S.cashFooterValue, { color: colors.text }]}>
+                    {parseFloat((balance - lockedBalance).toFixed(2))} PRB
+                  </Text>
+                </View>
+              </View>
+            )}
           </Animated.View>
         )}
 

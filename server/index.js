@@ -292,6 +292,36 @@ const connectDB = async () => {
         ADD COLUMN IF NOT EXISTS "refreshTokenExpires"   TIMESTAMPTZ,
         ADD COLUMN IF NOT EXISTS "pushToken"             VARCHAR(512);
     `);
+
+    // Stage 2 ВКР: аукционы. Источник истины — migrations/013_auction_system.sql.
+    // sync() не добавляет колонки в существующие таблицы и не умеет partial-индексы,
+    // поэтому ALTER + CREATE INDEX делаем inline. Всё идемпотентно.
+    await sequelize.query(`
+      ALTER TABLE loyalty_cards
+        ADD COLUMN IF NOT EXISTS locked_balance DECIMAL(12,2) DEFAULT 0 NOT NULL;
+    `);
+    await sequelize.query(`
+      ALTER TABLE events
+        ADD COLUMN IF NOT EXISTS current_bid           DECIMAL(12,2),
+        ADD COLUMN IF NOT EXISTS current_bid_user_id   TEXT,
+        ADD COLUMN IF NOT EXISTS winner_user_id        TEXT,
+        ADD COLUMN IF NOT EXISTS closed_at             TIMESTAMP WITH TIME ZONE,
+        ADD COLUMN IF NOT EXISTS min_bid_increment     DECIMAL(12,2) DEFAULT 100,
+        ADD COLUMN IF NOT EXISTS start_bid             DECIMAL(12,2);
+    `);
+    await sequelize.query(`
+      CREATE INDEX IF NOT EXISTS idx_auction_bids_event_user
+        ON auction_bids (event_id, user_id);
+    `);
+    await sequelize.query(`
+      CREATE INDEX IF NOT EXISTS idx_auction_bids_event_active
+        ON auction_bids (event_id) WHERE status = 'active';
+    `);
+    await sequelize.query(`
+      CREATE INDEX IF NOT EXISTS idx_auction_bids_user_active
+        ON auction_bids (user_id) WHERE status = 'active';
+    `);
+
     logger.info('Миграции схемы применены');
 
     // Идемпотентный sync номеров под клиентский src/constants/properties.js.
@@ -436,6 +466,7 @@ const listenWithRetry = (retries = 10) => {
 
 const mlJobs = require('./services/mlJobs');
 const mlProcess = require('./services/mlProcess');
+const auctionJobs = require('./services/auctionJobs');
 
 const startServer = async () => {
   try {
@@ -443,14 +474,15 @@ const startServer = async () => {
     await listenWithRetry();
     mlProcess.start();
     mlJobs.start();
+    auctionJobs.start();
   } catch (error) {
     logger.error('Server startup failed', { error: error.message, stack: error.stack });
     process.exit(1);
   }
 };
 
-process.on('SIGTERM', () => { mlProcess.stop(); mlJobs.stop(); });
-process.on('SIGINT', () => { mlProcess.stop(); mlJobs.stop(); });
+process.on('SIGTERM', () => { mlProcess.stop(); mlJobs.stop(); auctionJobs.stop(); });
+process.on('SIGINT', () => { mlProcess.stop(); mlJobs.stop(); auctionJobs.stop(); });
 
 startServer();
 

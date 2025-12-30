@@ -17,6 +17,12 @@ const LoyaltyCard = sequelize.define('LoyaltyCard', {
     defaultValue: 0,
     comment: 'Баланс карты лояльности в рублях',
   },
+  lockedBalance: {
+    type: DataTypes.DECIMAL(12, 2),
+    field: 'locked_balance',
+    defaultValue: 0,
+    comment: 'PRB, заблокированные в активных аукционных ставках. Доступный = balance - lockedBalance.',
+  },
   cashbackRate: {
     type: DataTypes.DECIMAL(5, 2),
     defaultValue: 5,

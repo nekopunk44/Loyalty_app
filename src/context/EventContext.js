@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createEvent, updateEvent as updateEventAPI, deleteEvent as deleteEventAPI, listenToEvents, getAllEvents } from '../services/DatabaseService';
+import { apiCall } from '../utils/api';
+import { getApiUrl } from '../utils/apiUrl';
 import { getEventStyleByType, calculateEventStatus } from '../utils/eventStyles';
 
 // Функция для форматирования даты в DD.MM.YYYY
@@ -123,6 +125,19 @@ export function EventProvider({ children }) {
       icon = eventStyle.icon;
     }
 
+    const cashbackBoostPercent = parseFloat(event.cashbackBoostPercent) || 0;
+    const discountPercent = parseFloat(event.discountPercent) || 0;
+    const targetUserIds = Array.isArray(event.targetUserIds)
+      ? event.targetUserIds.filter((v) => typeof v === 'string')
+      : [];
+
+    const startBid          = event.startBid != null ? parseFloat(event.startBid) : null;
+    const minBidIncrement   = event.minBidIncrement != null ? parseFloat(event.minBidIncrement) : 100;
+    const currentBid        = event.currentBid != null ? parseFloat(event.currentBid) : null;
+    const currentBidUserId  = event.currentBidUserId || null;
+    const winnerUserId      = event.winnerUserId || null;
+    const closedAt          = event.closedAt || null;
+
     return {
       ...event,
       eventType,
@@ -135,6 +150,15 @@ export function EventProvider({ children }) {
       allowedUsers: event.allowedUsers || 'all',
       participants: event.participants !== undefined ? event.participants : (event.participantsCount || 0),
       participantIds: Array.isArray(event.participantIds) ? event.participantIds : [],
+      cashbackBoostPercent,
+      discountPercent,
+      targetUserIds,
+      startBid,
+      minBidIncrement,
+      currentBid,
+      currentBidUserId,
+      winnerUserId,
+      closedAt,
     };
   }, []);
 
@@ -254,6 +278,9 @@ export function EventProvider({ children }) {
         startDate: event.startDate || '',
         endDate: event.endDate || '',
         allowedUsers: event.allowedUsers || 'all',
+        cashbackBoostPercent: event.cashbackBoostPercent || 0,
+        discountPercent: event.discountPercent || 0,
+        targetUserIds: Array.isArray(event.targetUserIds) ? event.targetUserIds : [],
         _local: true,
       });
 
@@ -274,6 +301,11 @@ export function EventProvider({ children }) {
         allowedUsers: event.allowedUsers || 'all',
         status: event.status || 'active',
         eventType: eventType || 'cashback',
+        cashbackBoostPercent: parseFloat(event.cashbackBoostPercent) || 0,
+        discountPercent: parseFloat(event.discountPercent) || 0,
+        targetUserIds: Array.isArray(event.targetUserIds) ? event.targetUserIds : [],
+        startBid: event.startBid != null ? parseFloat(event.startBid) : undefined,
+        minBidIncrement: event.minBidIncrement != null ? parseFloat(event.minBidIncrement) : undefined,
       };
 
       createEvent(eventData)
@@ -338,6 +370,11 @@ export function EventProvider({ children }) {
         eventType: eventType || 'cashback',
         participantIds: Array.isArray(updatedEvent.participantIds) ? updatedEvent.participantIds : [],
         participants: updatedEvent.participants !== undefined ? updatedEvent.participants : 0,
+        cashbackBoostPercent: parseFloat(updatedEvent.cashbackBoostPercent) || 0,
+        discountPercent: parseFloat(updatedEvent.discountPercent) || 0,
+        targetUserIds: Array.isArray(updatedEvent.targetUserIds) ? updatedEvent.targetUserIds : [],
+        startBid: updatedEvent.startBid != null ? parseFloat(updatedEvent.startBid) : undefined,
+        minBidIncrement: updatedEvent.minBidIncrement != null ? parseFloat(updatedEvent.minBidIncrement) : undefined,
       };
 
       updateEventAPI(id, eventData)
@@ -383,6 +420,73 @@ export function EventProvider({ children }) {
     }
   };
 
+  // Локальный мерж события без обращения к серверу. Нужен, когда сервер уже
+  // авторитетно обновил запись (например, /events/:id/join), и нам осталось
+  // только синхронизировать UI — без админского PATCH /events/:id.
+  const applyEventLocal = (id, updatedEvent) => {
+    if (!id || !updatedEvent) return;
+    setEvents((prevEvents) => {
+      const updatedEvents = prevEvents.map((e) =>
+        e.id === id ? normalizeEvent({ ...e, ...updatedEvent }) : e
+      );
+      saveToStorage(updatedEvents);
+      return updatedEvents;
+    });
+  };
+
+  /**
+   * Поставить ставку на аукционе. Возвращает { success, bid, currentBid } при удаче
+   * либо { success: false, code, error, ...extra } при ошибке валидации.
+   *
+   * Прямой fetch (а не apiPost), чтобы сохранить структуру ошибки сервера —
+   * apiCall теряет поле `code` и доп. поля при non-OK ответе, а они нам нужны
+   * для отображения причины (insufficient_available → показываем deficit и т.д.).
+   */
+  const placeBid = async (eventId, amount) => {
+    try {
+      const token = await AsyncStorage.getItem('@auth_token');
+      const response = await fetch(`${getApiUrl()}/events/${eventId}/bid`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ amount: parseFloat(amount) }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        return {
+          success: false,
+          code:    data.code || 'unknown',
+          error:   data.error || `HTTP ${response.status}`,
+          ...data,
+        };
+      }
+
+      // Денормализуем currentBid на локальной копии события для мгновенного отклика.
+      if (data.event) {
+        applyEventLocal(eventId, data.event);
+      } else if (data.currentBid != null) {
+        applyEventLocal(eventId, { currentBid: data.currentBid, currentBidUserId: data.currentBidUserId });
+      }
+
+      return { success: true, ...data };
+    } catch (error) {
+      return { success: false, code: 'network_error', error: error.message };
+    }
+  };
+
+  /**
+   * Получить историю ставок аукциона.
+   */
+  const getAuctionBids = async (eventId) => {
+    const data = await apiCall(`${getApiUrl()}/events/${eventId}/bids`);
+    if (!data.success) return [];
+    return Array.isArray(data.bids) ? data.bids : [];
+  };
+
   const refreshEvents = async (options = {}) => {
     const { personalized = false, k } = options;
     try {
@@ -412,8 +516,11 @@ export function EventProvider({ children }) {
     isLoading,
     addEvent,
     updateEvent,
+    applyEventLocal,
     deleteEvent,
     refreshEvents,
+    placeBid,
+    getAuctionBids,
   };
 
   return (
