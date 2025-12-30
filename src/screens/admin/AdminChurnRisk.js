@@ -189,10 +189,12 @@ export default function AdminChurnRisk({ navigation }) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(0)).current;
 
-  const fetchData = useCallback(async (riskFilter) => {
+  // Запрос всегда без ?risk= — сервер всё равно скорит всех активных и потом фильтрует,
+  // так что серверная фильтрация сетевую нагрузку не уменьшает, а вот клиентская
+  // делает переключение фильтров мгновенным (без reload-индикатора).
+  const fetchData = useCallback(async () => {
     try {
-      const qs = riskFilter && riskFilter !== 'all' ? `?risk=${riskFilter}` : '';
-      const data = await apiCall(`${getApiUrl()}/admin/churn-risk${qs}`);
+      const data = await apiCall(`${getApiUrl()}/admin/churn-risk`);
       setItems(Array.isArray(data?.items) ? data.items : []);
       setMeta(data?.meta || null);
       setError(null);
@@ -210,11 +212,11 @@ export default function AdminChurnRisk({ navigation }) {
 
   useEffect(() => {
     setLoading(true);
-    fetchData(filter).finally(() => {
+    fetchData().finally(() => {
       setLoading(false);
       Animated.timing(fadeAnim, { toValue: 1, duration: 280, useNativeDriver: true }).start();
     });
-  }, [filter, fetchData]);
+  }, [fetchData]);
 
   // "Model active" pulsing dot
   useEffect(() => {
@@ -228,9 +230,15 @@ export default function AdminChurnRisk({ navigation }) {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await fetchData(filter);
+    await fetchData();
     setRefreshing(false);
-  }, [filter, fetchData]);
+  }, [fetchData]);
+
+  // Клиентская фильтрация — мгновенная, без сетевых запросов.
+  const visibleItems = useMemo(() => {
+    if (filter === 'all') return items;
+    return items.filter((it) => it.risk === filter);
+  }, [items, filter]);
 
   const counts = useMemo(() => {
     if (meta?.counts) return meta.counts;
@@ -322,7 +330,7 @@ export default function AdminChurnRisk({ navigation }) {
       </View>
 
       <FlatList
-        data={items}
+        data={visibleItems}
         keyExtractor={(it) => String(it.userId)}
         renderItem={renderItem}
         contentContainerStyle={{ paddingBottom: 130 }}
@@ -494,13 +502,13 @@ export default function AdminChurnRisk({ navigation }) {
             </View>
 
             {/* Section label + count */}
-            {items.length > 0 && (
+            {visibleItems.length > 0 && (
               <View style={styles.listHeaderRow}>
                 <Text style={[styles.listHeaderLabel, { color: colors.textSecondary }]}>
                   Клиенты
                 </Text>
                 <Text style={[styles.listHeaderCount, { color: colors.textSecondary }]}>
-                  {items.length}
+                  {visibleItems.length}
                 </Text>
               </View>
             )}
