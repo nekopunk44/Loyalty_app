@@ -319,7 +319,7 @@ export default function AdminChurnRisk({ navigation }) {
             <MaterialIcons name="arrow-back" size={20} color={colors.text} />
           </TouchableOpacity>
         )}
-        <View style={{ flex: 1, minWidth: 0 }}>
+        <View style={styles.headerTitleWrap} pointerEvents="none">
           <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
             Риск оттока
           </Text>
@@ -327,6 +327,8 @@ export default function AdminChurnRisk({ navigation }) {
             ML-прогноз по активным клиентам
           </Text>
         </View>
+        {/* Симметричная распорка справа, чтобы заголовок встал ровно по центру */}
+        <View style={styles.headerSpacer} />
       </View>
 
       <FlatList
@@ -589,8 +591,12 @@ const makeStyles = (colors) => StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     borderWidth: 1,
   },
-  title: { fontSize: 19, fontWeight: '800' },
-  subtitle: { fontSize: 12, fontWeight: '500', marginTop: 2 },
+  // Симметричная распорка справа — той же ширины, что backBtn + gap,
+  // чтобы заголовок встал ровно по центру при flex-row раскладке.
+  headerSpacer: { width: 36 },
+  headerTitleWrap: { flex: 1, minWidth: 0, alignItems: 'center' },
+  title: { fontSize: 19, fontWeight: '800', textAlign: 'center' },
+  subtitle: { fontSize: 12, fontWeight: '500', marginTop: 2, textAlign: 'center' },
 
   /* === HERO === */
   heroCard: {
@@ -698,21 +704,22 @@ const makeStyles = (colors) => StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 10,
     borderWidth: 1,
+    alignItems: 'center',
   },
   chipHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
     marginBottom: 4,
   },
   chipDot: { width: 6, height: 6, borderRadius: 3 },
-  chipValue: { fontSize: 20, fontWeight: '900', letterSpacing: -0.6 },
+  chipValue: { fontSize: 20, fontWeight: '900', letterSpacing: -0.6, textAlign: 'center' },
   chipLabel: {
     fontSize: 9,
     fontWeight: '800',
     textTransform: 'uppercase',
     letterSpacing: 0.4,
-    flex: 1,
   },
 
   /* === SPOTLIGHT === */
