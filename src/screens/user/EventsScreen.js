@@ -359,13 +359,17 @@ export default function EventsScreen() {
     const requiredKey = (item.allowedUsers || 'all').toLowerCase();
     const lockColor = LEVEL_COLORS[requiredKey] || AMBER;
     const isRemoving = removingEventIds.has(item.id);
-    
+
+    const isAuction = eventData.startBid != null && Number(eventData.startBid) > 0;
+    const prizeNorm = (eventData.prize || '').trim().toLowerCase();
+    const titleNorm = (eventData.title || '').trim().toLowerCase();
+    const showPrize = !!eventData.prize && prizeNorm !== titleNorm;
+
     return (
-      <FadeOutCard 
-        key={item.id} 
+      <FadeOutCard
+        key={item.id}
         isRemoving={isRemoving}
         onRemove={() => {
-          // После анимации удаляем из списка removingEventIds
           setRemovingEventIds(prev => {
             const newSet = new Set(prev);
             newSet.delete(item.id);
@@ -374,7 +378,7 @@ export default function EventsScreen() {
         }}
       >
         <SlideInLeftCard delay={100 + (index % 3) * 100}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.eventCard, { borderLeftColor: eventData.color }]}
             onPress={() => handleEventPress(eventData)}
             activeOpacity={0.7}
@@ -383,30 +387,41 @@ export default function EventsScreen() {
               <MaterialIcons name={eventData.icon} size={28} color="#fff" />
             </View>
             <View style={styles.eventContent}>
-              <Text style={styles.eventTitle}>{eventData.title}</Text>
-              <Text style={styles.eventDescription} numberOfLines={2}>{eventData.description}</Text>
-              
-              {/* Информация о приз/награде */}
-              <View style={styles.metaInfo}>
-                {eventData.prize && (
-                  <View style={styles.metaItem}>
-                    <MaterialIcons name="card-giftcard" size={14} color={eventData.color} />
-                    <Text style={styles.metaText}>{eventData.prize}</Text>
-                  </View>
-                )}
-                {eventData.reward && (
-                  <View style={styles.metaItem}>
-                    <MaterialIcons name="trending-up" size={14} color={eventData.color} />
-                    <Text style={styles.metaText}>+{eventData.reward}</Text>
-                  </View>
-                )}
-                {eventData.startBid && (
-                  <View style={styles.metaItem}>
-                    <MaterialIcons name="attach-money" size={14} color={eventData.color} />
-                    <Text style={styles.metaText}>От {eventData.startBid} PRB</Text>
+              <View style={styles.titleRow}>
+                <Text style={styles.eventTitle} numberOfLines={1}>{eventData.title}</Text>
+                {isAuction && (
+                  <View style={styles.auctionBadge}>
+                    <MaterialIcons name="gavel" size={10} color={TEAL} />
+                    <Text style={styles.auctionBadgeText}>Аукцион</Text>
                   </View>
                 )}
               </View>
+              <Text style={styles.eventDescription} numberOfLines={2}>{eventData.description}</Text>
+
+              {(showPrize || eventData.reward || isAuction) && (
+                <View style={styles.metaInfo}>
+                  {showPrize && (
+                    <View style={styles.metaItem}>
+                      <MaterialIcons name="card-giftcard" size={14} color={eventData.color} />
+                      <Text style={styles.metaText} numberOfLines={1}>{eventData.prize}</Text>
+                    </View>
+                  )}
+                  {eventData.reward && (
+                    <View style={styles.metaItem}>
+                      <MaterialIcons name="trending-up" size={14} color={eventData.color} />
+                      <Text style={styles.metaText}>+{eventData.reward}</Text>
+                    </View>
+                  )}
+                  {isAuction && (
+                    <View style={[styles.bidPill, { borderColor: `${TEAL}55`, backgroundColor: `${TEAL}14` }]}>
+                      <MaterialIcons name="attach-money" size={12} color={TEAL} />
+                      <Text style={[styles.bidPillText, { color: TEAL }]}>
+                        От {Number(eventData.startBid).toFixed(0)} PRB
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
 
               <View style={styles.eventFooter}>
                 <Text style={[styles.eventStatus, { color: eventData.color }]}>
@@ -419,7 +434,7 @@ export default function EventsScreen() {
                   </Text>
                 </View>
               </View>
-              
+
               {locked && (
                 <View style={[styles.accessRestriction, { borderTopColor: lockColor, backgroundColor: `${lockColor}15` }]}>
                   <MaterialIcons name="lock" size={12} color={lockColor} />
@@ -450,31 +465,39 @@ export default function EventsScreen() {
   hArc: { position: 'absolute', width: 220, height: 220, borderRadius: 110, borderWidth: 1, borderColor: `${TEAL}28`, top: -90, left: -60 },
   // ── Filters ──
   filterRow: { flexDirection: 'row', paddingHorizontal: 16, paddingTop: 14, paddingBottom: 4, gap: 8 },
-  personalizedToggle: {
+  actionRow: {
+    flexDirection: 'row',
+    marginHorizontal: 16,
+    marginTop: 10,
+    gap: 8,
+  },
+  actionChip: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginHorizontal: 16,
-    marginTop: 8,
-    paddingVertical: 9,
-    paddingHorizontal: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     borderRadius: 22,
     borderWidth: 1.5,
+    gap: 6,
+  },
+  actionChipML: {
     borderColor: `${AMBER}55`,
     backgroundColor: `${AMBER}10`,
-    gap: 8,
   },
-  personalizedToggleActive: {
+  actionChipMLActive: {
     borderColor: AMBER,
     backgroundColor: AMBER,
   },
-  personalizedToggleText: {
+  actionChipBids: {
+    borderColor: `${TEAL}55`,
+    backgroundColor: `${TEAL}10`,
+  },
+  actionChipText: {
     fontSize: 13,
     fontWeight: '700',
-    color: AMBER,
-  },
-  personalizedToggleTextActive: {
-    color: '#fff',
+    flexShrink: 1,
   },
   personalizedBadge: {
     backgroundColor: 'rgba(255,255,255,0.25)',
@@ -504,23 +527,6 @@ export default function EventsScreen() {
     fontSize: 11,
     color: colors.textSecondary,
     flex: 1,
-  },
-  myBidsLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-end',
-    marginHorizontal: 16,
-    marginTop: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: `${TEAL}14`,
-    borderRadius: 999,
-    gap: 4,
-  },
-  myBidsLinkText: {
-    fontSize: 12,
-    color: TEAL,
-    fontWeight: '700',
   },
   filterPill: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.cardBg },
   filterPillActive: { borderColor: TEAL, backgroundColor: `${TEAL}14` },
@@ -559,11 +565,49 @@ export default function EventsScreen() {
   eventContent: {
     flex: 1,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: spacing.xs,
+  },
   eventTitle: {
     fontSize: 14,
     fontWeight: '700',
     color: colors.text,
-    marginBottom: spacing.xs,
+    flexShrink: 1,
+  },
+  auctionBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 999,
+    backgroundColor: `${TEAL}14`,
+    borderWidth: 1,
+    borderColor: `${TEAL}40`,
+  },
+  auctionBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: TEAL,
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+  },
+  bidPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 999,
+    borderWidth: 1,
+    marginLeft: 'auto',
+  },
+  bidPillText: {
+    fontSize: 11,
+    fontWeight: '700',
   },
   eventDescription: {
     fontSize: 12,
@@ -880,43 +924,49 @@ export default function EventsScreen() {
                 </TouchableOpacity>
               ))}
             </View>
-            <TouchableOpacity
-              style={[styles.personalizedToggle, personalized && styles.personalizedToggleActive]}
-              onPress={() => {
-                setPersonalizedHint(null);
-                setPersonalized((v) => !v);
-              }}
-              activeOpacity={0.85}
-            >
-              <MaterialIcons
-                name={personalized ? 'auto-awesome' : 'auto-awesome'}
-                size={16}
-                color={personalized ? '#fff' : AMBER}
-              />
-              <Text style={[styles.personalizedToggleText, personalized && styles.personalizedToggleTextActive]}>
-                {personalized ? 'Подобрано для вас' : 'Подобрать для меня'}
-              </Text>
-              {personalized && (
-                <View style={styles.personalizedBadge}>
-                  <Text style={styles.personalizedBadgeText}>ML</Text>
-                </View>
-              )}
-            </TouchableOpacity>
+            <View style={styles.actionRow}>
+              <TouchableOpacity
+                style={[styles.actionChip, styles.actionChipML, personalized && styles.actionChipMLActive]}
+                onPress={() => {
+                  setPersonalizedHint(null);
+                  setPersonalized((v) => !v);
+                }}
+                activeOpacity={0.85}
+              >
+                <MaterialIcons
+                  name="auto-awesome"
+                  size={16}
+                  color={personalized ? '#fff' : AMBER}
+                />
+                <Text
+                  style={[styles.actionChipText, { color: personalized ? '#fff' : AMBER }]}
+                  numberOfLines={1}
+                >
+                  {personalized ? 'Подобрано для вас' : 'Подобрать для меня'}
+                </Text>
+                {personalized && (
+                  <View style={styles.personalizedBadge}>
+                    <Text style={styles.personalizedBadgeText}>ML</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionChip, styles.actionChipBids]}
+                onPress={() => navigation.navigate('MyBids')}
+                activeOpacity={0.85}
+              >
+                <MaterialIcons name="gavel" size={16} color={TEAL} />
+                <Text style={[styles.actionChipText, { color: TEAL }]} numberOfLines={1}>
+                  Мои ставки
+                </Text>
+              </TouchableOpacity>
+            </View>
             {personalizedHint ? (
               <View style={styles.personalizedHint}>
                 <MaterialIcons name="info-outline" size={14} color={colors.textSecondary} />
                 <Text style={styles.personalizedHintText}>{personalizedHint}</Text>
               </View>
             ) : null}
-            <TouchableOpacity
-              style={styles.myBidsLink}
-              onPress={() => navigation.navigate('MyBids')}
-              activeOpacity={0.7}
-            >
-              <MaterialIcons name="gavel" size={14} color={TEAL} />
-              <Text style={styles.myBidsLinkText}>Мои ставки</Text>
-              <MaterialIcons name="chevron-right" size={16} color={TEAL} />
-            </TouchableOpacity>
           </View>
         }
         data={filteredEvents}
