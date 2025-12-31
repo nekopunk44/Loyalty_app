@@ -163,7 +163,9 @@ export const apiCall = async (url, options = {}, _isRetry = false) => {
     }
 
     if (!response.ok) {
-      throw new Error(data.error || `HTTP Error: ${response.status}`);
+      const err = new Error(data.error || `HTTP Error: ${response.status}`);
+      err.status = response.status;
+      throw err;
     }
 
     return data;
@@ -171,6 +173,10 @@ export const apiCall = async (url, options = {}, _isRetry = false) => {
     clearTimeout(timeoutId);
     if (error.name === 'AbortError') {
       return { success: false, error: 'Превышено время ожидания ответа от сервера' };
+    }
+    if (error.status === 429) {
+      console.warn('API rate-limited (429):', url);
+      return { success: false, error: error.message, rateLimited: true };
     }
     console.error('API Error:', error);
     return { success: false, error: error.message };

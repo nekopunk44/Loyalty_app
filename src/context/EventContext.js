@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createEvent, updateEvent as updateEventAPI, deleteEvent as deleteEventAPI, listenToEvents, getAllEvents } from '../services/DatabaseService';
 import { apiCall } from '../utils/api';
@@ -94,6 +94,7 @@ export function EventProvider({ children }) {
   const [isLoading, setIsLoading] = useState(true);
   const [_apiInitialized, setApiInitialized] = useState(false);
   const [_pendingEventIds, setPendingEventIds] = useState(new Set());
+  const lastRefreshRef = useRef({ at: 0, key: '', inflight: null });
 
   const normalizeEvent = useCallback((event) => {
     const eventType = event.eventType || 'cashback';
@@ -502,7 +503,19 @@ export function EventProvider({ children }) {
   };
 
   const refreshEvents = async (options = {}) => {
-    const { personalized = false, k } = options;
+    const { personalized = false, k, force = false } = options;
+    const key = `${personalized ? 'p' : 'a'}:${k ?? ''}`;
+    const now = Date.now();
+    const ref = lastRefreshRef.current;
+
+    if (ref.inflight && ref.key === key) {
+      return ref.inflight;
+    }
+    if (!force && ref.key === key && now - ref.at < 1500) {
+      return { personalized, throttled: true };
+    }
+
+    const exec = (async () => {
     try {
       const result = await getAllEvents(personalized ? { personalized: true, k } : {});
       const freshEvents = Array.isArray(result) ? result : (result?.events || []);
@@ -530,6 +543,18 @@ export function EventProvider({ children }) {
     } catch (error) {
       console.error('EventContext: Ошибка при обновлении событий:', error);
       return { personalized: false, reason: 'network_error' };
+    }
+    })();
+
+    ref.key = key;
+    ref.inflight = exec;
+    try {
+      const out = await exec;
+      lastRefreshRef.current = { at: Date.now(), key, inflight: null };
+      return out;
+    } catch (e) {
+      lastRefreshRef.current = { at: Date.now(), key, inflight: null };
+      throw e;
     }
   };
 
