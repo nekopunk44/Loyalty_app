@@ -31,6 +31,7 @@ const { Sequelize } = require('sequelize');
 const { sequelize } = require('../db');
 const { Event, LoyaltyCard, AuctionBid, Transaction, User } = require('../models');
 const { userMeetsLevelRequirement } = require('../utils/membershipLevels');
+const { notify } = require('../utils/notify');
 const logger = require('../logger');
 
 const num = (v) => {
@@ -155,6 +156,8 @@ async function placeBid({ eventId, userId, amount }) {
     // Освобождаем lockedBalance прежнего лидера (если есть и это другой юзер)
     let prevLeaderCard = null;
     let prevLeaderBid  = null;
+    let prevLeaderUserId = null;
+    let prevLeaderAmount = 0;
     if (event.currentBidUserId && event.currentBidUserId !== userId) {
       prevLeaderCard = await LoyaltyCard.findOne({
         where: { userId: event.currentBidUserId },
@@ -168,7 +171,9 @@ async function placeBid({ eventId, userId, amount }) {
       });
 
       if (prevLeaderCard && prevLeaderBid) {
-        const newLocked = parseFloat((num(prevLeaderCard.lockedBalance) - num(prevLeaderBid.amount)).toFixed(2));
+        prevLeaderUserId = event.currentBidUserId;
+        prevLeaderAmount = num(prevLeaderBid.amount);
+        const newLocked = parseFloat((num(prevLeaderCard.lockedBalance) - prevLeaderAmount).toFixed(2));
         await prevLeaderCard.update({ lockedBalance: Math.max(0, newLocked) }, { transaction: txn });
         await prevLeaderBid.update({ status: 'outbid', resolvedAt: now }, { transaction: txn });
       }
@@ -196,9 +201,25 @@ async function placeBid({ eventId, userId, amount }) {
 
     logger.info('Auction bid placed', {
       eventId, userId, amount: bidAmount,
-      prevLeader: event.currentBidUserId,
+      prevLeader: prevLeaderUserId,
       myNewLocked,
     });
+
+    if (prevLeaderUserId) {
+      notify({
+        userId: prevLeaderUserId,
+        type:   'auction_outbid',
+        title:  'Вашу ставку перебили',
+        message: `Новая ставка ${bidAmount} PRB на «${event.title}». Поднимите свою ставку, чтобы вернуть лидерство.`,
+        data: {
+          eventId: event.id,
+          eventTitle: event.title,
+          previousAmount: prevLeaderAmount,
+          newAmount: bidAmount,
+        },
+        actionUrl: `/events/${event.id}`,
+      }).catch(err => logger.error('placeBid: outbid notify failed', { error: err.message }));
+    }
 
     return {
       bid:           newBid.toJSON(),
@@ -332,6 +353,19 @@ async function closeAuction(eventId) {
     logger.info('Auction closed', {
       eventId, winnerUserId, winningAmount, otherActiveCount: sorted.length - 1,
     });
+
+    notify({
+      userId: winnerUserId,
+      type:   'auction_won',
+      title:  'Вы выиграли аукцион!',
+      message: `Поздравляем! Вы выиграли «${event.title}» за ${winningAmount} PRB. Сумма списана с карты.`,
+      data: {
+        eventId: event.id,
+        eventTitle: event.title,
+        winningAmount,
+      },
+      actionUrl: `/events/${event.id}`,
+    }).catch(err => logger.error('closeAuction: win notify failed', { error: err.message }));
 
     return {
       event: event.toJSON(),

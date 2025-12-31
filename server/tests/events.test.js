@@ -37,9 +37,30 @@ jest.mock('../models', () => ({
     findByPk: jest.fn(),
     create:   jest.fn(),
   },
+  AuctionBid: {
+    findAll: jest.fn(),
+    findOne: jest.fn(),
+    create:  jest.fn(),
+  },
+  LoyaltyCard:  { findOne: jest.fn() },
+  Transaction:  { create: jest.fn() },
+  User:         { findOne: jest.fn() },
 }));
 
 jest.mock('../models/User', () => ({ findOne: jest.fn() }));
+
+jest.mock('../db', () => ({
+  sequelize: { transaction: jest.fn() },
+  Sequelize: { Transaction: { ISOLATION_LEVELS: { SERIALIZABLE: 'SERIALIZABLE' } } },
+}));
+
+jest.mock('../services/auctionService', () => ({
+  placeBid:    jest.fn(),
+  closeAuction: jest.fn(),
+  BidError:    class BidError extends Error {
+    constructor(code, msg, extra = {}) { super(msg); this.code = code; this.extra = extra; }
+  },
+}));
 
 jest.mock('../utils/dates', () => ({
   isoToRu: jest.fn((d) => d ? '01.07.2025' : null),
@@ -385,5 +406,80 @@ describe('POST /api/events/:eventId/join', () => {
       .set('Authorization', `Bearer ${userToken}`);
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
+  });
+});
+
+// ─── GET /me/bids ────────────────────────────────────────────────────────────
+
+describe('GET /api/events/me/bids', () => {
+  const { AuctionBid } = require('../models');
+
+  beforeEach(() => { jest.clearAllMocks(); });
+
+  test('401 без токена', async () => {
+    const res = await request(createApp()).get('/api/events/me/bids');
+    expect(res.status).toBe(401);
+  });
+
+  test('503 когда БД недоступна', async () => {
+    const res = await request(createApp(() => false))
+      .get('/api/events/me/bids')
+      .set('Authorization', `Bearer ${userToken}`);
+    expect(res.status).toBe(503);
+  });
+
+  test('200 пустой список — bids: []', async () => {
+    AuctionBid.findAll.mockResolvedValue([]);
+    const res = await request(createApp())
+      .get('/api/events/me/bids')
+      .set('Authorization', `Bearer ${userToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.bids).toEqual([]);
+  });
+
+  test('200 ставки с обогащением события', async () => {
+    AuctionBid.findAll.mockResolvedValue([
+      { id: 7, eventId: 1, amount: '500', status: 'active', createdAt: new Date(), resolvedAt: null },
+      { id: 8, eventId: 2, amount: '900', status: 'won',    createdAt: new Date(), resolvedAt: new Date() },
+    ]);
+    Event.findAll.mockResolvedValue([
+      mockEvent({ id: 1, title: 'A', currentBid: 500, currentBidUserId: 'user-1' }),
+      mockEvent({ id: 2, title: 'B', currentBid: 900, winnerUserId: 'user-1' }),
+    ]);
+
+    const res = await request(createApp())
+      .get('/api/events/me/bids')
+      .set('Authorization', `Bearer ${userToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.bids).toHaveLength(2);
+    expect(res.body.bids[0]).toMatchObject({
+      id: 7, eventId: 1, amount: 500, status: 'active',
+      event: expect.objectContaining({ id: 1, title: 'A', currentBid: 500 }),
+    });
+    expect(res.body.bids[1]).toMatchObject({
+      id: 8, eventId: 2, amount: 900, status: 'won',
+      event: expect.objectContaining({ id: 2, title: 'B', winnerUserId: 'user-1' }),
+    });
+  });
+
+  test('фильтр ?status=active отсекает прочие статусы', async () => {
+    AuctionBid.findAll.mockResolvedValue([]);
+    await request(createApp())
+      .get('/api/events/me/bids?status=active,outbid')
+      .set('Authorization', `Bearer ${userToken}`);
+    expect(AuctionBid.findAll).toHaveBeenCalledWith(expect.objectContaining({
+      where: { userId: 'user-1', status: ['active', 'outbid'] },
+    }));
+  });
+
+  test('некорректный статус игнорируется (нет фильтра)', async () => {
+    AuctionBid.findAll.mockResolvedValue([]);
+    await request(createApp())
+      .get('/api/events/me/bids?status=garbage')
+      .set('Authorization', `Bearer ${userToken}`);
+    expect(AuctionBid.findAll).toHaveBeenCalledWith(expect.objectContaining({
+      where: { userId: 'user-1' },
+    }));
   });
 });
