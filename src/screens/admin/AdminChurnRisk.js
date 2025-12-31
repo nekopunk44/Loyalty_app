@@ -24,8 +24,10 @@ import { useTheme } from '../../context/ThemeContext';
 import { apiCall } from '../../utils/api';
 import { getApiUrl } from '../../utils/apiUrl';
 
-// Premium "command center" palette — independent of theme.
-const HERO = {
+// Premium "command center" palette — две версии для тёмной/светлой темы.
+// Тёмный hero — оригинальный «cockpit», светлый — мягкая лазурно-белая карточка,
+// чтобы на светлой теме hero не выпадал чужеродным пятном.
+const buildHero = (isDark) => isDark ? {
   bg:        '#0B1426',
   bgLayer:   '#10203A',
   cardLine:  'rgba(255,255,255,0.08)',
@@ -33,6 +35,14 @@ const HERO = {
   inkDim:    '#94A3B8',
   inkFaint:  '#64748B',
   trackBg:   'rgba(255,255,255,0.06)',
+} : {
+  bg:        '#FFFFFF',
+  bgLayer:   '#EFF4FB',
+  cardLine:  'rgba(15,23,42,0.08)',
+  ink:       '#0F172A',
+  inkDim:    '#475569',
+  inkFaint:  '#94A3B8',
+  trackBg:   'rgba(15,23,42,0.06)',
 };
 
 const RISK_HUES = {
@@ -54,7 +64,7 @@ const formatPct = (p) => `${Math.round((Number(p) || 0) * 100)}%`;
  * Semicircle gauge with green→amber→red gradient stroke.
  * Fill proportional to `percent` (0–100).
  */
-function GaugeArc({ percent, size = 220 }) {
+function GaugeArc({ percent, size = 220, trackBg, centerColor }) {
   const stroke = 16;
   const r = (size - stroke) / 2 - 4;
   const cx = size / 2;
@@ -88,7 +98,7 @@ function GaugeArc({ percent, size = 220 }) {
       {/* Background track */}
       <Path
         d={path}
-        stroke={HERO.trackBg}
+        stroke={trackBg}
         strokeWidth={stroke}
         strokeLinecap="round"
         fill="none"
@@ -116,7 +126,7 @@ function GaugeArc({ percent, size = 220 }) {
       />
       {/* Needle tip dot */}
       <Circle cx={tipX} cy={tipY} r={6} fill="#fff" />
-      <Circle cx={tipX} cy={tipY} r={3.5} fill={HERO.bg} />
+      <Circle cx={tipX} cy={tipY} r={3.5} fill={centerColor} />
     </Svg>
   );
 }
@@ -172,9 +182,10 @@ function ProbStrip({ prob, height = 4 }) {
 }
 
 export default function AdminChurnRisk({ navigation }) {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const colors = theme.colors;
   const insets = useSafeAreaInsets();
+  const HERO = useMemo(() => buildHero(isDark), [isDark]);
 
   const riskHue = (risk) => RISK_HUES[risk] || RISK_HUES.low;
   const riskLabel = (risk) =>
@@ -260,7 +271,7 @@ export default function AdminChurnRisk({ navigation }) {
     return top && top.probability >= 0.6 ? top : null;
   }, [items]);
 
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const styles = useMemo(() => makeStyles(colors, HERO), [colors, HERO]);
 
   const renderItem = ({ item }) => {
     const hue = riskHue(item.risk);
@@ -379,7 +390,12 @@ export default function AdminChurnRisk({ navigation }) {
 
               {/* Gauge */}
               <View style={styles.gaugeWrap}>
-                <GaugeArc percent={riskIndex} size={240} />
+                <GaugeArc
+                  percent={riskIndex}
+                  size={240}
+                  trackBg={HERO.trackBg}
+                  centerColor={HERO.bg}
+                />
                 <View style={styles.gaugeCenter} pointerEvents="none">
                   <Text style={styles.gaugeBig}>
                     {riskIndex}
@@ -573,7 +589,7 @@ export default function AdminChurnRisk({ navigation }) {
   );
 }
 
-const makeStyles = (colors) => StyleSheet.create({
+const makeStyles = (colors, HERO) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   center: { justifyContent: 'center', alignItems: 'center' },
   loadingText: { marginTop: 12, color: colors.textSecondary, fontSize: 13 },
