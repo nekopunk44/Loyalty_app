@@ -216,22 +216,31 @@ export function EventProvider({ children }) {
                 (typeof e.id === 'string' && e.id.startsWith('local_'))
               );
 
-              const uniqueServerEvents = normalizedServerEvents.filter(serverEvent => {
-                const isDuplicate = localOnlyEvents.some(localEvent =>
-                  localEvent.title === serverEvent.title &&
-                  localEvent.description === serverEvent.description
+              const filteredLocals = localOnlyEvents.filter(localEvent => {
+                const matchedServer = normalizedServerEvents.find(s =>
+                  s.title === localEvent.title &&
+                  s.description === localEvent.description
                 );
-                return !isDuplicate;
+                return !matchedServer;
               });
 
-              const combined = [...uniqueServerEvents, ...localOnlyEvents];
+              const dedupedServers = [];
+              const seenIds = new Set();
+              for (const ev of normalizedServerEvents) {
+                const key = ev.id != null ? String(ev.id) : null;
+                if (key && seenIds.has(key)) continue;
+                if (key) seenIds.add(key);
+                dedupedServers.push(ev);
+              }
+
+              const combined = [...dedupedServers, ...filteredLocals];
 
               saveToStorage(combined);
               setApiInitialized(true);
 
               setPendingEventIds((prevPending) => {
                 const newPending = new Set(prevPending);
-                uniqueServerEvents.forEach(e => newPending.delete(e.id));
+                dedupedServers.forEach(e => newPending.delete(e.id));
                 return newPending;
               });
 
@@ -311,9 +320,14 @@ export function EventProvider({ children }) {
       createEvent(eventData)
         .then((response) => {
           setEvents((prevEvents) => {
-            const updated = prevEvents.map((e) =>
-              e.id === tempId ? { ...e, id: response.id, _local: false } : e
+            const serverAlreadyExists = prevEvents.some(
+              (e) => e.id != null && String(e.id) === String(response.id)
             );
+            const updated = serverAlreadyExists
+              ? prevEvents.filter((e) => e.id !== tempId)
+              : prevEvents.map((e) =>
+                  e.id === tempId ? { ...e, id: response.id, _local: false } : e
+                );
             saveToStorage(updated);
             return updated;
           });
@@ -501,8 +515,16 @@ export function EventProvider({ children }) {
           };
       if (Array.isArray(freshEvents) && freshEvents.length > 0) {
         const normalizedEvents = freshEvents.map(e => normalizeEvent(e));
-        setEvents(normalizedEvents);
-        saveToStorage(normalizedEvents);
+        const seen = new Set();
+        const deduped = [];
+        for (const ev of normalizedEvents) {
+          const key = ev.id != null ? String(ev.id) : null;
+          if (key && seen.has(key)) continue;
+          if (key) seen.add(key);
+          deduped.push(ev);
+        }
+        setEvents(deduped);
+        saveToStorage(deduped);
       }
       return meta;
     } catch (error) {
