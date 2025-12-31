@@ -469,6 +469,7 @@ export default function EventsScreen() {
     flexDirection: 'row',
     marginHorizontal: 16,
     marginTop: 10,
+    marginBottom: 16,
     gap: 8,
   },
   actionChip: {
