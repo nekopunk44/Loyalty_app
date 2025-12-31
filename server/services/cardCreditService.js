@@ -148,10 +148,19 @@ async function creditCard(params) {
   await Transaction.create({
     userId,
     type: 'credit',
+    category: 'topup',
     amount: parsedAmount,
     description: topupData.description,
     balanceBefore,
     balanceAfter,
+    metadata: {
+      provider,
+      providerSessionId,
+      providerPaymentId,
+      originalAmount,
+      originalCurrency,
+      exchangeRate,
+    },
   }, { transaction: t });
 
   logger.info('card credited', {

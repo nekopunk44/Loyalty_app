@@ -4,8 +4,12 @@
  *   POST /ai-analysis                  — AI-анализ через OpenRouter
  *   GET  /finances/summary             — финансовая сводка администратора
  *   GET  /finances/transactions        — список финансовых транзакций
- *   POST /finances/withdrawal          — запросить вывод средств
- *   GET  /finances/withdrawals         — список запросов на вывод
+ *   POST  /finances/withdrawal                  — запросить вывод средств
+ *   GET   /finances/withdrawals                 — список запросов на вывод (?scope=mine для своих)
+ *   GET   /finances/withdrawals/:id/audit       — журнал событий по заявке
+ *   PATCH /finances/withdrawals/:id/cancel      — отменить (возврат средств)
+ *   PATCH /finances/withdrawals/:id/complete    — пометить как выплаченное
+ *   POST  /users/:userId/adjust-balance         — ± баланс пользователя (Sprint B: финансовый админ)
  *   GET  /churn-risk                   — оценка риска оттока (ML)
  *   GET  /ltv-top                      — топ-N клиентов по предсказанному LTV (ML)
  *   GET  /forecast-revenue             — прогноз ежедневной выручки (ML)
@@ -15,15 +19,36 @@ const express = require('express');
 const { Op } = require('sequelize');
 
 const logger = require('../logger');
-const { sequelize } = require('../db');
+const { sequelize, Sequelize } = require('../db');
 const {
   User, Booking, Property,
-  Payment, AdminWallet, AdminTransaction, WithdrawalRequest,
+  Payment, AdminWallet, AdminTransaction, WithdrawalRequest, WithdrawalAuditLog,
+  LoyaltyCard, Transaction, Notification,
 } = require('../models');
 const { verifyAdmin, verifyFinanceAdmin } = require('../middleware/auth');
+const { validate, schemas } = require('../validation');
 const { parsePagination } = require('../utils/pagination');
 
 const isDev = () => (process.env.NODE_ENV || 'development') === 'development';
+
+/**
+ * Иммутабельная запись в журнал жизненного цикла заявки.
+ * Принимает опциональный sequelize-transaction, чтобы запись в журнал
+ * откатывалась вместе с основной операцией при ошибке.
+ */
+async function writeWithdrawalAudit({
+  withdrawalId, action, fromStatus, toStatus, actorId, amount, note, transaction,
+}) {
+  return WithdrawalAuditLog.create({
+    withdrawalId,
+    action,
+    fromStatus: fromStatus || null,
+    toStatus,
+    actorId,
+    amount,
+    note: note || null,
+  }, transaction ? { transaction } : undefined);
+}
 
 module.exports = function createAdminRouter({ isDbConnected }) {
   const router = express.Router();
@@ -267,29 +292,35 @@ module.exports = function createAdminRouter({ isDbConnected }) {
 
   /**
    * POST /finances/withdrawal — запросить вывод средств.
+   * Атомарно: блокирует средства (available → pending), создаёт WithdrawalRequest
+   * и пишет первую запись в WithdrawalAuditLog (action='created').
    */
   router.post('/finances/withdrawal', verifyFinanceAdmin, async (req, res) => {
+    const { amount, bankAccount, reason } = req.body;
+
+    if (!amount || !bankAccount) {
+      return res.status(400).json({ success: false, error: 'amount и bankAccount обязательны' });
+    }
+    if (parseFloat(amount) <= 0) {
+      return res.status(400).json({ success: false, error: 'Сумма должна быть больше 0' });
+    }
+    if (!isDbConnected()) {
+      return res.status(503).json({ success: false, error: 'База данных не подключена' });
+    }
+
+    const t = await sequelize.transaction();
     try {
       const userId = req.userId;
-      const { amount, bankAccount, reason } = req.body;
 
-      if (!amount || !bankAccount) {
-        return res.status(400).json({ success: false, error: 'amount и bankAccount обязательны' });
-      }
-      if (parseFloat(amount) <= 0) {
-        return res.status(400).json({ success: false, error: 'Сумма должна быть больше 0' });
-      }
-      if (!isDbConnected()) {
-        return res.status(503).json({ success: false, error: 'База данных не подключена' });
-      }
-
-      const adminUser = await User.findOne({ where: { userId } });
+      const adminUser = await User.findOne({ where: { userId }, transaction: t });
       if (!adminUser) {
+        await t.rollback();
         return res.status(404).json({ success: false, error: 'Пользователь не найден' });
       }
 
-      const adminWallet = await AdminWallet.findOne({ where: { adminId: userId } });
+      const adminWallet = await AdminWallet.findOne({ where: { adminId: userId }, transaction: t });
       if (!adminWallet) {
+        await t.rollback();
         return res.status(404).json({ success: false, error: 'Кошелек администратора не найден' });
       }
 
@@ -297,6 +328,7 @@ module.exports = function createAdminRouter({ isDbConnected }) {
       const availableBalance  = parseFloat(adminWallet.availableBalance);
 
       if (availableBalance < withdrawAmount) {
+        await t.rollback();
         return res.status(400).json({
           success:         false,
           error:           'Недостаточно средств',
@@ -312,12 +344,24 @@ module.exports = function createAdminRouter({ isDbConnected }) {
         bankAccount,
         status:     'pending',
         reason:     reason || 'Запрос на вывод средств',
-      });
+      }, { transaction: t });
 
       adminWallet.availableBalance = parseFloat((availableBalance - withdrawAmount).toFixed(2));
       adminWallet.pendingBalance   = parseFloat((parseFloat(adminWallet.pendingBalance) + withdrawAmount).toFixed(2));
-      await adminWallet.save();
+      await adminWallet.save({ transaction: t });
 
+      await writeWithdrawalAudit({
+        withdrawalId: withdrawalRequest.id,
+        action:       'created',
+        fromStatus:   null,
+        toStatus:     'pending',
+        actorId:      userId,
+        amount:       withdrawAmount,
+        note:         reason || null,
+        transaction:  t,
+      });
+
+      await t.commit();
       logger.info('Запрос на вывод', { userId, amount: withdrawAmount });
 
       return res.status(201).json({
@@ -330,6 +374,7 @@ module.exports = function createAdminRouter({ isDbConnected }) {
         },
       });
     } catch (error) {
+      await t.rollback();
       logger.error('admin withdrawal error', { error: error.message });
       return res.status(500).json({
         success: false,
@@ -341,18 +386,23 @@ module.exports = function createAdminRouter({ isDbConnected }) {
 
   /**
    * GET /finances/withdrawals — список запросов на вывод с фильтром по статусу.
+   *
+   * По умолчанию возвращает заявки всех финансовых админов — это нужно для
+   * peer-approval (фин. админы одобряют друг друга). Если нужно показать
+   * только свои — передать ?scope=mine.
    */
   router.get('/finances/withdrawals', verifyFinanceAdmin, async (req, res) => {
     try {
       const userId = req.userId;
-      const { status } = req.query;
+      const { status, scope } = req.query;
       const { limit, offset } = parsePagination(req.query);
 
       if (!isDbConnected()) {
         return res.status(503).json({ success: false, error: 'База данных не подключена' });
       }
 
-      const where = { adminId: userId };
+      const where = {};
+      if (scope === 'mine') where.adminId = userId;
       if (status) where.status = status;
 
       const withdrawals = await WithdrawalRequest.findAll({
@@ -369,6 +419,241 @@ module.exports = function createAdminRouter({ isDbConnected }) {
       return res.status(500).json({
         success: false,
         error:   'Ошибка при получении запросов на вывод',
+        details: isDev() ? error.message : undefined,
+      });
+    }
+  });
+
+  /**
+   * PATCH /finances/withdrawals/:id/cancel — отменить pending-заявку.
+   * pending → rejected (enum-значение repurposed как «cancelled»).
+   * Возврат: pendingBalance −= amount, availableBalance += amount.
+   * Пишет AdminTransaction(type='refund') для аудита.
+   *
+   * Single-admin модель: владелец сам отменяет, нет защиты от само-отмены.
+   */
+  router.patch('/finances/withdrawals/:id/cancel', verifyFinanceAdmin, async (req, res) => {
+    const t = await sequelize.transaction();
+    try {
+      const userId = req.userId;
+      const { id } = req.params;
+      const { reason } = req.body || {};
+
+      if (!isDbConnected()) {
+        await t.rollback();
+        return res.status(503).json({ success: false, error: 'База данных не подключена' });
+      }
+
+      const withdrawal = await WithdrawalRequest.findByPk(id, { transaction: t });
+      if (!withdrawal) {
+        await t.rollback();
+        return res.status(404).json({ success: false, error: 'Заявка не найдена' });
+      }
+      if (withdrawal.status !== 'pending') {
+        await t.rollback();
+        return res.status(409).json({
+          success: false,
+          error:   `Отменить можно только pending-заявку (текущий статус: "${withdrawal.status}")`,
+        });
+      }
+
+      const adminWallet = await AdminWallet.findOne({
+        where: { adminId: withdrawal.adminId },
+        transaction: t,
+      });
+      if (!adminWallet) {
+        await t.rollback();
+        return res.status(404).json({ success: false, error: 'Кошелек заявителя не найден' });
+      }
+
+      const amount = parseFloat(withdrawal.amount);
+      const prevAvailable = parseFloat(adminWallet.availableBalance);
+      const prevPending   = parseFloat(adminWallet.pendingBalance);
+
+      adminWallet.pendingBalance   = parseFloat((prevPending   - amount).toFixed(2));
+      adminWallet.availableBalance = parseFloat((prevAvailable + amount).toFixed(2));
+      adminWallet.totalBalance     = parseFloat((parseFloat(adminWallet.totalBalance) || 0).toFixed(2));
+      await adminWallet.save({ transaction: t });
+
+      withdrawal.status     = 'rejected';
+      withdrawal.approvedBy = userId;
+      withdrawal.approvedAt = new Date();
+      if (reason && typeof reason === 'string') {
+        withdrawal.reason = `${withdrawal.reason || ''}\n[Отменено: ${reason}]`.trim();
+      }
+      await withdrawal.save({ transaction: t });
+
+      await AdminTransaction.create({
+        adminId:       withdrawal.adminId,
+        adminLevel:    withdrawal.adminLevel,
+        type:          'refund',
+        amount,
+        description:   `Возврат при отмене заявки #${withdrawal.id}`,
+        balanceBefore: prevAvailable,
+        balanceAfter:  adminWallet.availableBalance,
+      }, { transaction: t });
+
+      await writeWithdrawalAudit({
+        withdrawalId: withdrawal.id,
+        action:       'cancelled',
+        fromStatus:   'pending',
+        toStatus:     'rejected',
+        actorId:      userId,
+        amount,
+        transaction:  t,
+      });
+
+      await t.commit();
+      logger.info('Заявка отменена', { id, by: userId });
+
+      return res.status(200).json({
+        success:       true,
+        withdrawal,
+        updatedWallet: {
+          availableBalance: adminWallet.availableBalance,
+          pendingBalance:   adminWallet.pendingBalance,
+        },
+      });
+    } catch (error) {
+      await t.rollback();
+      logger.error('admin cancel withdrawal error', { error: error.message });
+      return res.status(500).json({
+        success: false,
+        error:   'Ошибка при отмене заявки',
+        details: isDev() ? error.message : undefined,
+      });
+    }
+  });
+
+  /**
+   * PATCH /finances/withdrawals/:id/complete — пометить заявку как выплаченную.
+   * pending → completed. Применяется ПОСЛЕ ручного банковского перевода.
+   *
+   * Что меняется:
+   * - pendingBalance −= amount  (деньги покинули кошелёк)
+   * - totalWithdrawn += amount  (накопительный аудит выплат)
+   * - AdminTransaction(type='withdrawal') пишется для журнала
+   */
+  router.patch('/finances/withdrawals/:id/complete', verifyFinanceAdmin, async (req, res) => {
+    const t = await sequelize.transaction();
+    try {
+      const userId = req.userId;
+      const { id } = req.params;
+
+      if (!isDbConnected()) {
+        await t.rollback();
+        return res.status(503).json({ success: false, error: 'База данных не подключена' });
+      }
+
+      const withdrawal = await WithdrawalRequest.findByPk(id, { transaction: t });
+      if (!withdrawal) {
+        await t.rollback();
+        return res.status(404).json({ success: false, error: 'Заявка не найдена' });
+      }
+      if (withdrawal.status !== 'pending') {
+        await t.rollback();
+        return res.status(409).json({
+          success: false,
+          error:   `Завершить можно только pending-заявку (текущий статус: "${withdrawal.status}")`,
+        });
+      }
+
+      const adminWallet = await AdminWallet.findOne({
+        where: { adminId: withdrawal.adminId },
+        transaction: t,
+      });
+      if (!adminWallet) {
+        await t.rollback();
+        return res.status(404).json({ success: false, error: 'Кошелек заявителя не найден' });
+      }
+
+      const amount = parseFloat(withdrawal.amount);
+      const prevPending    = parseFloat(adminWallet.pendingBalance);
+      const prevWithdrawn  = parseFloat(adminWallet.totalWithdrawn || 0);
+      const prevTotal      = parseFloat(adminWallet.totalBalance || 0);
+
+      adminWallet.pendingBalance = parseFloat((prevPending - amount).toFixed(2));
+      adminWallet.totalWithdrawn = parseFloat((prevWithdrawn + amount).toFixed(2));
+      adminWallet.totalBalance   = parseFloat((prevTotal - amount).toFixed(2));
+      await adminWallet.save({ transaction: t });
+
+      withdrawal.status      = 'completed';
+      withdrawal.approvedBy  = userId;
+      withdrawal.approvedAt  = withdrawal.approvedAt || new Date();
+      withdrawal.completedAt = new Date();
+      await withdrawal.save({ transaction: t });
+
+      await AdminTransaction.create({
+        adminId:       withdrawal.adminId,
+        adminLevel:    withdrawal.adminLevel,
+        type:          'withdrawal',
+        amount,
+        description:   `Выплата по заявке #${withdrawal.id} на счёт ${withdrawal.bankAccount || '—'}`,
+        balanceBefore: prevPending + parseFloat(adminWallet.availableBalance),
+        balanceAfter:  adminWallet.pendingBalance + parseFloat(adminWallet.availableBalance),
+      }, { transaction: t });
+
+      await writeWithdrawalAudit({
+        withdrawalId: withdrawal.id,
+        action:       'completed',
+        fromStatus:   'pending',
+        toStatus:     'completed',
+        actorId:      userId,
+        amount,
+        transaction:  t,
+      });
+
+      await t.commit();
+      logger.info('Заявка выплачена', { id, by: userId, amount });
+
+      return res.status(200).json({
+        success:       true,
+        withdrawal,
+        updatedWallet: {
+          availableBalance: adminWallet.availableBalance,
+          pendingBalance:   adminWallet.pendingBalance,
+          totalWithdrawn:   adminWallet.totalWithdrawn,
+        },
+      });
+    } catch (error) {
+      await t.rollback();
+      logger.error('admin complete withdrawal error', { error: error.message });
+      return res.status(500).json({
+        success: false,
+        error:   'Ошибка при завершении заявки',
+        details: isDev() ? error.message : undefined,
+      });
+    }
+  });
+
+  /**
+   * GET /finances/withdrawals/:id/audit — журнал событий по конкретной заявке.
+   * Возвращает все записи в хронологическом порядке (created → cancelled/completed).
+   */
+  router.get('/finances/withdrawals/:id/audit', verifyFinanceAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      if (!isDbConnected()) {
+        return res.status(503).json({ success: false, error: 'База данных не подключена' });
+      }
+
+      const withdrawal = await WithdrawalRequest.findByPk(id);
+      if (!withdrawal) {
+        return res.status(404).json({ success: false, error: 'Заявка не найдена' });
+      }
+
+      const entries = await WithdrawalAuditLog.findAll({
+        where:  { withdrawalId: id },
+        order:  [['createdAt', 'ASC']],
+      });
+
+      return res.status(200).json({ success: true, entries });
+    } catch (error) {
+      logger.error('admin withdrawal audit error', { error: error.message });
+      return res.status(500).json({
+        success: false,
+        error:   'Ошибка при получении журнала заявки',
         details: isDev() ? error.message : undefined,
       });
     }
@@ -677,6 +962,183 @@ module.exports = function createAdminRouter({ isDbConnected }) {
       });
     }
   });
+
+  /**
+   * POST /users/:userId/adjust-balance — ручная корректировка баланса пользователя.
+   *
+   * Финансовый админ (adminLevel=1) переводит средства между AdminWallet и LoyaltyCard:
+   *   amount > 0  → AdminWallet ↓, LoyaltyCard ↑  (бонус, компенсация)
+   *   amount < 0  → AdminWallet ↑, LoyaltyCard ↓  (штраф, корректировка)
+   *
+   * Транзакция SERIALIZABLE + SELECT FOR UPDATE на оба кошелька — защита от гонок
+   * при двух параллельных корректировках одному и тому же пользователю.
+   *
+   * Все движения логируются в Transaction (category='admin_adjustment', performedBy, metadata.reason)
+   * и в AdminTransaction (type='adjustment') — двойная запись для аудита.
+   */
+  router.post(
+    '/users/:userId/adjust-balance',
+    verifyFinanceAdmin,
+    validate(schemas.adminAdjustBalance),
+    async (req, res) => {
+      const { userId } = req.params;
+      const { amount, reason, description } = req.body;
+      const adminId = req.userId;
+
+      if (!isDbConnected()) {
+        return res.status(503).json({ success: false, error: 'База данных не подключена' });
+      }
+      if (!userId) {
+        return res.status(400).json({ success: false, error: 'userId обязателен' });
+      }
+
+      const t = await sequelize.transaction({
+        isolationLevel: Sequelize.Transaction.ISOLATION_LEVELS.SERIALIZABLE,
+      });
+      try {
+        const targetUser = await User.findOne({ where: { userId }, transaction: t });
+        if (!targetUser) {
+          await t.rollback();
+          return res.status(404).json({ success: false, error: 'Пользователь не найден' });
+        }
+        if (targetUser.role === 'admin') {
+          await t.rollback();
+          return res.status(400).json({ success: false, error: 'Нельзя корректировать баланс админа' });
+        }
+
+        const loyaltyCard = await LoyaltyCard.findOne({
+          where: { userId },
+          lock: t.LOCK.UPDATE,
+          transaction: t,
+        });
+        if (!loyaltyCard) {
+          await t.rollback();
+          return res.status(404).json({ success: false, error: 'Карта лояльности не найдена' });
+        }
+
+        const adminWallet = await AdminWallet.findOne({
+          where: { adminId, adminLevel: 1 },
+          lock: t.LOCK.UPDATE,
+          transaction: t,
+        });
+        if (!adminWallet) {
+          await t.rollback();
+          return res.status(404).json({ success: false, error: 'Кошелёк админа не найден' });
+        }
+
+        const delta             = parseFloat(amount);
+        const cardBalanceBefore = parseFloat(loyaltyCard.balance);
+        const cardBalanceAfter  = parseFloat((cardBalanceBefore + delta).toFixed(2));
+
+        if (cardBalanceAfter < 0) {
+          await t.rollback();
+          return res.status(409).json({
+            success: false,
+            error:   `Недостаточно средств на карте: списание ${Math.abs(delta)} приведёт к отрицательному балансу (${cardBalanceBefore})`,
+          });
+        }
+
+        const walletBalBefore   = parseFloat(adminWallet.totalBalance);
+        const walletAvailBefore = parseFloat(adminWallet.availableBalance);
+
+        // Зачисление пользователю → списание из AdminWallet.
+        // Списание у пользователя → возврат в AdminWallet.
+        const walletBalAfter   = parseFloat((walletBalBefore   - delta).toFixed(2));
+        const walletAvailAfter = parseFloat((walletAvailBefore - delta).toFixed(2));
+
+        if (delta > 0 && walletAvailBefore < delta) {
+          await t.rollback();
+          return res.status(409).json({
+            success: false,
+            error:   `Недостаточно доступных средств в кошельке админа: требуется ${delta}, доступно ${walletAvailBefore}`,
+          });
+        }
+
+        await loyaltyCard.update({ balance: cardBalanceAfter }, { transaction: t });
+        await adminWallet.update({
+          totalBalance:     walletBalAfter,
+          availableBalance: walletAvailAfter,
+        }, { transaction: t });
+
+        const adjustmentId = `ADJ_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+
+        // 1) Transaction в истории пользователя
+        await Transaction.create({
+          userId,
+          type:          delta > 0 ? 'credit' : 'debit',
+          category:      'admin_adjustment',
+          amount:        Math.abs(delta),
+          description,
+          balanceBefore: cardBalanceBefore,
+          balanceAfter:  cardBalanceAfter,
+          performedBy:   adminId,
+          relatedType:   'admin_adjustment',
+          relatedId:     adjustmentId,
+          metadata: {
+            reason,
+            adjustmentId,
+            adminId,
+            adminEmail: req.dbUser?.email || null,
+            signedAmount: delta,
+          },
+        }, { transaction: t });
+
+        // 2) AdminTransaction в истории админа
+        await AdminTransaction.create({
+          adminId,
+          adminLevel:    1,
+          type:          'adjustment',
+          amount:        Math.abs(delta),
+          description:   `Корректировка баланса ${targetUser.email || userId} (${reason}): ${description}`,
+          balanceBefore: walletBalBefore,
+          balanceAfter:  walletBalAfter,
+        }, { transaction: t });
+
+        // 3) Уведомление пользователю
+        try {
+          await Notification.create({
+            userId,
+            title:   delta > 0 ? 'Баланс пополнен администратором' : 'Корректировка баланса',
+            message: delta > 0
+              ? `На вашу карту зачислено ${delta} PRB. Причина: ${description}`
+              : `С вашей карты списано ${Math.abs(delta)} PRB. Причина: ${description}`,
+            type:    'admin_adjustment',
+            data: {
+              amount:       delta,
+              reason,
+              adjustmentId,
+              balanceAfter: cardBalanceAfter,
+            },
+            read: false,
+          }, { transaction: t });
+        } catch (notifErr) {
+          logger.error('admin adjust-balance notify error', { error: notifErr.message });
+        }
+
+        await t.commit();
+
+        logger.info('admin adjust-balance', {
+          adminId, userId, delta, reason, adjustmentId,
+        });
+
+        return res.status(200).json({
+          success:           true,
+          adjustmentId,
+          userBalanceBefore: cardBalanceBefore,
+          userBalanceAfter:  cardBalanceAfter,
+          walletBalanceAfter: walletBalAfter,
+        });
+      } catch (error) {
+        try { await t.rollback(); } catch (_e) { /* already finished */ }
+        logger.error('admin adjust-balance error', { error: error.message, userId });
+        return res.status(500).json({
+          success: false,
+          error:   'Ошибка при корректировке баланса',
+          details: isDev() ? error.message : undefined,
+        });
+      }
+    },
+  );
 
   return router;
 };

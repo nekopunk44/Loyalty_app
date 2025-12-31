@@ -83,6 +83,17 @@ const updateUserSchema = z.object({
   avatar:      z.string().url().max(512).optional(),
 }).strict();
 
+// ==================== Admin ====================
+
+// Admin balance adjustment: amount может быть отрицательным (списание) или положительным (зачисление).
+// Reason — обязательный код причины; description — свободный комментарий для аудита.
+const adminAdjustBalanceSchema = z.object({
+  amount:      z.coerce.number().refine(n => n !== 0, { message: 'Сумма не может быть 0' })
+                .refine(n => Math.abs(n) <= 1_000_000, { message: 'Максимум 1 000 000' }),
+  reason:      z.enum(['compensation', 'correction', 'promo_bonus', 'penalty', 'other']),
+  description: safeString(500),
+}).strict();
+
 // ==================== Analytics ====================
 
 const analyticsSchema = z.object({
@@ -136,5 +147,6 @@ module.exports = {
     updateUser:    updateUserSchema,
     analytics:     analyticsSchema,
     createEvent:   createEventSchema,
+    adminAdjustBalance: adminAdjustBalanceSchema,
   },
 };

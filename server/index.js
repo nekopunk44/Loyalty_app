@@ -355,6 +355,27 @@ const connectDB = async () => {
     await sequelize.query(`UPDATE properties SET deposit_amount = 500  WHERE id = 3 AND deposit_amount = 0;`);
     await sequelize.query(`UPDATE properties SET deposit_amount = 2500 WHERE id = 4 AND deposit_amount = 0;`);
 
+    // Sprint B ВКР: классификация транзакций и админ-корректировки.
+    //   category    — узкий код типа операции для фильтрации и иконок в UI.
+    //   performedBy — adminId, инициировавший операцию (для admin_adjustment).
+    //   relatedType — 'booking' | 'event' | 'auction' (для деталки в UI).
+    //   relatedId   — строковый id сущности (booking#, event#, etc.).
+    await sequelize.query(`
+      ALTER TABLE transactions
+        ADD COLUMN IF NOT EXISTS category      TEXT,
+        ADD COLUMN IF NOT EXISTS "performedBy" TEXT,
+        ADD COLUMN IF NOT EXISTS "relatedType" TEXT,
+        ADD COLUMN IF NOT EXISTS "relatedId"   TEXT;
+    `);
+    await sequelize.query(`
+      CREATE INDEX IF NOT EXISTS idx_transactions_category
+        ON transactions (category);
+    `);
+    await sequelize.query(`
+      CREATE INDEX IF NOT EXISTS idx_transactions_user_created
+        ON transactions ("userId", "createdAt" DESC);
+    `);
+
     logger.info('Миграции схемы применены');
 
     // Идемпотентный sync номеров под клиентский src/constants/properties.js.

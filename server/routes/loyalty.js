@@ -95,10 +95,12 @@ module.exports = function createLoyaltyRouter({ isDbConnected }) {
       await Transaction.create({
         userId,
         type: 'credit',
+        category: 'topup',
         amount: topUpAmount,
         description: `Пополнение карты через ${paymentMethod || 'другой способ'}`,
         balanceBefore: oldBalance,
         balanceAfter: card.balance,
+        metadata: { paymentMethod: paymentMethod || 'другой способ', source: 'loyalty_route' },
       });
 
       try {

@@ -10,15 +10,23 @@ import {
   TextInput,
   ActivityIndicator,
   Animated,
+  Easing,
+  Dimensions,
+  PanResponder,
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { colors, spacing, borderRadius } from '../../constants/theme';
+
+const SCREEN_H = Dimensions.get('window').height;
+const SHEET_H  = SCREEN_H * 0.92;
 import { FadeInCard, ScaleInCard } from '../../components/ui/AnimatedCard';
 import { AdminUserListCard } from '../../components/admin/AdminUserListCard';
 import { UserLevelCard } from '../../components/admin/UserLevelCard';
 import UserManagementModal from '../../components/admin/UserManagementModal';
 import UserEditModal from '../../components/admin/UserEditModal';
 import UserDeleteConfirmModal from '../../components/admin/UserDeleteConfirmModal';
+import BalanceAdjustModal from '../../components/admin/BalanceAdjustModal';
+import UserTransactionsModal from '../../components/admin/UserTransactionsModal';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useNotification } from '../../context/NotificationContext';
@@ -45,9 +53,10 @@ export default function AdminUsers({ navigation: _navigation }) {
     status: 'all', // all, online, offline
   });
   const [openDropdown, setOpenDropdown] = useState(null);
-  const [quickBalanceVisible, setQuickBalanceVisible] = useState(false);
-  const [quickBalanceUser, setQuickBalanceUser] = useState(null);
-  const [quickBalanceAmount, setQuickBalanceAmount] = useState('');
+  const [balanceAdjustVisible, setBalanceAdjustVisible] = useState(false);
+  const [balanceAdjustUser, setBalanceAdjustUser]       = useState(null);
+  const [txHistoryVisible, setTxHistoryVisible]         = useState(false);
+  const [txHistoryUser, setTxHistoryUser]               = useState(null);
   
   // Состояние для уведомления
   const [notificationVisible, setNotificationVisible] = useState(false);
@@ -59,6 +68,55 @@ export default function AdminUsers({ navigation: _navigation }) {
   // Анимация цветов при смене темы
   const bgColorAnim = useRef(new Animated.Value(0)).current;
   const cardColorAnim = useRef(new Animated.Value(0)).current;
+
+  // Bottom-sheet анимация профиля пользователя в стиле NotificationBell.
+  // profileVisible держит Modal в дереве, profileTranslateY двигает контент.
+  const profileTranslateY = useRef(new Animated.Value(SHEET_H)).current;
+
+  const openProfileSheet = () => {
+    profileTranslateY.setValue(SHEET_H);
+    setProfileVisible(true);
+    Animated.timing(profileTranslateY, {
+      toValue: 0,
+      duration: 360,
+      easing: Easing.bezier(0.22, 1, 0.36, 1),
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const closeProfileSheet = () => {
+    Animated.timing(profileTranslateY, {
+      toValue: SHEET_H,
+      duration: 280,
+      easing: Easing.bezier(0.4, 0, 0.2, 1),
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished) setProfileVisible(false);
+    });
+  };
+
+  // Свайп-вниз по drag-handle закрывает sheet — как в NotificationBell.
+  const profilePanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, g) => g.dy > 4 && Math.abs(g.dy) > Math.abs(g.dx),
+      onPanResponderMove: (_, g) => {
+        if (g.dy > 0) profileTranslateY.setValue(g.dy);
+      },
+      onPanResponderRelease: (_, g) => {
+        if (g.dy > 110 || g.vy > 0.8) {
+          closeProfileSheet();
+        } else {
+          Animated.spring(profileTranslateY, {
+            toValue: 0,
+            useNativeDriver: true,
+            tension: 80,
+            friction: 12,
+          }).start();
+        }
+      },
+    }),
+  ).current;
 
   // Загружаем пользователей с сервера
   useEffect(() => {
@@ -216,7 +274,7 @@ export default function AdminUsers({ navigation: _navigation }) {
 
   const openProfile = (user) => {
     setSelectedUser(user);
-    setProfileVisible(true);
+    openProfileSheet();
     // Загружаем полные данные пользователя с сервера
     loadUserDetails(user.id);
   };
@@ -284,32 +342,45 @@ export default function AdminUsers({ navigation: _navigation }) {
   };
 
   const onlineCount = users.filter((u) => u.status === 'online').length;
-  const totalRating = (users.reduce((sum, u) => sum + u.rating, 0) / users.length).toFixed(1);
+  const totalUsers = users.length;
 
-  const handleQuickBalance = (user) => {
-    setQuickBalanceUser(user);
-    setQuickBalanceAmount('');
-    setQuickBalanceVisible(true);
+  // Распределение по уровням — для hero-полоски статистики над списком.
+  // Порядок сегментов фиксирован: admin → platinum → gold → silver → bronze.
+  // Считаем admin отдельно от уровня, остальные нормализуем к lowercase.
+  const levelStats = (() => {
+    const stats = { admin: 0, platinum: 0, gold: 0, silver: 0, bronze: 0 };
+    users.forEach((u) => {
+      if (u.role === 'admin') { stats.admin += 1; return; }
+      const k = (u.membershipLevel || u.level || 'bronze').toLowerCase();
+      if (k in stats) stats[k] += 1; else stats.bronze += 1;
+    });
+    return stats;
+  })();
+  const LEVEL_PALETTE = {
+    admin:    '#3B82F6',
+    platinum: '#A78BFA',
+    gold:     '#F5B301',
+    silver:   '#9CA3AF',
+    bronze:   '#B97A45',
+  };
+  const LEVEL_LABEL = {
+    admin: 'Admin', platinum: 'Platinum', gold: 'Gold', silver: 'Silver', bronze: 'Bronze',
+  };
+  const levelOrder = ['admin', 'platinum', 'gold', 'silver', 'bronze'];
+  const totalForBar = levelOrder.reduce((s, k) => s + levelStats[k], 0) || 1;
+
+  const handleOpenBalanceAdjust = (user) => {
+    setBalanceAdjustUser(user);
+    setBalanceAdjustVisible(true);
   };
 
-  const submitQuickBalance = async () => {
-    const amount = parseFloat(quickBalanceAmount);
-    if (!amount || amount <= 0 || !quickBalanceUser) return;
-    setQuickBalanceVisible(false);
-    try {
-      const data = await apiCall(`${API_BASE_URL}/loyalty-card/${quickBalanceUser.userId}/top-up`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount, paymentMethod: 'admin' }),
-      });
-      if (data.success) {
-        const newBalance = data.loyaltyCard?.balance ?? (Number(quickBalanceUser.balance || 0) + amount);
-        setUsers(prev => prev.map(u => u.id === quickBalanceUser.id ? { ...u, balance: newBalance } : u));
-        showNotification(`+${amount} PRB → ${quickBalanceUser.name}`, 'success');
-      }
-    } catch (e) {
-      showNotification('Ошибка пополнения', 'error');
-    }
+  const handleBalanceAdjusted = ({ userId, newBalance }) => {
+    setUsers(prev => prev.map(u => (u.userId === userId ? { ...u, balance: newBalance } : u)));
+  };
+
+  const handleShowTransactions = (user) => {
+    setTxHistoryUser(user);
+    setTxHistoryVisible(true);
   };
 
   // Рендер для администратора - список с подробной информацией
@@ -327,7 +398,8 @@ export default function AdminUsers({ navigation: _navigation }) {
           setSelectedUser(item);
           setUserDeleteVisible(true);
         }}
-        onQuickBalance={() => handleQuickBalance(item)}
+        onQuickBalance={() => handleOpenBalanceAdjust(item)}
+        onShowTransactions={() => handleShowTransactions(item)}
       />
     </FadeInCard>
   );
@@ -388,7 +460,7 @@ export default function AdminUsers({ navigation: _navigation }) {
       >
         {/* Header */}
         <ScaleInCard delay={100}>
-          <View 
+          <View
             style={[
               styles.header,
               {
@@ -396,17 +468,26 @@ export default function AdminUsers({ navigation: _navigation }) {
               }
             ]}
           >
-            <View>
-              <Text style={[styles.title, { color: theme.colors.text }]}>Управление пользователями</Text>
-              <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
-                Онлайн: {onlineCount} | Рейтинг: {totalRating}
+            <View style={styles.headerSpacer} />
+            <View style={styles.headerTextWrap}>
+              <Text
+                style={[styles.title, { color: theme.colors.text }]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.75}
+              >
+                Управление пользователями
+              </Text>
+              <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+                Онлайн: {onlineCount} из {totalUsers}
               </Text>
             </View>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.addButton, { backgroundColor: theme.colors.primary }]}
               onPress={() => setUserManagementVisible(true)}
+              activeOpacity={0.85}
             >
-              <MaterialIcons name="person-add" size={24} color="#fff" />
+              <MaterialIcons name="person-add" size={22} color="#fff" />
             </TouchableOpacity>
           </View>
         </ScaleInCard>
@@ -419,18 +500,102 @@ export default function AdminUsers({ navigation: _navigation }) {
           </View>
         )}
 
+        {/* Hero stats: KPI + распределение по уровням */}
+        {!loading && totalUsers > 0 && (
+          <FadeInCard delay={120} style={{ paddingHorizontal: spacing.md, marginBottom: spacing.lg }}>
+            <View style={[styles.heroCard, { backgroundColor: theme.colors.cardBg, borderColor: theme.colors.border }]}>
+              {/* KPI-строка: всего + онлайн + админов */}
+              <View style={styles.kpiRow}>
+                <View style={styles.kpiItem}>
+                  <Text style={[styles.kpiValue, { color: theme.colors.text }]}>{totalUsers}</Text>
+                  <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>Всего</Text>
+                </View>
+                <View style={[styles.kpiDivider, { backgroundColor: theme.colors.border }]} />
+                <View style={styles.kpiItem}>
+                  <View style={styles.kpiValueRow}>
+                    <View style={[styles.kpiDot, { backgroundColor: '#10B981' }]} />
+                    <Text style={[styles.kpiValue, { color: theme.colors.text }]}>{onlineCount}</Text>
+                  </View>
+                  <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>Онлайн</Text>
+                </View>
+                <View style={[styles.kpiDivider, { backgroundColor: theme.colors.border }]} />
+                <View style={styles.kpiItem}>
+                  <View style={styles.kpiValueRow}>
+                    <MaterialIcons name="shield" size={14} color={LEVEL_PALETTE.admin} />
+                    <Text style={[styles.kpiValue, { color: theme.colors.text }]}>{levelStats.admin}</Text>
+                  </View>
+                  <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>Админов</Text>
+                </View>
+              </View>
+
+              {/* Сегментированный бар распределения по уровням */}
+              <View style={[styles.segBarTrack, { backgroundColor: theme.colors.background }]}>
+                {levelOrder.map((k) => {
+                  const w = (levelStats[k] / totalForBar) * 100;
+                  if (w <= 0) return null;
+                  return (
+                    <View
+                      key={k}
+                      style={{
+                        width: `${w}%`,
+                        backgroundColor: LEVEL_PALETTE[k],
+                        height: '100%',
+                      }}
+                    />
+                  );
+                })}
+              </View>
+
+              {/* Легенда — компактные чипы с количеством */}
+              <View style={styles.legendRow}>
+                {levelOrder.map((k) => (
+                  <View key={k} style={styles.legendItem}>
+                    <View style={[styles.legendDot, { backgroundColor: LEVEL_PALETTE[k] }]} />
+                    <Text style={[styles.legendLabel, { color: theme.colors.textSecondary }]}>
+                      {LEVEL_LABEL[k]}
+                    </Text>
+                    <Text style={[styles.legendValue, { color: theme.colors.text }]}>
+                      {levelStats[k]}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          </FadeInCard>
+        )}
+
         {/* Search */}
         {!loading && (
-          <FadeInCard delay={150} style={{ paddingHorizontal: spacing.md, marginBottom: spacing.lg }}>
-            <View style={[styles.searchContainer, { backgroundColor: theme.colors.cardBg }]}>
-              <MaterialIcons name="search" size={20} color={theme.colors.textSecondary} />
+          <FadeInCard delay={150} style={{ paddingHorizontal: spacing.md, marginBottom: spacing.md }}>
+            <View
+              style={[
+                styles.searchContainer,
+                {
+                  backgroundColor: theme.colors.cardBg,
+                  borderColor: searchText ? `${theme.colors.primary}55` : theme.colors.border,
+                },
+              ]}
+            >
+              <View style={[styles.searchIconWrap, { backgroundColor: `${theme.colors.primary}14` }]}>
+                <MaterialIcons name="search" size={18} color={theme.colors.primary} />
+              </View>
               <TextInput
-                style={[styles.searchInput, { color: theme.colors.text, backgroundColor: theme.colors.cardBg }]}
-                placeholder="Поиск по имени или email..."
+                style={[styles.searchInput, { color: theme.colors.text }]}
+                placeholder="Поиск по имени или email"
                 placeholderTextColor={theme.colors.textSecondary}
                 value={searchText}
                 onChangeText={setSearchText}
+                returnKeyType="search"
               />
+              {searchText.length > 0 && (
+                <TouchableOpacity
+                  onPress={() => setSearchText('')}
+                  hitSlop={8}
+                  style={[styles.searchClearBtn, { backgroundColor: theme.colors.background }]}
+                >
+                  <MaterialIcons name="close" size={14} color={theme.colors.textSecondary} />
+                </TouchableOpacity>
+              )}
             </View>
           </FadeInCard>
         )}
@@ -451,27 +616,41 @@ export default function AdminUsers({ navigation: _navigation }) {
               ]}
             >
               {/* Role Filter Dropdown */}
+              {(() => {
+                const active = activeFilters.role !== 'all';
+                const fg = active ? '#fff' : theme.colors.primary;
+                return (
               <View style={{ flex: 1, position: 'relative', zIndex: openDropdown === 'role' ? 1000 : 1 }}>
                 <TouchableOpacity
                   style={[
                     styles.compactFilterButton,
-                    { backgroundColor: theme.colors.background, borderColor: theme.colors.border },
-                    openDropdown === 'role' && { borderColor: theme.colors.primary, borderWidth: 2 },
+                    {
+                      backgroundColor: active ? theme.colors.primary : theme.colors.cardBg,
+                      borderColor: active ? theme.colors.primary : theme.colors.border,
+                    },
+                    openDropdown === 'role' && !active && { borderColor: theme.colors.primary, borderWidth: 1.5 },
                   ]}
                   onPress={() => setOpenDropdown(openDropdown === 'role' ? null : 'role')}
+                  activeOpacity={0.85}
                 >
-                  <MaterialIcons name="person" size={16} color={theme.colors.primary} />
-                  <Text style={[styles.compactFilterButtonText, { color: theme.colors.text }]} numberOfLines={1}>
+                  <MaterialIcons name="person" size={15} color={fg} />
+                  <Text
+                    style={[
+                      styles.compactFilterButtonText,
+                      { color: active ? '#fff' : theme.colors.text, fontWeight: active ? '800' : '600' },
+                    ]}
+                    numberOfLines={1}
+                  >
                     {activeFilters.role === 'all'
                       ? 'Роль'
                       : activeFilters.role === 'admin'
                       ? 'Админ'
-                      : 'Пользователи'}
+                      : 'Юзеры'}
                   </Text>
                   <MaterialIcons
                     name={openDropdown === 'role' ? 'expand-less' : 'expand-more'}
                     size={16}
-                    color={theme.colors.primary}
+                    color={fg}
                   />
                 </TouchableOpacity>
                 {openDropdown === 'role' && (
@@ -510,28 +689,43 @@ export default function AdminUsers({ navigation: _navigation }) {
                   </View>
                 )}
               </View>
+              );})()}
 
               {/* Membership Filter Dropdown */}
+              {(() => {
+                const active = activeFilters.membership !== 'all';
+                const fg = active ? '#fff' : theme.colors.primary;
+                return (
               <View style={{ flex: 1, position: 'relative', zIndex: openDropdown === 'membership' ? 1000 : 1 }}>
                 <TouchableOpacity
                   style={[
                     styles.compactFilterButton,
-                    { backgroundColor: theme.colors.background, borderColor: theme.colors.border },
-                    openDropdown === 'membership' && { borderColor: theme.colors.primary, borderWidth: 2 },
+                    {
+                      backgroundColor: active ? theme.colors.primary : theme.colors.cardBg,
+                      borderColor: active ? theme.colors.primary : theme.colors.border,
+                    },
+                    openDropdown === 'membership' && !active && { borderColor: theme.colors.primary, borderWidth: 1.5 },
                   ]}
                   onPress={() => setOpenDropdown(openDropdown === 'membership' ? null : 'membership')}
+                  activeOpacity={0.85}
                 >
-                  <MaterialIcons name="star" size={16} color={theme.colors.primary} />
-                  <Text style={[styles.compactFilterButtonText, { color: theme.colors.text }]}>
+                  <MaterialIcons name="star" size={15} color={fg} />
+                  <Text
+                    style={[
+                      styles.compactFilterButtonText,
+                      { color: active ? '#fff' : theme.colors.text, fontWeight: active ? '800' : '600' },
+                    ]}
+                    numberOfLines={1}
+                  >
                     {activeFilters.membership === 'all'
-                      ? 'Статус'
+                      ? 'Уровень'
                       : activeFilters.membership.charAt(0).toUpperCase() +
                         activeFilters.membership.slice(1)}
                   </Text>
                   <MaterialIcons
                     name={openDropdown === 'membership' ? 'expand-less' : 'expand-more'}
                     size={16}
-                    color={theme.colors.primary}
+                    color={fg}
                   />
                 </TouchableOpacity>
                 {openDropdown === 'membership' && (
@@ -571,21 +765,36 @@ export default function AdminUsers({ navigation: _navigation }) {
                   </View>
                 )}
               </View>
+              );})()}
 
               {/* Status Filter Dropdown */}
+              {(() => {
+                const active = activeFilters.status !== 'all';
+                const fg = active ? '#fff' : theme.colors.primary;
+                return (
               <View style={{ flex: 1, position: 'relative', zIndex: openDropdown === 'status' ? 1000 : 1 }}>
                 <TouchableOpacity
                   style={[
                     styles.compactFilterButton,
-                    { backgroundColor: theme.colors.background, borderColor: theme.colors.border },
-                    openDropdown === 'status' && { borderColor: theme.colors.primary, borderWidth: 2 },
+                    {
+                      backgroundColor: active ? theme.colors.primary : theme.colors.cardBg,
+                      borderColor: active ? theme.colors.primary : theme.colors.border,
+                    },
+                    openDropdown === 'status' && !active && { borderColor: theme.colors.primary, borderWidth: 1.5 },
                   ]}
                   onPress={() => setOpenDropdown(openDropdown === 'status' ? null : 'status')}
+                  activeOpacity={0.85}
                 >
-                  <MaterialIcons name="signal-cellular-alt" size={16} color={theme.colors.primary} />
-                  <Text style={[styles.compactFilterButtonText, { color: theme.colors.text }]}>
+                  <MaterialIcons name="signal-cellular-alt" size={15} color={fg} />
+                  <Text
+                    style={[
+                      styles.compactFilterButtonText,
+                      { color: active ? '#fff' : theme.colors.text, fontWeight: active ? '800' : '600' },
+                    ]}
+                    numberOfLines={1}
+                  >
                     {activeFilters.status === 'all'
-                      ? 'Наличие'
+                      ? 'Статус'
                       : activeFilters.status === 'online'
                       ? 'Онлайн'
                       : 'Офлайн'}
@@ -593,7 +802,7 @@ export default function AdminUsers({ navigation: _navigation }) {
                   <MaterialIcons
                     name={openDropdown === 'status' ? 'expand-less' : 'expand-more'}
                     size={16}
-                    color={theme.colors.primary}
+                    color={fg}
                   />
                 </TouchableOpacity>
                 {openDropdown === 'status' && (
@@ -631,6 +840,7 @@ export default function AdminUsers({ navigation: _navigation }) {
                   </View>
                 )}
               </View>
+              );})()}
             </View>
           </FadeInCard>
         )}
@@ -708,7 +918,7 @@ export default function AdminUsers({ navigation: _navigation }) {
           onUserDeleted={(deletedUserId) => {
             const deletedUser = users.find(u => u.id === deletedUserId);
             setUsers(users.filter(u => u.id !== deletedUserId));
-            setProfileVisible(false);
+            closeProfileSheet();
             setUserDeleteVisible(false);
             // Показываем плавное уведомление
             if (deletedUser) {
@@ -721,19 +931,57 @@ export default function AdminUsers({ navigation: _navigation }) {
         />
       )}
 
-      {/* User Profile Modal */}
-      <Modal visible={profileVisible} animationType="slide" transparent>
+      {/* User Profile Modal — bottom-sheet в стиле NotificationBell */}
+      <Modal
+        visible={profileVisible}
+        animationType="none"
+        transparent
+        statusBarTranslucent
+        onRequestClose={closeProfileSheet}
+      >
         <View style={styles.modalContainer}>
-          <View style={[styles.modalContent, { backgroundColor: theme.colors.cardBg }]}>
-            {/* Header */}
-            <View style={[styles.modalHeader, { borderBottomColor: theme.colors.border }]}>
-              <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Профиль пользователя</Text>
-              <TouchableOpacity onPress={() => setProfileVisible(false)}>
-                <MaterialIcons name="close" size={24} color={theme.colors.text} />
+          {/* Tap по backdrop закрывает sheet */}
+          <TouchableOpacity
+            style={StyleSheet.absoluteFillObject}
+            activeOpacity={1}
+            onPress={closeProfileSheet}
+          />
+          <Animated.View
+            style={[
+              styles.modalContent,
+              {
+                backgroundColor: theme.colors.cardBg,
+                height: SHEET_H,
+                transform: [{ translateY: profileTranslateY }],
+              },
+            ]}
+          >
+            {/* Drag handle — реагирует на свайп вниз */}
+            <View style={styles.dragHandleWrap} {...profilePanResponder.panHandlers}>
+              <View style={[styles.dragHandle, { backgroundColor: theme.colors.border }]} />
+            </View>
+
+            {/* Заголовок по центру, close-кнопка справа, симметричный spacer слева */}
+            <View style={styles.modalHeader}>
+              <View style={styles.modalHeaderSpacer} />
+              <View style={styles.modalHeaderCenter} pointerEvents="none">
+                <Text style={[styles.modalTitle, { color: theme.colors.text }]} numberOfLines={1}>
+                  Профиль пользователя
+                </Text>
+                <Text style={[styles.modalSubtitle, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+                  {selectedUser?.role === 'admin' ? 'Карточка администратора' : 'Карточка клиента'}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={closeProfileSheet}
+                hitSlop={8}
+                style={[styles.modalCloseBtn, { backgroundColor: theme.colors.background }]}
+              >
+                <MaterialIcons name="close" size={20} color={theme.colors.text} />
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalBody}>
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
               {selectedUser && (
                 <>
                   {/* Profile Card */}
@@ -857,46 +1105,27 @@ export default function AdminUsers({ navigation: _navigation }) {
                 </>
               )}
             </ScrollView>
-          </View>
+          </Animated.View>
         </View>
       </Modal>
 
-      {/* Quick Balance Modal */}
-      <Modal visible={quickBalanceVisible} transparent animationType="fade" onRequestClose={() => setQuickBalanceVisible(false)}>
-        <View style={styles.quickBalanceOverlay}>
-          <View style={[styles.quickBalanceContainer, { backgroundColor: theme.colors.cardBg }]}>
-            <Text style={[styles.quickBalanceTitle, { color: theme.colors.text }]}>
-              Пополнить баланс
-            </Text>
-            <Text style={[styles.quickBalanceSubtitle, { color: theme.colors.textSecondary }]}>
-              {quickBalanceUser?.name} · {Number(quickBalanceUser?.balance || 0).toFixed(0)} PRB
-            </Text>
-            <TextInput
-              style={[styles.quickBalanceInput, { borderColor: theme.colors.border, color: theme.colors.text, backgroundColor: theme.colors.background }]}
-              placeholder="Сумма в PRB"
-              placeholderTextColor={theme.colors.textSecondary}
-              keyboardType="numeric"
-              value={quickBalanceAmount}
-              onChangeText={setQuickBalanceAmount}
-              autoFocus
-            />
-            <View style={styles.quickBalanceButtons}>
-              <TouchableOpacity
-                style={[styles.quickBalanceCancelBtn, { borderColor: theme.colors.border }]}
-                onPress={() => setQuickBalanceVisible(false)}
-              >
-                <Text style={[styles.quickBalanceCancelText, { color: theme.colors.textSecondary }]}>Отмена</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.quickBalanceConfirmBtn, { backgroundColor: theme.colors.primary }]}
-                onPress={submitQuickBalance}
-              >
-                <Text style={styles.quickBalanceConfirmText}>Пополнить</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      {/* Balance Adjust Modal (Sprint B) */}
+      <BalanceAdjustModal
+        visible={balanceAdjustVisible}
+        onClose={() => setBalanceAdjustVisible(false)}
+        theme={theme}
+        user={balanceAdjustUser}
+        onAdjusted={handleBalanceAdjusted}
+        onNotify={showNotification}
+      />
+
+      {/* User Transactions History Modal (Sprint B) */}
+      <UserTransactionsModal
+        visible={txHistoryVisible}
+        onClose={() => setTxHistoryVisible(false)}
+        theme={theme}
+        user={txHistoryUser}
+      />
     </View>
   );
 }
@@ -908,28 +1137,41 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingVertical: spacing.md,
+    paddingBottom: 130,
   },
   header: {
     marginHorizontal: spacing.md,
     marginBottom: spacing.lg,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  headerSpacer: {
+    width: 44,
+    height: 44,
+  },
+  headerTextWrap: {
+    flex: 1,
+    minWidth: 0,
+    alignItems: 'center',
   },
   title: {
-    fontSize: 22,
-    fontWeight: '700',
+    fontSize: 20,
+    fontWeight: '800',
     color: colors.text,
+    textAlign: 'center',
   },
   subtitle: {
     fontSize: 12,
     color: colors.textSecondary,
-    marginTop: spacing.xs,
+    marginTop: 2,
+    textAlign: 'center',
   },
   addButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 3,
@@ -938,21 +1180,109 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 4,
   },
+  heroCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: spacing.md,
+    gap: 14,
+  },
+  kpiRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  kpiItem: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 4,
+  },
+  kpiValueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  kpiValue: {
+    fontSize: 22,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+  },
+  kpiLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
+  kpiDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  kpiDivider: {
+    width: 1,
+    height: 28,
+    opacity: 0.6,
+  },
+  segBarTrack: {
+    flexDirection: 'row',
+    height: 8,
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  legendRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    rowGap: 6,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  legendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  legendLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  legendValue: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.cardBg,
-    borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing.md,
+    borderRadius: 14,
+    paddingLeft: 8,
+    paddingRight: 6,
+    paddingVertical: 6,
     borderWidth: 1,
     borderColor: colors.border,
   },
+  searchIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   searchInput: {
     flex: 1,
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.sm,
     marginLeft: spacing.sm,
     fontSize: 14,
     color: colors.text,
+  },
+  searchClearBtn: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 4,
   },
   filtersContainer: {
     backgroundColor: colors.cardBg,
@@ -989,26 +1319,28 @@ const styles = StyleSheet.create({
   },
   compactFiltersContainer: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    gap: 8,
   },
   compactFilterButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    borderRadius: 999,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.background,
+    gap: 4,
   },
   compactFilterButtonText: {
     flex: 1,
-    marginHorizontal: 4,
-    fontSize: 12,
+    marginHorizontal: 2,
+    fontSize: 11,
     fontWeight: '600',
     color: colors.text,
+    textAlign: 'center',
   },
   dropdownMenu: {
     position: 'absolute',
@@ -1162,34 +1494,67 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.text,
   },
-  // Modal styles
+  // Modal styles — bottom-sheet в стиле NotificationBell
   modalContainer: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(6, 18, 30, 0.46)',
     justifyContent: 'flex-end',
   },
   modalContent: {
     backgroundColor: colors.cardBg,
-    borderTopLeftRadius: borderRadius.xl,
-    borderTopRightRadius: borderRadius.xl,
-    maxHeight: '90%',
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    paddingHorizontal: spacing.md,
+    paddingTop: 6,
+    paddingBottom: 0,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -10 },
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    elevation: 18,
+  },
+  dragHandleWrap: {
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  dragHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    opacity: 0.6,
   },
   modalHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    marginBottom: spacing.md,
+    gap: spacing.sm,
   },
+  modalHeaderSpacer: { width: 32 },
+  modalHeaderCenter: { flex: 1, alignItems: 'center', minWidth: 0 },
   modalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 19,
+    fontWeight: '800',
     color: colors.text,
+    textAlign: 'center',
+  },
+  modalSubtitle: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 2,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  modalCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   modalBody: {
-    padding: spacing.md,
+    paddingTop: 0,
+    paddingHorizontal: 0,
   },
   profileCard: {
     alignItems: 'center',
@@ -1334,59 +1699,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     marginLeft: spacing.sm,
-  },
-  quickBalanceOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing.lg,
-  },
-  quickBalanceContainer: {
-    width: '100%',
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-  },
-  quickBalanceTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  quickBalanceSubtitle: {
-    fontSize: 13,
-    marginBottom: spacing.lg,
-  },
-  quickBalanceInput: {
-    borderWidth: 1,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    fontSize: 16,
-    marginBottom: spacing.lg,
-  },
-  quickBalanceButtons: {
-    flexDirection: 'row',
-    gap: spacing.md,
-  },
-  quickBalanceCancelBtn: {
-    flex: 1,
-    borderWidth: 1,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    alignItems: 'center',
-  },
-  quickBalanceCancelText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  quickBalanceConfirmBtn: {
-    flex: 1,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    alignItems: 'center',
-  },
-  quickBalanceConfirmText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '700',
   },
 });

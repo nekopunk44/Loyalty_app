@@ -34,6 +34,7 @@ export const AdminUserListCard = ({
   onEdit,
   onDelete,
   onQuickBalance,
+  onShowTransactions,
   theme,
 }) => {
   const isAdmin = user.role === 'admin';
@@ -61,6 +62,8 @@ export const AdminUserListCard = ({
         },
       ]}
     >
+      {/* Left edge accent strip in level color — даёт визуальный «корешок» карточке */}
+      <View style={[styles.levelStrip, { backgroundColor: levelColor }]} />
       <View style={styles.row}>
         <View style={[styles.avatar, { backgroundColor: levelColor }]}>
           <Text style={styles.avatarText}>{initials}</Text>
@@ -107,27 +110,51 @@ export const AdminUserListCard = ({
               </View>
             )}
             {user.balance != null && (
-              <View style={styles.metaItem}>
-                <MaterialIcons name="account-balance-wallet" size={12} color={theme.colors.textSecondary} />
-                <Text style={[styles.metaText, { color: theme.colors.text, fontWeight: '700' }]}>
-                  {Number(user.balance).toFixed(0)} <Text style={{ color: theme.colors.textSecondary, fontWeight: '600' }}>PRB</Text>
-                </Text>
-              </View>
+              onQuickBalance ? (
+                <Pressable
+                  onPress={onQuickBalance}
+                  hitSlop={6}
+                  style={({ pressed }) => [
+                    styles.balancePill,
+                    {
+                      backgroundColor: pressed ? `${levelColor}2A` : `${levelColor}14`,
+                      borderColor: `${levelColor}40`,
+                    },
+                  ]}
+                >
+                  <MaterialIcons name="account-balance-wallet" size={12} color={levelColor} />
+                  <Text style={[styles.balancePillText, { color: theme.colors.text }]}>
+                    {Number(user.balance).toFixed(0)}{' '}
+                    <Text style={{ color: theme.colors.textSecondary, fontWeight: '600' }}>PRB</Text>
+                  </Text>
+                  <View style={[styles.balancePillPlus, { backgroundColor: `${levelColor}33` }]}>
+                    <MaterialIcons name="tune" size={12} color={levelColor} />
+                  </View>
+                </Pressable>
+              ) : (
+                <View style={styles.metaItem}>
+                  <MaterialIcons name="account-balance-wallet" size={12} color={theme.colors.textSecondary} />
+                  <Text style={[styles.metaText, { color: theme.colors.text, fontWeight: '700' }]}>
+                    {Number(user.balance).toFixed(0)}{' '}
+                    <Text style={{ color: theme.colors.textSecondary, fontWeight: '600' }}>PRB</Text>
+                  </Text>
+                </View>
+              )
             )}
           </View>
         </View>
 
         <View style={styles.actionsCol}>
-          {onQuickBalance && (
+          {onShowTransactions && (
             <Pressable
-              onPress={onQuickBalance}
+              onPress={onShowTransactions}
               hitSlop={8}
               style={({ pressed }) => [
                 styles.iconBtn,
-                { backgroundColor: pressed ? `${levelColor}26` : `${levelColor}14` },
+                { backgroundColor: pressed ? `${ICON_MUTED}26` : 'transparent' },
               ]}
             >
-              <MaterialIcons name="add" size={18} color={levelColor} />
+              <MaterialIcons name="receipt-long" size={18} color={ICON_MUTED} />
             </Pressable>
           )}
           <Pressable
@@ -161,11 +188,21 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  levelStrip: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 4,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.md,
+    paddingLeft: spacing.md + 4,
+    paddingRight: spacing.md,
     paddingVertical: spacing.sm + 2,
     gap: spacing.md,
   },
@@ -242,6 +279,27 @@ const styles = StyleSheet.create({
   metaText: {
     fontSize: 11,
     fontWeight: '600',
+  },
+  balancePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingLeft: 8,
+    paddingRight: 4,
+    paddingVertical: 3,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  balancePillText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  balancePillPlus: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   actionsCol: {
     flexDirection: 'row',
