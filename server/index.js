@@ -235,12 +235,23 @@ const sendWelcomeEmail = async (toEmail, setupToken, displayName) => {
         <p style="color:#4a5568;margin-bottom:24px">
           Для вас создан аккаунт в приложении <strong>Villa Jaconda</strong>.<br>
           Ваш логин: <strong>${toEmail}</strong><br>
-          Чтобы войти, откройте приложение, выберите «Есть код приглашения?» и введите код ниже.
+          Нажмите на кнопку ниже — приложение само откроет окно установки пароля.
           Код действует <strong>24 часа</strong>.
+        </p>
+        <div style="text-align:center;margin-bottom:24px">
+          <a href="villajaconda://setup?token=${setupToken}"
+             style="display:inline-block;background:#14B8A6;color:#ffffff;text-decoration:none;
+                    padding:14px 28px;border-radius:10px;font-weight:700;font-size:15px">
+            Установить пароль
+          </a>
+        </div>
+        <p style="color:#718096;font-size:13px;margin-bottom:16px">
+          Если кнопка не сработала — откройте приложение, выберите «Есть код приглашения?»
+          и введите код вручную:
         </p>
         <div style="background:#1a1150;border-radius:10px;padding:20px 24px;text-align:center;margin-bottom:24px">
           <p style="color:#a0aec0;font-size:12px;margin:0 0 8px">Код приглашения</p>
-          <code style="color:#ffffff;font-size:22px;letter-spacing:2px;word-break:break-all">${setupToken}</code>
+          <code style="color:#ffffff;font-size:18px;letter-spacing:1px;word-break:break-all">${setupToken}</code>
         </div>
         <p style="color:#718096;font-size:13px">
           Если вы не ожидали это письмо — просто проигнорируйте его. Аккаунт станет неактивным после истечения срока действия кода.

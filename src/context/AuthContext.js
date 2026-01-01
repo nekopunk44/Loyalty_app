@@ -109,11 +109,14 @@ export const AuthProvider = ({ children }) => {
         ]);
 
         if (savedToken && savedUser) {
+          const parsedUser = JSON.parse(savedUser);
           setAuthToken(savedToken);
-          setUser(JSON.parse(savedUser));
+          setUser(parsedUser);
           // Сразу пробуем обновить токен — он мог устареть пока приложение было закрыто
           _startRefreshTimer();
           refreshAccessToken();
+          // Без heartbeat сервер считает пользователя offline сразу после рестарта
+          _startHeartbeat(parsedUser.id);
         }
       } catch (e) {
         console.error('Ошибка при восстановлении сессии:', e);
@@ -185,13 +188,7 @@ export const AuthProvider = ({ children }) => {
       if (!token) throw new Error('Сервер не вернул токен авторизации');
 
       await _persistSession(token, refreshToken, userData);
-
-      // Heartbeat каждые 60 секунд
-      if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
-      heartbeatIntervalRef.current = setInterval(() => {
-        sendHeartbeat(userData.id, token);
-      }, 60000);
-
+      _startHeartbeat(userData.id);
       return { success: true };
     } catch (e) {
       console.error('Ошибка входа:', e);
@@ -204,8 +201,13 @@ export const AuthProvider = ({ children }) => {
   };
 
   // ─── Heartbeat ──────────────────────────────────────────────────────────────
-  const sendHeartbeat = async (userId, token) => {
+  // Токен читаем из AsyncStorage на каждый запрос — старый, закрытый в замыкании
+  // setInterval'а, становится невалидным после refresh (~раз в 13 мин) и сервер
+  // начинает отдавать 401, из-за чего пользователь «протухает» в offline.
+  const sendHeartbeat = async (userId) => {
     try {
+      const token = await AsyncStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
+      if (!token) return;
       await fetch(`${getApiUrl()}/auth/heartbeat`, {
         method: 'POST',
         headers: {
@@ -217,6 +219,18 @@ export const AuthProvider = ({ children }) => {
     } catch (_) {
       // фоновый процесс, ошибки не критичны
     }
+  };
+
+  // Сразу отправляем heartbeat и запускаем интервал. Используется и при login,
+  // и при восстановлении сессии — без второго вызова админ остаётся offline до
+  // следующего логина (heartbeat висел только внутри login).
+  const _startHeartbeat = (userId) => {
+    if (!userId) return;
+    if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
+    sendHeartbeat(userId);
+    heartbeatIntervalRef.current = setInterval(() => {
+      sendHeartbeat(userId);
+    }, 60000);
   };
 
   // ─── Выход ──────────────────────────────────────────────────────────────────
@@ -272,11 +286,13 @@ export const AuthProvider = ({ children }) => {
   };
 
   // ─── Установка нового пароля по токену из письма ───────────────────────────
-  const setNewPassword = async (token, newPassword) => {
+  // mode: 'reset' (по умолчанию) или 'setup' — влияет только на текст
+  // уведомления админам.
+  const setNewPassword = async (token, newPassword, mode) => {
     const response = await fetch(`${getApiUrl()}/auth/set-new-password`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, newPassword }),
+      body: JSON.stringify({ token, newPassword, ...(mode ? { mode } : {}) }),
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Ошибка смены пароля');

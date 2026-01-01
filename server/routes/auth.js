@@ -368,7 +368,7 @@ module.exports = function createAuthRouter({
    */
   router.post('/set-new-password', validate(schemas.setNewPassword), async (req, res) => {
     try {
-      const { token, newPassword } = req.body;
+      const { token, newPassword, mode = 'reset' } = req.body;
 
       if (!isDbConnected()) {
         return res.status(503).json({ success: false, error: 'База данных не подключена' });
@@ -395,6 +395,8 @@ module.exports = function createAuthRouter({
         resetPasswordExpires: null,
       });
 
+      const isSetup = mode === 'setup';
+
       try {
         const admins   = await User.findAll({ where: { role: 'admin' } });
         const userName = user.displayName || user.email;
@@ -402,11 +404,13 @@ module.exports = function createAuthRouter({
           admins.map((admin) =>
             Notification.create({
               userId:  admin.userId,
-              title:   'Смена пароля',
-              message: `Пользователь ${userName} (${user.email}) сменил пароль.`,
+              title:   isSetup ? 'Активация аккаунта' : 'Смена пароля',
+              message: isSetup
+                ? `Пользователь ${userName} (${user.email}) установил пароль и активировал аккаунт.`
+                : `Пользователь ${userName} (${user.email}) сменил пароль.`,
               type:    'security',
               read:    false,
-              data:    { userId: user.userId, email: user.email },
+              data:    { userId: user.userId, email: user.email, mode },
             })
           )
         );
@@ -414,7 +418,10 @@ module.exports = function createAuthRouter({
         logger.error('Ошибка при отправке уведомлений админам', { error: notifErr.message });
       }
 
-      return res.status(200).json({ success: true, message: 'Пароль успешно изменён' });
+      return res.status(200).json({
+        success: true,
+        message: isSetup ? 'Пароль установлен' : 'Пароль успешно изменён',
+      });
     } catch (error) {
       logger.error('set-new-password error', { error: error.message });
       return res.status(500).json({ success: false, error: 'Ошибка сервера' });

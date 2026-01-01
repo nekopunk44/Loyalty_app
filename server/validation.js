@@ -41,6 +41,7 @@ const resetPasswordSchema = z.object({
 const setNewPasswordSchema = z.object({
   token:       z.string().min(8).max(256),
   newPassword: password,
+  mode:        z.enum(['reset', 'setup']).optional(),
 }).strict();
 
 const verifyEmailSchema = z.object({
