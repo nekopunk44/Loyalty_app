@@ -170,6 +170,8 @@ const authSlowDown = slowDown({
 app.use('/api/', apiLimiter);
 
 // ==================== Email Transport ====================
+// Таймауты ограничивают худший случай при недоступном SMTP — без них
+// nodemailer ждёт до 10 минут и блокирует HTTP-запрос/фоновую очередь.
 const emailTransporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || 'smtp.gmail.com',
   port: parseInt(process.env.SMTP_PORT || '587'),
@@ -178,6 +180,9 @@ const emailTransporter = nodemailer.createTransport({
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
   },
+  connectionTimeout: 10_000,
+  greetingTimeout:   10_000,
+  socketTimeout:     15_000,
 });
 
 const sendPasswordResetEmail = async (toEmail, resetToken) => {

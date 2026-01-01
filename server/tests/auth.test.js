@@ -5,6 +5,11 @@
 
 process.env.JWT_SECRET = 'test-secret-auth';
 process.env.NODE_ENV   = 'test';
+// emailSent в /register-admin теперь отражает «настроен ли SMTP», а не результат
+// отправки (письмо уходит fire-and-forget). Чтобы тесты видели emailSent=true,
+// эмулируем настроенный SMTP.
+process.env.SMTP_USER = process.env.SMTP_USER || 'test@example.com';
+process.env.SMTP_PASS = process.env.SMTP_PASS || 'test-pass';
 
 const jwt     = require('jsonwebtoken');
 const request = require('supertest');
@@ -188,6 +193,9 @@ describe('POST /api/auth/register-admin', () => {
   test('создание не падает, если письмо не ушло', async () => {
     const app = express();
     app.use(express.json());
+    // sendWelcomeEmail вызывается fire-and-forget — отклонение не должно
+    // ронять запрос. Проверяем, что ответ 201 приходит, и .catch() в роуте
+    // молча перехватывает ошибку.
     const failingSend = jest.fn().mockRejectedValue(new Error('SMTP down'));
     app.use('/api/auth', require('../routes/auth')({
       authLimiter:            noop,
@@ -202,7 +210,25 @@ describe('POST /api/auth/register-admin', () => {
       .send({ email: 'new@example.com', displayName: 'New User' });
     expect(res.status).toBe(201);
     expect(res.body.success).toBe(true);
-    expect(res.body.emailSent).toBe(false);
+    expect(failingSend).toHaveBeenCalled();
+  });
+
+  test('emailSent=false когда SMTP не настроен', async () => {
+    const savedUser = process.env.SMTP_USER;
+    const savedPass = process.env.SMTP_PASS;
+    delete process.env.SMTP_USER;
+    delete process.env.SMTP_PASS;
+    try {
+      const res = await request(createApp())
+        .post('/api/auth/register-admin')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ email: 'new@example.com', displayName: 'New User' });
+      expect(res.status).toBe(201);
+      expect(res.body.emailSent).toBe(false);
+    } finally {
+      process.env.SMTP_USER = savedUser;
+      process.env.SMTP_PASS = savedPass;
+    }
   });
 });
 
