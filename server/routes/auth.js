@@ -99,18 +99,18 @@ module.exports = function createAuthRouter({
       } = req.body;
 
       if (!email) {
-        return res.status(400).json({ success: false, message: 'Email обязателен' });
+        return res.status(400).json({ success: false, error: 'Email обязателен' });
       }
       if (!validateEmail(email)) {
-        return res.status(400).json({ success: false, message: 'Неверный формат email' });
+        return res.status(400).json({ success: false, error: 'Неверный формат email' });
       }
       if (!isDbConnected()) {
-        return res.status(503).json({ success: false, message: 'База данных не подключена' });
+        return res.status(503).json({ success: false, error: 'База данных не подключена' });
       }
 
       const existingUser = await User.findOne({ where: { email } });
       if (existingUser) {
-        return res.status(400).json({ success: false, message: 'Email уже зарегистрирован' });
+        return res.status(400).json({ success: false, error: 'Email уже зарегистрирован' });
       }
 
       // Пароль не задаётся админом — генерим случайный hash. Юзер не сможет
@@ -181,7 +181,7 @@ module.exports = function createAuthRouter({
       logger.error('register-admin error', { error: error.message });
       return res.status(500).json({
         success: false,
-        message: 'Ошибка при создании пользователя',
+        error: 'Ошибка при создании пользователя',
         details: isDev() ? error.message : undefined,
       });
     }
