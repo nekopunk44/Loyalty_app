@@ -14,6 +14,13 @@ import { SkeletonBlock } from '../../components/ui/Skeleton';
 import { apiCall } from '../../utils/api';
 import { getApiUrl } from '../../utils/apiUrl';
 import { getSkyMood, pad, STAR_POSITIONS } from '../../utils/skyMood';
+import { properties as PROPERTY_CATALOG } from '../../constants/properties';
+
+const propertyNameById = (id) => {
+  if (id == null) return null;
+  const found = PROPERTY_CATALOG.find(p => String(p.id) === String(id));
+  return found?.name || null;
+};
 
 const ORANGE = '#FF6B35';
 const TEAL   = '#14B8A6';
@@ -150,7 +157,7 @@ export default function HomeScreen({ navigation }) {
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: screenBg }]}
-      contentContainerStyle={{ paddingBottom: 100, backgroundColor: screenBg }}
+      contentContainerStyle={{ paddingBottom: 130, backgroundColor: screenBg }}
       showsVerticalScrollIndicator={false}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[ORANGE]} tintColor={ORANGE} />}
     >
@@ -292,12 +299,6 @@ export default function HomeScreen({ navigation }) {
       <FadeInCard delay={260}>
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: textPri }]}>Мои привилегии</Text>
-          <View style={[styles.levelPill, { backgroundColor: `${levelColor}15`, borderColor: `${levelColor}40` }]}>
-            <MaterialIcons name="emoji-events" size={11} color={levelColor} />
-            <Text style={[styles.levelPillText, { color: levelColor }]}>
-              {user?.membershipLevel || 'Bronze'}
-            </Text>
-          </View>
         </View>
         <FlatList
           data={LEVEL_PERKS[levelKey] || LEVEL_PERKS.bronze}
@@ -392,11 +393,13 @@ export default function HomeScreen({ navigation }) {
           </View>
           {recentBookings.map((b) => {
             const STATUS = {
-              confirmed: { label: 'Активный',  bg: '#D1FAE5', text: '#065F46' },
-              paid:      { label: 'Активный',  bg: '#D1FAE5', text: '#065F46' },
-              pending:   { label: 'Ожидает',   bg: '#FEF3C7', text: '#B45309' },
-              completed: { label: 'Завершено', bg: '#E5E7EB', text: '#374151' },
-              cancelled: { label: 'Отменено',  bg: '#FEE2E2', text: '#B91C1C' },
+              confirmed:       { label: 'Активный',         bg: '#D1FAE5', text: '#065F46' },
+              paid:            { label: 'Активный',         bg: '#D1FAE5', text: '#065F46' },
+              pending:         { label: 'Ожидает оплаты',   bg: '#FEF3C7', text: '#B45309' },
+              pending_payment: { label: 'Ожидает депозита', bg: '#FEF3C7', text: '#B45309' },
+              completed:       { label: 'Завершено',        bg: '#E5E7EB', text: '#374151' },
+              cancelled:       { label: 'Отменено',         bg: '#FEE2E2', text: '#B91C1C' },
+              expired:         { label: 'Закрыто',          bg: '#E5E7EB', text: '#6B7280' },
             };
             const s = STATUS[b.status] || { label: b.status, bg: '#F3F4F6', text: '#6B7280' };
             const dateStr = b.checkIn && b.checkOut ? `${b.checkIn} — ${b.checkOut}` : b.checkIn || '';
@@ -410,7 +413,7 @@ export default function HomeScreen({ navigation }) {
                 <View style={[styles.bookingAccent, { backgroundColor: s.text }]} />
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.bookingProperty, { color: textPri }]} numberOfLines={1}>
-                    {b.property || b.propertyId || 'Объект'}
+                    {b.property || propertyNameById(b.propertyId) || (b.propertyId ? `Объект #${b.propertyId}` : 'Объект')}
                   </Text>
                   {!!dateStr && <Text style={[styles.bookingDate, { color: textSec }]}>{dateStr}</Text>}
                 </View>

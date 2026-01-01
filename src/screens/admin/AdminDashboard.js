@@ -82,11 +82,13 @@ const formatTimeAgo = (input) => {
 };
 
 const STATUS_META = {
-  pending:   { color: AMBER, label: 'Ожидает' },
-  confirmed: { color: NAVY2, label: 'Подтверждено' },
-  completed: { color: TEAL2, label: 'Завершено' },
-  cancelled: { color: RED,   label: 'Отменено' },
-  canceled:  { color: RED,   label: 'Отменено' },
+  pending:         { color: AMBER, label: 'Ожидает оплаты' },
+  pending_payment: { color: AMBER, label: 'Ожидает депозита' },
+  confirmed:       { color: NAVY2, label: 'Подтверждено' },
+  completed:       { color: TEAL2, label: 'Завершено' },
+  cancelled:       { color: RED,   label: 'Отменено' },
+  canceled:        { color: RED,   label: 'Отменено' },
+  expired:         { color: '#94A3B8', label: 'Закрыто' },
 };
 
 export default function AdminDashboard({ navigation }) {
