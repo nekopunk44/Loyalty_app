@@ -8,6 +8,7 @@ const Sentry = require('./monitoring');
 
 const express = require('express');
 const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const dotenv = require('dotenv');
@@ -170,8 +171,13 @@ const authSlowDown = slowDown({
 app.use('/api/', apiLimiter);
 
 // ==================== Email Transport ====================
-// Таймауты ограничивают худший случай при недоступном SMTP — без них
-// nodemailer ждёт до 10 минут и блокирует HTTP-запрос/фоновую очередь.
+// Двухдрайверная отправка: Resend (HTTPS API, основной путь в проде) или
+// SMTP через nodemailer (fallback, удобно для локальной разработки).
+// Railway блокирует/тормозит SMTP на 587 — Gmail-SMTP проваливается в
+// Connection timeout, поэтому в проде используем Resend.
+const RESEND_API_KEY = process.env.RESEND_API_KEY;
+const resendClient = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null;
+
 const emailTransporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || 'smtp.gmail.com',
   port: parseInt(process.env.SMTP_PORT || '587'),
@@ -185,20 +191,56 @@ const emailTransporter = nodemailer.createTransport({
   socketTimeout:     15_000,
 });
 
-const sendPasswordResetEmail = async (toEmail, resetToken) => {
-  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-    logger.info('DEV reset token', { email: toEmail, token: resetToken });
+const isMailConfigured = () =>
+  !!RESEND_API_KEY || !!(process.env.SMTP_USER && process.env.SMTP_PASS);
+
+// Адрес отправителя. До верификации собственного домена в Resend используем
+// его sandbox-адрес onboarding@resend.dev — он не требует настройки DNS, но
+// получатели увидят именно этот адрес. Можно переопределить через MAIL_FROM.
+const mailFrom = () => {
+  if (process.env.MAIL_FROM) return process.env.MAIL_FROM;
+  if (resendClient) return 'Villa Jaconda <onboarding@resend.dev>';
+  return `"Villa Jaconda" <${process.env.SMTP_USER}>`;
+};
+
+const MAIL_HEADERS = {
+  'X-Priority': '1',
+  'X-Mailer': 'Villa Jaconda Mailer',
+  'Precedence': 'transactional',
+};
+
+// Единая точка отправки: Resend если есть ключ, иначе SMTP. Бросает наверх,
+// чтобы вызывающий код мог поймать и залогировать (см. .catch fire-and-forget
+// в /register-admin).
+const sendMail = async ({ to, subject, html }) => {
+  if (resendClient) {
+    const { error } = await resendClient.emails.send({
+      from: mailFrom(),
+      to,
+      subject,
+      html,
+      headers: MAIL_HEADERS,
+    });
+    if (error) throw new Error(error.message || JSON.stringify(error));
     return;
   }
   await emailTransporter.sendMail({
-    from: `"Villa Jaconda" <${process.env.SMTP_USER}>`,
+    from: mailFrom(),
+    to,
+    subject,
+    html,
+    headers: MAIL_HEADERS,
+  });
+};
+
+const sendPasswordResetEmail = async (toEmail, resetToken) => {
+  if (!isMailConfigured()) {
+    logger.info('DEV reset token', { email: toEmail, token: resetToken });
+    return;
+  }
+  await sendMail({
     to: toEmail,
     subject: 'Сброс пароля — Villa Jaconda',
-    headers: {
-      'X-Priority': '1',
-      'X-Mailer': 'Villa Jaconda Mailer',
-      'Precedence': 'transactional',
-    },
     html: `
       <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#f7fafc;border-radius:12px">
         <h2 style="color:#1a1150;margin-bottom:8px">Сброс пароля</h2>
@@ -219,20 +261,14 @@ const sendPasswordResetEmail = async (toEmail, resetToken) => {
 };
 
 const sendWelcomeEmail = async (toEmail, setupToken, displayName) => {
-  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+  if (!isMailConfigured()) {
     logger.info('DEV welcome token', { email: toEmail, token: setupToken });
     return;
   }
   const greeting = displayName ? `Здравствуйте, ${displayName}!` : 'Здравствуйте!';
-  await emailTransporter.sendMail({
-    from: `"Villa Jaconda" <${process.env.SMTP_USER}>`,
+  await sendMail({
     to: toEmail,
     subject: 'Добро пожаловать в Villa Jaconda',
-    headers: {
-      'X-Priority': '1',
-      'X-Mailer': 'Villa Jaconda Mailer',
-      'Precedence': 'transactional',
-    },
     html: `
       <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#f7fafc;border-radius:12px">
         <h2 style="color:#1a1150;margin-bottom:8px">Добро пожаловать в Villa Jaconda</h2>
