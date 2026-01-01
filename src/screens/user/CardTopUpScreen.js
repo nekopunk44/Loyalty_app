@@ -92,7 +92,7 @@ export default function CardTopUpScreen({ navigation, onClose }) {
   const isSheet = !!onClose;
   const { user } = useAuth();
   const { topUpCard, topUpCardStripe, getCardBalance, isProcessing, paymentError } = usePayment();
-  const { notifyPaymentSuccess } = useNotification();
+  const { notifyTopup } = useNotification();
   const { isDark, theme } = useTheme();
 
   const {
@@ -192,10 +192,11 @@ export default function CardTopUpScreen({ navigation, onClose }) {
       if (selectedMethod === 'card') {
         const result = await topUpCardStripe(user.id, parsedAmount, currency);
         if (result?.success) {
+          notifyTopup?.(parsedAmount, 'Stripe');
           Alert.alert(
             'Готово',
             `Баланс пополнен на ${parsedAmount.toLocaleString('ru-RU')} PRB`,
-            [{ text: 'OK', onPress: () => { setTopUpAmount(''); loadBalance(); notifyPaymentSuccess?.(); } }],
+            [{ text: 'OK', onPress: () => { setTopUpAmount(''); loadBalance(); } }],
           );
         } else if (result?.status === 'cancelled') {
           // Пользователь закрыл браузер — молча, ничего не показываем
@@ -213,8 +214,9 @@ export default function CardTopUpScreen({ navigation, onClose }) {
 
       // PayPal и банковские переводы — старый flow (демо/manual)
       await topUpCard(user.id, parsedAmount, selectedMethod);
+      notifyTopup?.(parsedAmount, selectedMethod === 'paypal' ? 'PayPal' : 'банковский перевод');
       Alert.alert('Готово', `Баланс пополнен на ${parsedAmount.toLocaleString('ru-RU')} PRB`, [
-        { text: 'OK', onPress: () => { setTopUpAmount(''); loadBalance(); notifyPaymentSuccess?.(); } },
+        { text: 'OK', onPress: () => { setTopUpAmount(''); loadBalance(); } },
       ]);
     } catch (e) {
       Alert.alert('Ошибка', e.message || 'Не удалось пополнить счёт');

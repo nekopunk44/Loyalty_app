@@ -570,42 +570,53 @@ function ChurnRiskCard({ summary, theme, onPress }) {
     idx >= 25 ? 'умеренный риск' :
                 'низкий риск';
 
+  const isDark = theme.dark;
+  const cardBg     = isDark ? HERO.bg      : theme.colors.cardBg;
+  const cardBorder = isDark ? HERO.cardLine : theme.colors.border;
+  const eyebrowClr = isDark ? HERO.inkDim   : theme.colors.textSecondary;
+  const unitClr    = isDark ? HERO.inkFaint : theme.colors.textSecondary;
+  const chevronClr = isDark ? HERO_INK_DIM  : theme.colors.textSecondary;
+
   return (
     <TouchableOpacity
       activeOpacity={0.88}
       onPress={onPress}
-      style={[styles.churnCardPremium, { borderColor: HERO.cardLine }]}
+      style={[styles.churnCardPremium, { backgroundColor: cardBg, borderColor: cardBorder }]}
     >
       <View style={styles.churnLeft}>
-        <Text style={styles.churnEyebrow}>ML · CHURN INDEX</Text>
+        <Text style={[styles.churnEyebrow, { color: eyebrowClr }]}>ML · ИНДЕКС ОТТОКА</Text>
         <View style={styles.churnValueRow}>
           <Text style={[styles.churnValue, { color: accent }]}>{idx}</Text>
-          <Text style={styles.churnValueUnit}>/100</Text>
+          <Text style={[styles.churnValueUnit, { color: unitClr }]}>/100</Text>
         </View>
-        <Text style={[styles.churnLabel, { color: accent }]}>{label}</Text>
+        <Text style={[styles.churnLabel, { color: accent }]}>{label.toUpperCase()}</Text>
         {summary.partial && (
-          <Text style={styles.churnPartial}>
+          <Text style={[styles.churnPartial, { color: unitClr }]}>
             данные частичные · ML отвечал не на всех
           </Text>
         )}
       </View>
 
       <View style={styles.churnRight}>
-        <ChurnBucket count={summary.high}   color="#F87171" letter="H" theme={theme} />
-        <ChurnBucket count={summary.medium} color="#FBBF24" letter="M" theme={theme} />
-        <ChurnBucket count={summary.low}    color="#34D399" letter="L" theme={theme} />
+        <ChurnBucket count={summary.high}   color="#F87171" letter="В" theme={theme} />
+        <ChurnBucket count={summary.medium} color="#FBBF24" letter="С" theme={theme} />
+        <ChurnBucket count={summary.low}    color="#34D399" letter="Н" theme={theme} />
       </View>
 
-      <MaterialIcons name="chevron-right" size={20} color={HERO_INK_DIM} style={{ marginLeft: 4 }} />
+      <MaterialIcons name="chevron-right" size={20} color={chevronClr} style={{ marginLeft: 4 }} />
     </TouchableOpacity>
   );
 }
 
-function ChurnBucket({ count, color, letter }) {
+function ChurnBucket({ count, color, letter, theme }) {
+  const isDark = theme.dark;
+  const bucketBg     = isDark ? HERO.bgLayer  : theme.colors.background;
+  const bucketBorder = isDark ? HERO.cardLine  : theme.colors.border;
+  const letterClr    = isDark ? HERO.inkFaint  : theme.colors.textSecondary;
   return (
-    <View style={styles.churnBucket}>
+    <View style={[styles.churnBucket, { backgroundColor: bucketBg, borderColor: bucketBorder }]}>
       <Text style={[styles.churnBucketCount, { color }]}>{count}</Text>
-      <Text style={styles.churnBucketLetter}>{letter}</Text>
+      <Text style={[styles.churnBucketLetter, { color: letterClr }]}>{letter}</Text>
     </View>
   );
 }
@@ -719,10 +730,9 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
 
-  // Churn ML card (premium — тёмный «command center»)
+  // Churn ML card (premium — адаптируется к теме через инлайн-стили)
   churnCardPremium: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: HERO.bg,
     borderWidth: 1,
     borderRadius: borderRadius.lg,
     padding: spacing.md,
@@ -730,26 +740,23 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   churnLeft: { flex: 1, minWidth: 0 },
-  churnEyebrow: {
-    color: HERO.inkDim, fontSize: 9, fontWeight: '900', letterSpacing: 1.4,
-  },
+  churnEyebrow: { fontSize: 9, fontWeight: '900', letterSpacing: 1.4 },
   churnValueRow: { flexDirection: 'row', alignItems: 'baseline', gap: 4, marginTop: 4 },
   churnValue: { fontSize: 30, fontWeight: '900', lineHeight: 32 },
-  churnValueUnit: { color: HERO.inkFaint, fontSize: 12, fontWeight: '800' },
-  churnLabel: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.6, marginTop: 2 },
-  churnPartial: { color: HERO.inkFaint, fontSize: 10, marginTop: 6 },
+  churnValueUnit: { fontSize: 12, fontWeight: '800' },
+  churnLabel: { fontSize: 11, fontWeight: '800', letterSpacing: 0.6, marginTop: 2 },
+  churnPartial: { fontSize: 10, marginTop: 6 },
 
   churnRight: { flexDirection: 'row', gap: 6 },
   churnBucket: {
-    backgroundColor: HERO.bgLayer,
-    borderWidth: 1, borderColor: HERO.cardLine,
+    borderWidth: 1,
     borderRadius: 10,
     paddingVertical: 6, paddingHorizontal: 9,
     alignItems: 'center',
     minWidth: 36,
   },
   churnBucketCount: { fontSize: 14, fontWeight: '900' },
-  churnBucketLetter: { color: HERO.inkFaint, fontSize: 9, fontWeight: '800', letterSpacing: 0.8, marginTop: 1 },
+  churnBucketLetter: { fontSize: 9, fontWeight: '800', letterSpacing: 0.8, marginTop: 1 },
 
   // Activity panel
   panel: { borderWidth: 1, borderRadius: borderRadius.lg, padding: spacing.md, marginBottom: spacing.md },

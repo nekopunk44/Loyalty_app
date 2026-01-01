@@ -442,13 +442,21 @@ export default function AdminStats() {
 
       {renderRevenueChart()}
 
-      <View style={[styles.panel, { backgroundColor: theme.colors.cardBg, borderColor: theme.colors.border }]}>
-        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Эффективность</Text>
-        <MetricRow label="Средний чек"       value={fmtMoney(model.avgBooking)}  progress={clamp(model.avgBooking / 50000 * 100, 3, 100)} color={theme.colors.primary} theme={theme} />
-        <MetricRow label="Доход на клиента"  value={fmtMoney(model.revPerUser)}  progress={clamp(model.revPerUser / 12000 * 100, 3, 100)}  color="#06B6D4" theme={theme} />
-        <MetricRow label="Доля Premium"      value={fmtPct(model.premiumShare)}  progress={clamp(model.premiumShare, 3, 100)}              color="#8B5CF6" theme={theme} />
-        <MetricRow label="Загрузка номеров"  value={fmtPct(model.utilization)}   progress={model.utilization}                              color="#10B981" theme={theme} />
-      </View>
+      {(() => {
+        // Динамические знаменатели — 150% от текущего значения, но не меньше разумного минимума.
+        // Это делает бар осмысленным даже на маленьких тестовых данных.
+        const avgBase     = Math.max(model.avgBooking * 1.5, 5000);
+        const perUserBase = Math.max(model.revPerUser * 1.5, 2000);
+        return (
+          <View style={[styles.panel, { backgroundColor: theme.colors.cardBg, borderColor: theme.colors.border }]}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Эффективность</Text>
+            <MetricRow label="Средний чек"      value={fmtMoney(model.avgBooking)} progress={clamp(model.avgBooking / avgBase * 100, 3, 100)}     color={theme.colors.primary} theme={theme} />
+            <MetricRow label="Доход на клиента" value={fmtMoney(model.revPerUser)} progress={clamp(model.revPerUser / perUserBase * 100, 3, 100)} color="#06B6D4"             theme={theme} />
+            <MetricRow label="Доля Premium"     value={fmtPct(model.premiumShare)} progress={clamp(model.premiumShare, 3, 100)}                   color="#8B5CF6"             theme={theme} />
+            <MetricRow label="Загрузка номеров" value={fmtPct(model.utilization)}  progress={clamp(model.utilization, 3, 100)}                    color="#10B981"             theme={theme} />
+          </View>
+        );
+      })()}
     </>
   );
 
@@ -604,8 +612,16 @@ export default function AdminStats() {
         )}
 
         <View style={styles.chartMetrics}>
-          <MetricRow label="Прогноз роста (AI)"   value={metrics.revenue > 0 ? '+11%' : 'нет данных'}                              progress={metrics.revenue > 0 ? 66 : 0}               color="#10B981" theme={theme} />
-          <MetricRow label="Риск просадки (AI)"   value={model.riskScore !== null ? fmtPct(model.riskScore) : 'нет данных'}       progress={model.riskScore ?? 0}                       color="#F59E0B" theme={theme} />
+          <MetricRow
+            label="Динамика периода"
+            value={revenueDelta.prev > 0
+              ? (revenueDelta.pct >= 0 ? `+${Math.round(revenueDelta.pct)}%` : `${Math.round(revenueDelta.pct)}%`)
+              : (metrics.revenue > 0 ? 'первый период' : 'нет данных')}
+            progress={revenueDelta.prev > 0 ? clamp(Math.abs(revenueDelta.pct), 3, 100) : (metrics.revenue > 0 ? 50 : 0)}
+            color={revenueDelta.pct >= 0 ? '#10B981' : '#EF4444'}
+            theme={theme}
+          />
+          <MetricRow label="Риск просадки (AI)" value={model.riskScore !== null ? fmtPct(model.riskScore) : 'нет данных'} progress={model.riskScore ?? 0} color="#F59E0B" theme={theme} />
         </View>
       </View>
     );
@@ -1024,9 +1040,9 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 17, fontWeight: '900', marginBottom: spacing.md },
 
   metricRow:   { marginBottom: spacing.md },
-  metricHeader:{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.sm },
-  metricLabel: { fontSize: 13, fontWeight: '600' },
-  metricValue: { fontSize: 13, fontWeight: '800' },
+  metricHeader:{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
+  metricLabel: { fontSize: 13, fontWeight: '600', flex: 1, marginRight: spacing.sm },
+  metricValue: { fontSize: 13, fontWeight: '800', flexShrink: 0 },
   progressTrack: { height: 6, borderRadius: 3, overflow: 'hidden' },
   progressFill:  { height: '100%', borderRadius: 3 },
 
