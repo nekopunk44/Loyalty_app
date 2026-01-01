@@ -74,13 +74,17 @@ const UserModel = require('../models/User');
 
 const noop = (req, res, next) => next();
 
+let lastSendWelcomeEmail = null;
+
 const createApp = (isDbConnected = () => true) => {
   const app = express();
   app.use(express.json());
+  lastSendWelcomeEmail = jest.fn().mockResolvedValue(undefined);
   app.use('/api/auth', require('../routes/auth')({
     authLimiter:            noop,
     authSlowDown:           noop,
     sendPasswordResetEmail: jest.fn().mockResolvedValue(undefined),
+    sendWelcomeEmail:       lastSendWelcomeEmail,
     isDbConnected,
   }));
   return app;
@@ -144,10 +148,61 @@ describe('POST /api/auth/register-admin', () => {
     const res = await request(createApp())
       .post('/api/auth/register-admin')
       .set('Authorization', `Bearer ${adminToken}`)
-      .send({ email: 'new@example.com', password: 'Pass1234', displayName: 'New User' });
+      .send({ email: 'new@example.com', displayName: 'New User' });
     expect(res.status).toBe(201);
     expect(res.body.success).toBe(true);
     expect(res.body.user).toBeDefined();
+  });
+
+  test('отправляет welcome-письмо и сохраняет setupToken', async () => {
+    let createdAttrs = null;
+    User.create.mockImplementation(async (attrs) => {
+      createdAttrs = attrs;
+      return mockUser();
+    });
+    const res = await request(createApp())
+      .post('/api/auth/register-admin')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ email: 'new@example.com', displayName: 'New User' });
+    expect(res.status).toBe(201);
+    expect(res.body.emailSent).toBe(true);
+    // токен сохранён в БД
+    expect(createdAttrs.resetPasswordToken).toBeTruthy();
+    expect(createdAttrs.resetPasswordExpires).toBeInstanceOf(Date);
+    // письмо отправлено с тем же токеном (displayName приходит из созданного User)
+    expect(lastSendWelcomeEmail).toHaveBeenCalledWith(
+      'new@example.com',
+      createdAttrs.resetPasswordToken,
+      expect.any(String),
+    );
+  });
+
+  test('400 без email', async () => {
+    const res = await request(createApp())
+      .post('/api/auth/register-admin')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ displayName: 'No Email' });
+    expect(res.status).toBe(400);
+  });
+
+  test('создание не падает, если письмо не ушло', async () => {
+    const app = express();
+    app.use(express.json());
+    const failingSend = jest.fn().mockRejectedValue(new Error('SMTP down'));
+    app.use('/api/auth', require('../routes/auth')({
+      authLimiter:            noop,
+      authSlowDown:           noop,
+      sendPasswordResetEmail: jest.fn().mockResolvedValue(undefined),
+      sendWelcomeEmail:       failingSend,
+      isDbConnected:          () => true,
+    }));
+    const res = await request(app)
+      .post('/api/auth/register-admin')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ email: 'new@example.com', displayName: 'New User' });
+    expect(res.status).toBe(201);
+    expect(res.body.success).toBe(true);
+    expect(res.body.emailSent).toBe(false);
   });
 });
 

@@ -45,6 +45,7 @@ export default function LoginScreen() {
 
   const [resetVisible, setResetVisible]         = useState(false);
   const [resetStep, setResetStep]               = useState(1); // 1 = email, 2 = token+password
+  const [setupMode, setSetupMode]               = useState(false); // true = установка пароля по приглашению
   const [resetEmail, setResetEmail]             = useState('');
   const [resetToken, setResetToken]             = useState('');
   const [resetNewPwd, setResetNewPwd]           = useState('');
@@ -121,6 +122,7 @@ export default function LoginScreen() {
   }, [isDark, themeAnim]);
 
   const handleForgotPassword = () => {
+    setSetupMode(false);
     setResetEmail(username);
     setResetToken('');
     setResetNewPwd('');
@@ -129,9 +131,19 @@ export default function LoginScreen() {
     setResetVisible(true);
   };
 
+  const handleSetupInvite = () => {
+    setSetupMode(true);
+    setResetToken('');
+    setResetNewPwd('');
+    setResetConfirm('');
+    setResetStep(2); // сразу к вводу кода и пароля
+    setResetVisible(true);
+  };
+
   const handleCloseReset = () => {
     setResetVisible(false);
     setResetStep(1);
+    setSetupMode(false);
     setResetToken('');
     setResetNewPwd('');
     setResetConfirm('');
@@ -167,8 +179,14 @@ export default function LoginScreen() {
     setResetLoading(true);
     try {
       await setNewPassword(resetToken.trim(), resetNewPwd);
+      const wasSetup = setupMode;
       handleCloseReset();
-      Alert.alert('Готово', 'Пароль успешно изменён. Войдите с новым паролем.');
+      Alert.alert(
+        'Готово',
+        wasSetup
+          ? 'Пароль установлен. Войдите в аккаунт с новым паролем.'
+          : 'Пароль успешно изменён. Войдите с новым паролем.',
+      );
     } catch (e) {
       Alert.alert('Ошибка', e.message || 'Не удалось сменить пароль');
     } finally {
@@ -362,6 +380,15 @@ export default function LoginScreen() {
               <Text style={[styles.forgotText, { color: themePalette.linkText }]}>Забыли пароль?</Text>
             </TouchableOpacity>
 
+            {/* Setup invite — для новых пользователей с кодом из welcome-письма */}
+            <TouchableOpacity
+              style={styles.forgotBtn}
+              onPress={handleSetupInvite}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.forgotText, { color: themePalette.linkText }]}>Есть код приглашения?</Text>
+            </TouchableOpacity>
+
             {loading && (
               <View style={[styles.loadingHint, { backgroundColor: `${NAVY}0E` }]}>
                 <ActivityIndicator size="small" color={NAVY} style={{ marginRight: 8 }} />
@@ -394,12 +421,16 @@ export default function LoginScreen() {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.modalTitle}>
-                  {resetStep === 1 ? 'Сброс пароля' : 'Новый пароль'}
+                  {setupMode
+                    ? 'Установка пароля'
+                    : (resetStep === 1 ? 'Сброс пароля' : 'Новый пароль')}
                 </Text>
                 <Text style={styles.modalSub}>
-                  {resetStep === 1
-                    ? 'Введите email — отправим код подтверждения'
-                    : 'Введите код из письма и новый пароль'}
+                  {setupMode
+                    ? 'Введите код из письма-приглашения и придумайте пароль'
+                    : (resetStep === 1
+                        ? 'Введите email — отправим код подтверждения'
+                        : 'Введите код из письма и новый пароль')}
                 </Text>
               </View>
               <TouchableOpacity onPress={handleCloseReset} style={styles.modalClose}>
@@ -407,12 +438,14 @@ export default function LoginScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Индикатор шагов */}
-            <View style={styles.stepRow}>
-              <View style={[styles.stepDot, { backgroundColor: NAVY }]} />
-              <View style={[styles.stepLine, { backgroundColor: resetStep === 2 ? NAVY : '#E2E8F0' }]} />
-              <View style={[styles.stepDot, { backgroundColor: resetStep === 2 ? NAVY : '#E2E8F0' }]} />
-            </View>
+            {/* Индикатор шагов — только в режиме сброса (в setup один шаг). */}
+            {!setupMode && (
+              <View style={styles.stepRow}>
+                <View style={[styles.stepDot, { backgroundColor: NAVY }]} />
+                <View style={[styles.stepLine, { backgroundColor: resetStep === 2 ? NAVY : '#E2E8F0' }]} />
+                <View style={[styles.stepDot, { backgroundColor: resetStep === 2 ? NAVY : '#E2E8F0' }]} />
+              </View>
+            )}
 
             {resetStep === 1 ? (
               <>
@@ -502,19 +535,23 @@ export default function LoginScreen() {
                 >
                   {resetLoading
                     ? <ActivityIndicator size="small" color="#fff" />
-                    : <Text style={styles.modalBtnText}>Сменить пароль</Text>
+                    : <Text style={styles.modalBtnText}>
+                        {setupMode ? 'Установить пароль' : 'Сменить пароль'}
+                      </Text>
                   }
                 </TouchableOpacity>
 
-                {/* Назад на шаг 1 */}
-                <TouchableOpacity
-                  style={styles.backBtn}
-                  onPress={() => { setResetStep(1); setResetToken(''); setResetNewPwd(''); setResetConfirm(''); }}
-                  disabled={resetLoading}
-                >
-                  <MaterialIcons name="arrow-back" size={14} color="#64748B" />
-                  <Text style={styles.backBtnText}>Изменить email</Text>
-                </TouchableOpacity>
+                {/* Назад на шаг 1 — только в режиме сброса. */}
+                {!setupMode && (
+                  <TouchableOpacity
+                    style={styles.backBtn}
+                    onPress={() => { setResetStep(1); setResetToken(''); setResetNewPwd(''); setResetConfirm(''); }}
+                    disabled={resetLoading}
+                  >
+                    <MaterialIcons name="arrow-back" size={14} color="#64748B" />
+                    <Text style={styles.backBtnText}>Изменить email</Text>
+                  </TouchableOpacity>
+                )}
               </>
             )}
           </View>
