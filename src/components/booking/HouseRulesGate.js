@@ -6,8 +6,10 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
 import SignaturePad from '../ui/SignaturePad';
 import { HOUSE_RULES, RULES_SIGN_KEY } from '../../constants/houseRules';
+import { apiPost, getAPIEndpoints } from '../../utils/api';
 
 const NAVY = '#063B5C';
 const TEAL = '#14B8A6';
@@ -17,6 +19,7 @@ const SHEET_H = Math.round(SCREEN_H * 0.92);
 export default function HouseRulesGate({ visible, onClose, onSigned }) {
   const { theme, isDark } = useTheme();
   const colors = theme.colors;
+  const { user } = useAuth();
 
   const [ack, setAck] = useState(false);
   const [paths, setPaths] = useState([]);
@@ -73,6 +76,15 @@ export default function HouseRulesGate({ visible, onClose, onSigned }) {
       setSubmitting(true);
       const ts = new Date().toISOString();
       const payload = { signedAt: ts, paths };
+
+      if (user?.id) {
+        const endpoint = `${getAPIEndpoints().USERS.UPDATE(user.id)}/sign-house-rules`;
+        const resp = await apiPost(endpoint, { paths, signedAt: ts });
+        if (!resp?.success) {
+          console.warn('[HouseRulesGate] не удалось сохранить подпись на сервере', resp?.error);
+        }
+      }
+
       await AsyncStorage.setItem(RULES_SIGN_KEY, JSON.stringify(payload));
       setSubmitting(false);
       Animated.timing(translateY, {

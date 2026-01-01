@@ -83,6 +83,18 @@ const User = sequelize.define('User', {
     allowNull: true,
     comment: 'Дата рождения (YYYY-MM-DD). Используется для бонуса в день рождения.',
   },
+  rulesSignature: {
+    type: DataTypes.TEXT,
+    field: 'rules_signature',
+    allowNull: true,
+    comment: 'JSON-снапшот подписи правил дома (paths SVG).',
+  },
+  rulesSignedAt: {
+    type: DataTypes.DATE,
+    field: 'rules_signed_at',
+    allowNull: true,
+    comment: 'Момент подписания правил дома.',
+  },
 }, {
   timestamps: false,
   tableName: 'users',

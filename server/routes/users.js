@@ -238,6 +238,65 @@ module.exports = function createUsersRouter({ isDbConnected }) {
   });
 
   /**
+   * POST /:userId/sign-house-rules — сохранить подпись правил дома.
+   *
+   * Тело: { paths: string[], signedAt?: ISO }
+   * Подпись одноразовая для пользователя. Доступна только владельцу аккаунта —
+   * админ не может подписать за пользователя.
+   */
+  router.post('/:userId/sign-house-rules', verifyToken, requireOwnerOrAdmin, async (req, res) => {
+    try {
+      const { userId } = req.params;
+
+      if (req.userId !== userId) {
+        return res.status(403).json({
+          success: false,
+          error: 'You can only sign rules for your own account',
+        });
+      }
+
+      const { paths, signedAt } = req.body || {};
+      if (!Array.isArray(paths) || paths.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Подпись пустая',
+        });
+      }
+
+      if (!isDbConnected()) {
+        return res.status(503).json({ success: false, error: 'База данных не подключена' });
+      }
+
+      const user = await User.findOne({ where: { userId } });
+      if (!user) {
+        return res.status(404).json({ success: false, error: 'Пользователь не найден' });
+      }
+
+      const ts = signedAt ? new Date(signedAt) : new Date();
+      if (Number.isNaN(ts.getTime())) {
+        return res.status(400).json({ success: false, error: 'Некорректная дата подписи' });
+      }
+
+      await user.update({
+        rulesSignature: JSON.stringify({ paths, signedAt: ts.toISOString() }),
+        rulesSignedAt: ts,
+      });
+
+      return res.status(200).json({
+        success: true,
+        signedAt: ts.toISOString(),
+      });
+    } catch (error) {
+      logger.error('sign house rules error', { error: error.message });
+      return res.status(500).json({
+        success: false,
+        error: 'Ошибка при сохранении подписи',
+        details: isDev() ? error.message : undefined,
+      });
+    }
+  });
+
+  /**
    * DELETE /:userId — удаление аккаунта. Свой может удалить себя; админ — кого угодно.
    * Каскадно сносит Bookings, Transactions, Notifications.
    */
