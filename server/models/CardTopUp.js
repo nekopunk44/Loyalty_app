@@ -26,27 +26,27 @@ const CardTopUp = sequelize.define('CardTopUp', {
     defaultValue: 'pending',
   },
   transactionId: {
-    type: DataTypes.STRING,
+    type: DataTypes.TEXT,
     unique: true,
     index: true,
   },
   description: DataTypes.TEXT,
 
-  // ==================== Платёжные провайдеры (Stripe / PayPal) ====================
+  // ==================== Платёжные провайдеры (Stripe / PayPal / Google Play) ====================
   provider: {
     type: DataTypes.STRING(32),
     defaultValue: 'manual',
-    comment: "'manual' | 'stripe' | 'paypal' | 'bank_transfer'",
+    comment: "'manual' | 'stripe' | 'paypal' | 'bank_transfer' | 'google_play'",
   },
   providerSessionId: {
-    type: DataTypes.STRING(255),
+    type: DataTypes.TEXT,
     field: 'provider_session_id',
-    comment: 'Stripe Checkout session.id / PayPal order.id',
+    comment: 'Stripe Checkout session.id / PayPal order.id / Google Play purchaseToken',
   },
   providerPaymentId: {
-    type: DataTypes.STRING(255),
+    type: DataTypes.TEXT,
     field: 'provider_payment_id',
-    comment: 'Stripe payment_intent.id / PayPal capture.id после успеха',
+    comment: 'Stripe payment_intent.id / PayPal capture.id / Google Play orderId',
   },
   originalAmount: {
     type: DataTypes.DECIMAL(12, 2),
