@@ -14,6 +14,8 @@ import {
   Dimensions,
   PanResponder,
   Alert,
+  Image,
+  Platform,
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { colors, spacing, borderRadius } from '../../constants/theme';
@@ -293,7 +295,7 @@ export default function AdminUsers({ navigation: _navigation }) {
           balance: data.user.balance || data.user.walletBalance || 0,
           totalBookings: data.user.totalBookings || 0,
           cashback: data.user.cashback || data.user.loyaltyPoints || 0,
-          joinDate: data.user.joinDate || prevUser.joinDate || 'сегодня',
+          joinDate: data.user.joinDate || prevUser.joinDate || null,
         }));
       }
     } catch (error) {
@@ -1051,129 +1053,137 @@ export default function AdminUsers({ navigation: _navigation }) {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
-              {selectedUser && (
-                <>
-                  {/* Profile Card */}
-                  <View style={[styles.profileCard, { borderBottomColor: theme.colors.border }]}>
-                    <View style={[styles.largeAvatar, { backgroundColor: theme.colors.primary }]}>
-                      <Text style={styles.largeAvatarText}>
-                        {selectedUser.name.split(' ').map(w => w[0]).join('')}
-                      </Text>
-                    </View>
-                    <Text style={[styles.profileName, { color: theme.colors.text }]}>{selectedUser.name}</Text>
-                    <Text style={[styles.profileEmail, { color: theme.colors.textSecondary }]}>{selectedUser.email}</Text>
-                    
-                    <View style={styles.statusBadges}>
-                      <View style={[styles.badge, { backgroundColor: selectedUser.status === 'online' ? theme.colors.success : theme.colors.textSecondary }]}>
-                        <MaterialIcons 
-                          name={selectedUser.status === 'online' ? 'check-circle' : 'radio-button-off'} 
-                          size={14} 
-                          color="#fff" 
-                        />
-                        <Text style={styles.badgeText}>
-                          {selectedUser.status === 'online' ? 'Онлайн' : 'Оффлайн'}
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalBodyContent}>
+              {selectedUser && (() => {
+                const isAdmin = selectedUser.role === 'admin';
+                const online = selectedUser.status === 'online';
+                const levelColor = getLevelColor(selectedUser.membershipLevel || selectedUser.level, selectedUser.role);
+                const levelLabel = getLevelLabel(selectedUser.membershipLevel || selectedUser.level, selectedUser.role);
+                const initials = (selectedUser.name || '?').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+                return (
+                  <>
+                    {/* Hero (компактно, без дублей) */}
+                    <View style={[styles.mHeroCard, { backgroundColor: `${levelColor}10`, borderColor: `${levelColor}30` }]}>
+                      <View style={styles.mHeroTop}>
+                        {selectedUser.avatar ? (
+                          <Image source={{ uri: selectedUser.avatar }} style={[styles.mHeroAvatar, { borderColor: levelColor }]} />
+                        ) : (
+                          <View style={[styles.mHeroAvatar, { backgroundColor: levelColor, alignItems: 'center', justifyContent: 'center' }]}>
+                            <Text style={styles.mHeroAvatarText}>{initials}</Text>
+                          </View>
+                        )}
+                        <View style={styles.mHeroInfo}>
+                          <Text style={[styles.mHeroName, { color: theme.colors.text }]} numberOfLines={1}>{selectedUser.name}</Text>
+                          <Text style={[styles.mHeroEmail, { color: theme.colors.textSecondary }]} numberOfLines={1}>{selectedUser.email}</Text>
+                          <View style={styles.mHeroBadges}>
+                            <View style={[styles.mHeroBadge, { backgroundColor: online ? '#10B98115' : '#94A3B815', borderColor: online ? '#10B98140' : '#94A3B840' }]}>
+                              <View style={[styles.mHeroDot, { backgroundColor: online ? '#10B981' : '#94A3B8' }]} />
+                              <Text style={[styles.mHeroBadgeText, { color: online ? '#10B981' : theme.colors.textSecondary }]}>
+                                {online ? 'Онлайн' : 'Оффлайн'}
+                              </Text>
+                            </View>
+                            <View style={[styles.mHeroBadge, { backgroundColor: `${levelColor}18`, borderColor: `${levelColor}40` }]}>
+                              <MaterialIcons name={isAdmin ? 'security' : 'star'} size={11} color={levelColor} />
+                              <Text style={[styles.mHeroBadgeText, { color: levelColor }]}>{levelLabel}</Text>
+                            </View>
+                          </View>
+                        </View>
+                      </View>
+
+                      {/* Реальная дата регистрации в программе лояльности */}
+                      <View style={[styles.mHeroJoin, { borderTopColor: `${levelColor}25` }]}>
+                        <MaterialIcons name="verified-user" size={13} color={levelColor} />
+                        <Text style={[styles.mHeroJoinText, { color: theme.colors.textSecondary }]}>
+                          {isAdmin ? 'Администратор с' : 'Участник программы лояльности с'}{' '}
+                          <Text style={{ color: theme.colors.text, fontWeight: '800' }}>
+                            {selectedUser.joinDate || '—'}
+                          </Text>
                         </Text>
                       </View>
-                      <View style={[
-                        styles.badge, 
-                        { backgroundColor: getLevelColor(selectedUser.membershipLevel || selectedUser.level, selectedUser.role) }
-                      ]}>
-                        <MaterialIcons name={selectedUser.role === 'admin' ? 'security' : 'star'} size={14} color="#fff" />
-                        <Text style={styles.badgeText}>{getLevelLabel(selectedUser.membershipLevel || selectedUser.level, selectedUser.role)}</Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  {/* Stats */}
-                  <View style={[styles.statsSection, { borderBottomColor: theme.colors.border }]}>
-                    <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Статистика</Text>
-                    
-                    <View style={styles.statRow}>
-                      <View style={styles.statRowLabel}>
-                        <MaterialIcons name="calendar-today" size={18} color={theme.colors.primary} />
-                        <Text style={[styles.statRowTitle, { color: theme.colors.text }]}>
-                          {selectedUser.role === 'admin' ? 'Дата регистрации' : 'Дата присоединения'}
-                        </Text>
-                      </View>
-                      <Text style={[styles.statRowValue, { color: theme.colors.text }]}>{selectedUser.joinDate}</Text>
                     </View>
 
-                    {selectedUser.role !== 'admin' && (
+                    {/* Статистика — только для обычных пользователей */}
+                    {!isAdmin && (
                       <>
-                        <View style={styles.statRow}>
-                          <View style={styles.statRowLabel}>
-                            <MaterialIcons name="account-balance-wallet" size={18} color={theme.colors.accent} />
-                            <Text style={[styles.statRowTitle, { color: theme.colors.text }]}>Баланс карты</Text>
+                        <Text style={[styles.sectionLabel, { color: theme.colors.textSecondary }]}>СТАТИСТИКА</Text>
+                        <View style={styles.mStatRow}>
+                          <View style={[styles.mStatTile, { backgroundColor: '#F9731612', borderColor: '#F9731630' }]}>
+                            <MaterialIcons name="account-balance-wallet" size={16} color="#F97316" />
+                            <Text style={[styles.mStatTileVal, { color: theme.colors.text }]}>{selectedUser.balance || 0} <Text style={styles.mStatTileUnit}>PRB</Text></Text>
+                            <Text style={[styles.mStatTileLabel, { color: theme.colors.textSecondary }]}>Баланс</Text>
                           </View>
-                          <Text style={[styles.statRowValue, { color: theme.colors.text }]}>{selectedUser.balance || 0} PRB</Text>
-                        </View>
-
-                        <View style={styles.statRow}>
-                          <View style={styles.statRowLabel}>
-                            <MaterialIcons name="book" size={18} color={theme.colors.secondary} />
-                            <Text style={[styles.statRowTitle, { color: theme.colors.text }]}>Количество бронирований</Text>
+                          <View style={[styles.mStatTile, { backgroundColor: '#3B82F612', borderColor: '#3B82F630' }]}>
+                            <MaterialIcons name="event-note" size={16} color="#3B82F6" />
+                            <Text style={[styles.mStatTileVal, { color: theme.colors.text }]}>{selectedUser.totalBookings || 0}</Text>
+                            <Text style={[styles.mStatTileLabel, { color: theme.colors.textSecondary }]}>Бронирований</Text>
                           </View>
-                          <Text style={[styles.statRowValue, { color: theme.colors.text }]}>{selectedUser.totalBookings || 0}</Text>
-                        </View>
-
-                        <View style={styles.statRow}>
-                          <View style={styles.statRowLabel}>
-                            <MaterialIcons name="trending-up" size={18} color={theme.colors.success} />
-                            <Text style={[styles.statRowTitle, { color: theme.colors.text }]}>Накопленный кешбек</Text>
+                          <View style={[styles.mStatTile, { backgroundColor: '#10B98112', borderColor: '#10B98130' }]}>
+                            <MaterialIcons name="trending-up" size={16} color="#10B981" />
+                            <Text style={[styles.mStatTileVal, { color: theme.colors.text }]}>{selectedUser.cashback || 0} <Text style={styles.mStatTileUnit}>PRB</Text></Text>
+                            <Text style={[styles.mStatTileLabel, { color: theme.colors.textSecondary }]}>Кешбек</Text>
                           </View>
-                          <Text style={[styles.statRowValue, { color: theme.colors.text }]}>{selectedUser.cashback || 0} PRB</Text>
                         </View>
                       </>
                     )}
-                  </View>
 
-                  {/* Personal Info */}
-                  <View style={[styles.infoSection, { borderBottomColor: theme.colors.border }]}>
-                    <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Личная информация</Text>
-                    
-                    <View style={styles.infoRow}>
-                      <Text style={[styles.infoLabel, { color: theme.colors.textSecondary }]}>Email</Text>
-                      <Text style={[styles.infoValue, { color: theme.colors.text }]}>{selectedUser.email}</Text>
+                    {/* Личная информация — только то, что не продублировано */}
+                    <Text style={[styles.sectionLabel, { color: theme.colors.textSecondary }]}>ЛИЧНАЯ ИНФОРМАЦИЯ</Text>
+                    <View style={[styles.infoCard, { backgroundColor: theme.colors.background, borderColor: theme.colors.border }]}>
+                      <View style={styles.infoRowNew}>
+                        <MaterialIcons name="fingerprint" size={15} color={theme.colors.textSecondary} />
+                        <Text style={[styles.infoLabelNew, { color: theme.colors.textSecondary }]}>ID</Text>
+                        <Text
+                          style={[styles.infoValueMono, { color: theme.colors.text }]}
+                          numberOfLines={1}
+                          ellipsizeMode="middle"
+                        >
+                          {selectedUser.id}
+                        </Text>
+                      </View>
+                      {selectedUser.phone ? (
+                        <View style={[styles.infoRowNew, { borderTopColor: theme.colors.border, borderTopWidth: 1 }]}>
+                          <MaterialIcons name="phone" size={15} color={theme.colors.textSecondary} />
+                          <Text style={[styles.infoLabelNew, { color: theme.colors.textSecondary }]}>Телефон</Text>
+                          <Text style={[styles.infoValueNew, { color: theme.colors.text }]} numberOfLines={1}>{selectedUser.phone}</Text>
+                        </View>
+                      ) : null}
+                      {selectedUser.address ? (
+                        <View style={[styles.infoRowNew, { borderTopColor: theme.colors.border, borderTopWidth: 1 }]}>
+                          <MaterialIcons name="place" size={15} color={theme.colors.textSecondary} />
+                          <Text style={[styles.infoLabelNew, { color: theme.colors.textSecondary }]}>Адрес</Text>
+                          <Text style={[styles.infoValueNew, { color: theme.colors.text }]} numberOfLines={2}>{selectedUser.address}</Text>
+                        </View>
+                      ) : null}
+                      {selectedUser.birthDate ? (
+                        <View style={[styles.infoRowNew, { borderTopColor: theme.colors.border, borderTopWidth: 1 }]}>
+                          <MaterialIcons name="cake" size={15} color={theme.colors.textSecondary} />
+                          <Text style={[styles.infoLabelNew, { color: theme.colors.textSecondary }]}>День рождения</Text>
+                          <Text style={[styles.infoValueNew, { color: theme.colors.text }]} numberOfLines={1}>{selectedUser.birthDate}</Text>
+                        </View>
+                      ) : null}
                     </View>
 
-                    <View style={styles.infoRow}>
-                      <Text style={[styles.infoLabel, { color: theme.colors.textSecondary }]}>ID пользователя</Text>
-                      <Text style={[styles.infoValue, { color: theme.colors.text }]}>{selectedUser.id}</Text>
+                    {/* Actions — рядом, edit шире delete */}
+                    <View style={styles.actionsRow}>
+                      <TouchableOpacity
+                        style={[styles.actionBtnEdit, { backgroundColor: theme.colors.primary }]}
+                        onPress={() => setUserEditVisible(true)}
+                        activeOpacity={0.85}
+                      >
+                        <MaterialIcons name="edit" size={18} color="#fff" />
+                        <Text style={styles.actionBtnEditText}>Редактировать</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.actionBtnDelete, { backgroundColor: '#EF444412', borderColor: '#EF444440' }]}
+                        onPress={() => setUserDeleteVisible(true)}
+                        activeOpacity={0.85}
+                      >
+                        <MaterialIcons name="delete" size={18} color="#EF4444" />
+                      </TouchableOpacity>
                     </View>
-
-                    <View style={styles.infoRow}>
-                      <Text style={[styles.infoLabel, { color: theme.colors.textSecondary }]}>Статус</Text>
-                      <Text style={[styles.infoValue, { color: selectedUser.status === 'online' ? theme.colors.success : theme.colors.textSecondary }]}>
-                        {selectedUser.status === 'online' ? 'Онлайн' : 'Оффлайн'}
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* Actions */}
-                  <View style={styles.actionsSection}>
-                    <TouchableOpacity 
-                      style={[styles.actionButton, { backgroundColor: theme.colors.primary }]}
-                      onPress={() => {
-                        setUserEditVisible(true);
-                      }}
-                    >
-                      <MaterialIcons name="edit" size={20} color="#fff" />
-                      <Text style={styles.actionButtonText}>Редактировать</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity 
-                      style={[styles.actionButton, { backgroundColor: theme.colors.secondary }]}
-                      onPress={() => {
-                        setUserDeleteVisible(true);
-                      }}
-                    >
-                      <MaterialIcons name="delete" size={20} color="#fff" />
-                      <Text style={styles.actionButtonText}>Удалить</Text>
-                    </TouchableOpacity>
-                  </View>
-                </>
-              )}
+                  </>
+                );
+              })()}
             </ScrollView>
           </Animated.View>
         </View>
@@ -1627,122 +1637,85 @@ const styles = StyleSheet.create({
     paddingTop: 0,
     paddingHorizontal: 0,
   },
-  profileCard: {
-    alignItems: 'center',
-    paddingVertical: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    marginBottom: spacing.lg,
-  },
-  largeAvatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  largeAvatarText: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: '#fff',
-  },
-  profileName: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  profileEmail: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
-  },
-  statusBadges: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginTop: spacing.md,
-  },
-  badge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+  modalBodyContent: {
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.md,
+    gap: 10,
   },
-  badgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#fff',
+
+  // Hero (modal-only — m-префикс чтобы не коллизировать с list-view heroCard)
+  mHeroCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 12,
+    gap: 10,
   },
-  statsSection: {
-    marginBottom: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    paddingBottom: spacing.lg,
+  mHeroTop: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  mHeroAvatar: {
+    width: 56, height: 56, borderRadius: 28,
+    borderWidth: 2,
   },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: spacing.md,
+  mHeroAvatarText: { fontSize: 20, fontWeight: '900', color: '#fff' },
+  mHeroInfo: { flex: 1, minWidth: 0 },
+  mHeroName: { fontSize: 16, fontWeight: '800' },
+  mHeroEmail: { fontSize: 12, marginTop: 2 },
+  mHeroBadges: { flexDirection: 'row', gap: 6, marginTop: 8, flexWrap: 'wrap' },
+  mHeroBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 8, paddingVertical: 3,
+    borderRadius: 999, borderWidth: 1,
   },
-  statRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: spacing.sm,
+  mHeroDot: { width: 6, height: 6, borderRadius: 3 },
+  mHeroBadgeText: { fontSize: 10, fontWeight: '800' },
+  mHeroJoin: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    borderTopWidth: 1, paddingTop: 9,
   },
-  statRowLabel: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
+  mHeroJoinText: { fontSize: 11.5, fontWeight: '600', flex: 1 },
+
+  // Sections
+  sectionLabel: {
+    fontSize: 10, fontWeight: '800', letterSpacing: 0.7,
+    marginTop: 6, marginBottom: 2, paddingHorizontal: 2,
   },
-  statRowTitle: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: colors.text,
+
+  // Stats — 3 в ряд (modal-only)
+  mStatRow: { flexDirection: 'row', gap: 8 },
+  mStatTile: {
+    flex: 1,
+    borderRadius: 12, borderWidth: 1,
+    paddingHorizontal: 10, paddingVertical: 10,
+    gap: 4,
   },
-  statRowValue: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.primary,
+  mStatTileVal: { fontSize: 16, fontWeight: '900', marginTop: 4 },
+  mStatTileUnit: { fontSize: 10, fontWeight: '700', opacity: 0.7 },
+  mStatTileLabel: { fontSize: 10, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.4 },
+
+  // Info card
+  infoCard: { borderRadius: 12, borderWidth: 1, overflow: 'hidden' },
+  infoRowNew: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingHorizontal: 12, paddingVertical: 11,
   },
-  infoSection: {
-    marginBottom: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    paddingBottom: spacing.lg,
+  infoLabelNew: { fontSize: 12, fontWeight: '700', width: 90 },
+  infoValueNew: { flex: 1, fontSize: 13, fontWeight: '600', textAlign: 'right' },
+  infoValueMono: {
+    flex: 1, fontSize: 11, fontWeight: '600', textAlign: 'right',
+    fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' }),
+    letterSpacing: 0.2,
   },
-  infoRow: {
-    paddingVertical: spacing.sm,
+
+  // Actions
+  actionsRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
+  actionBtnEdit: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, paddingVertical: 13, borderRadius: 12,
   },
-  infoLabel: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    fontWeight: '500',
-  },
-  infoValue: {
-    fontSize: 14,
-    color: colors.text,
-    fontWeight: '600',
-    marginTop: 4,
-  },
-  actionsSection: {
-    gap: spacing.md,
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.lg,
-    gap: spacing.sm,
-  },
-  actionButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#fff',
+  actionBtnEditText: { fontSize: 14, fontWeight: '800', color: '#fff' },
+  actionBtnDelete: {
+    width: 52, alignItems: 'center', justifyContent: 'center',
+    borderRadius: 12, borderWidth: 1,
   },
   // Стили для уведомления
   notificationContainer: {
