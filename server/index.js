@@ -303,8 +303,13 @@ const sendWelcomeEmail = async (toEmail, setupToken, displayName) => {
 };
 
 const path = require('path');
+const fs = require('fs');
 app.use(express.static('public'));
 app.use('/assets', express.static(path.join(__dirname, '../src/assets')));
+// Загруженные админом фото номеров. multer пишет сюда, GET отдаёт по тому же пути.
+const UPLOADS_DIR = path.join(__dirname, 'uploads');
+fs.mkdirSync(path.join(UPLOADS_DIR, 'properties'), { recursive: true });
+app.use('/uploads', express.static(UPLOADS_DIR));
 
 // ==================== Database Setup ====================
 let dbConnected = false;
@@ -492,29 +497,62 @@ const connectDB = async () => {
 
     // ВКР: Google Play purchaseToken — opaque base64 600–1000 символов,
     // не помещается в VARCHAR(255). Источник — migrations/017_widen_topup_id_columns.sql.
+    // Имена колонок: transactionId без field-маппинга → "transactionId" (camelCase
+    // в двойных кавычках); provider_session_id / provider_payment_id имеют
+    // field:'snake_case'. Если миграцию запустить на свежей БД, sync() уже создаст
+    // их как TEXT — поэтому проверяем существование колонки.
     await sequelize.query(`
-      ALTER TABLE card_topups
-        ALTER COLUMN transaction_id       TYPE TEXT,
-        ALTER COLUMN provider_session_id  TYPE TEXT,
-        ALTER COLUMN provider_payment_id  TYPE TEXT;
+      DO $$ BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name='card_topups' AND column_name='transactionId') THEN
+          ALTER TABLE card_topups ALTER COLUMN "transactionId" TYPE TEXT;
+        END IF;
+        IF EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name='card_topups' AND column_name='provider_session_id') THEN
+          ALTER TABLE card_topups ALTER COLUMN provider_session_id TYPE TEXT;
+        END IF;
+        IF EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_name='card_topups' AND column_name='provider_payment_id') THEN
+          ALTER TABLE card_topups ALTER COLUMN provider_payment_id TYPE TEXT;
+        END IF;
+      END $$;
+    `);
+
+    // ВКР: админ-CRUD номеров. photos — массив относительных путей к файлам
+    // в server/uploads/properties/<id>/. Источник — migrations/018_property_photos.sql.
+    await sequelize.query(`
+      ALTER TABLE properties
+        ADD COLUMN IF NOT EXISTS photos JSONB DEFAULT '[]'::jsonb NOT NULL;
+    `);
+    await sequelize.query(`
+      ALTER TABLE properties
+        ALTER COLUMN image TYPE TEXT,
+        ALTER COLUMN price TYPE TEXT;
     `);
 
     logger.info('Миграции схемы применены');
 
-    // Идемпотентный sync номеров под клиентский src/constants/properties.js.
-    // Запускается при КАЖДОМ старте (не зависит от seedDatabase, который
-    // отрабатывает только при пустой БД). upsert по фиксированным id 1..4
-    // перетирает исторический seed (Villa Bonita / Sunset Apartment / ...).
+    // Идемпотентный sync 4 базовых номеров. Фото копируются разово в
+    // server/uploads/properties/<id>/ при первом старте через scripts/copy
+    // (см. README), либо вручную из src/assets. Здесь только запись метаданных.
+    // upsert по фиксированным id 1..4 перетирает исторический seed.
+    const luksPhotos     = ['st1.png','st2.png','st3.png','st4.png','st5.png','st6.png','st7.png','st8.png','st9.png','st10.png'];
+    const standartPhotos = ['st1.png','st2.png','st3.png','st4.png','st5.png','st6.png','st7.png','st8.png'];
+    const zadPhotos      = ['zd1.png','zd2.png','zd3.png','zd4.png','zd5.png'];
+    const wholePhotos    = [...luksPhotos, ...zadPhotos];
+
+    const toRel = (propertyId, files) => files.map((f) => `properties/${propertyId}/${f}`);
+
     const REAL_PROPERTIES = [
-      { id: 1, name: 'Люкс апартамент', description: 'Полный комфорт, с видом на природу',         price: '200PRB/ночь', priceNumber: 200, rooms: 10,   guests: 20, amenities: ['WiFi','Кондиционер','TV','Кухня','Бассейн','Сауна (с доплатой)','Мангал','Парковочное место','Караоке','Большой зал'], image: 'luks.jpg',    status: 'available' },
-      { id: 2, name: 'Стандарт',         description: 'Студия с террасой и бассейном',              price: '150PRB/ночь', priceNumber: 150, rooms: 2,    guests: 10, amenities: ['WiFi','Кондиционер','TV','Бассейн','Сауна (с доплатой)','Мангал','Парковочное место'],                                                  image: 'standart.jpg', status: 'available' },
-      { id: 3, name: 'Задний двор',      description: 'Открытая местность с бассейном и беседкой',  price: '100PRB/день', priceNumber: 100, rooms: null, guests: 15, amenities: ['WiFi','Бассейн','Мангал','Парковочное место','Караоке','Холодильник','Беседка','Шезлонги','Зонты'],                              image: 'zad.jpg',      status: 'available' },
-      { id: 4, name: 'Вся территория',   description: 'Полный комплекс со всеми удобствами',        price: '500PRB/ночь', priceNumber: 500, rooms: 10,   guests: 30, amenities: ['WiFi','Кондиционер','TV','Кухня','Бассейн','Сауна (с доплатой)','Мангал','Парковочное место','Караоке','Большой зал','Беседка','Шезлонги','Зонты','Холодильник'], image: 'vsya.jpg', status: 'available' },
+      { id: 1, name: 'Люкс апартамент', description: 'Полный комфорт, с видом на природу',         price: '200PRB/ночь', priceNumber: 200, rooms: 10,   guests: 20, amenities: ['WiFi','Кондиционер','TV','Кухня','Бассейн','Сауна (с доплатой)','Мангал','Парковочное место','Караоке','Большой зал'], image: 'properties/1/st1.png', photos: toRel(1, luksPhotos),     status: 'available' },
+      { id: 2, name: 'Стандарт',         description: 'Студия с террасой и бассейном',              price: '150PRB/ночь', priceNumber: 150, rooms: 2,    guests: 10, amenities: ['WiFi','Кондиционер','TV','Бассейн','Сауна (с доплатой)','Мангал','Парковочное место'],                                                  image: 'properties/2/st1.png', photos: toRel(2, standartPhotos), status: 'available' },
+      { id: 3, name: 'Задний двор',      description: 'Открытая местность с бассейном и беседкой',  price: '100PRB/день', priceNumber: 100, rooms: null, guests: 15, amenities: ['WiFi','Бассейн','Мангал','Парковочное место','Караоке','Холодильник','Беседка','Шезлонги','Зонты'],                              image: 'properties/3/zd1.png', photos: toRel(3, zadPhotos),      status: 'available' },
+      { id: 4, name: 'Вся территория',   description: 'Полный комплекс со всеми удобствами',        price: '500PRB/ночь', priceNumber: 500, rooms: 10,   guests: 30, amenities: ['WiFi','Кондиционер','TV','Кухня','Бассейн','Сауна (с доплатой)','Мангал','Парковочное место','Караоке','Большой зал','Беседка','Шезлонги','Зонты','Холодильник'], image: 'properties/4/st1.png', photos: toRel(4, wholePhotos),    status: 'available' },
     ];
     for (const p of REAL_PROPERTIES) {
       await Property.upsert(p);
     }
-    logger.info('Номера синхронизированы с client constants', { count: REAL_PROPERTIES.length });
+    logger.info('Базовые номера засеяны', { count: REAL_PROPERTIES.length });
 
     // Seed только при первом запуске на пустой БД — не при каждом рестарте.
     const userCount = await User.count();
