@@ -47,9 +47,10 @@ export const BookingProvider = ({ children }) => {
   const addBooking = async (booking) => {
     try {
       setIsLoading(true);
+      // userId сервер берёт из JWT (req.userId) — в теле не отправляем,
+      // т.к. zod-схема .strict() и неизвестное поле даёт «Ошибка валидации»
       const payload = {
         propertyId: booking.propertyId?.toString() || '',
-        userId: userId || 'anonymous',
         checkInDate: booking.checkInDate || '',
         checkOutDate: booking.checkOutDate || '',
         guests: booking.guests || 1,
