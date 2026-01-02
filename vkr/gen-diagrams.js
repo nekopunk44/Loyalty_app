@@ -546,7 +546,126 @@ function genFig24() {
   console.log('✓ fig_2_4.png');
 }
 
+// ─── Рисунок 2.2 — Диаграмма последовательности «Бронирование» ───────────────
+function genFig22() {
+  const W = 1240, H = 920;
+  const canvas = createCanvas(W, H);
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = C.bg;
+  ctx.fillRect(0, 0, W, H);
+
+  // 5 lifelines
+  const actors = [
+    { x: 110, w: 150, label: 'Пользователь', sub: '(актор)' },
+    { x: 340, w: 170, label: 'Mobile App',   sub: 'React Native' },
+    { x: 590, w: 170, label: 'Express API',  sub: 'Node.js' },
+    { x: 840, w: 170, label: 'PostgreSQL',   sub: 'Sequelize ORM' },
+    { x: 1080, w: 130, label: 'ML-сервис',   sub: 'FastAPI' },
+  ];
+
+  const headTop = 24, headH = 56;
+  const lifelineTop = headTop + headH;
+  const lifelineBottom = H - 60;
+
+  // Заголовки lifelines
+  actors.forEach(a => {
+    drawRect(ctx, a.x, headTop, a.w, headH, { fill: C.fillDark, stroke: C.border, lw: 1.5 });
+    setFont(ctx, 13, true);
+    ctx.fillStyle = C.textLight;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(a.label, a.x + a.w / 2, headTop + headH / 2 - 8);
+    setFont(ctx, 10);
+    ctx.fillText(a.sub, a.x + a.w / 2, headTop + headH / 2 + 10);
+  });
+
+  // Вертикальные пунктирные lifelines (от низа заголовка до низа диаграммы)
+  ctx.strokeStyle = C.border;
+  ctx.lineWidth = 1;
+  ctx.setLineDash([5, 4]);
+  actors.forEach(a => {
+    const cx = a.x + a.w / 2;
+    ctx.beginPath();
+    ctx.moveTo(cx, lifelineTop);
+    ctx.lineTo(cx, lifelineBottom);
+    ctx.stroke();
+  });
+  ctx.setLineDash([]);
+
+  const lc = i => actors[i].x + actors[i].w / 2;
+
+  // Универсальная стрелка сообщения; dashed = ответ
+  function msg(y, from, to, n, label, dashed = false) {
+    const x1 = lc(from), x2 = lc(to);
+    const dir = x2 > x1 ? 1 : -1;
+    ctx.strokeStyle = C.arrow;
+    ctx.lineWidth = 1.6;
+    if (dashed) ctx.setLineDash([6, 4]); else ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(x1, y);
+    ctx.lineTo(x2, y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    arrowHead(ctx, x2, y, dir > 0 ? 0 : Math.PI);
+    setFont(ctx, 11, true);
+    ctx.fillStyle = C.gold;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(n + '.', Math.min(x1, x2) + 6, y - 4);
+    setFont(ctx, 11);
+    ctx.fillStyle = C.text;
+    ctx.fillText('  ' + label, Math.min(x1, x2) + 22, y - 4);
+  }
+
+  // Само-вызов на lifeline (петля сбоку)
+  function selfMsg(y, actor, n, label) {
+    const cx = lc(actor);
+    ctx.strokeStyle = C.arrow;
+    ctx.lineWidth = 1.6;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(cx, y);
+    ctx.lineTo(cx + 36, y);
+    ctx.lineTo(cx + 36, y + 18);
+    ctx.lineTo(cx + 2, y + 18);
+    ctx.stroke();
+    arrowHead(ctx, cx + 2, y + 18, Math.PI);
+    setFont(ctx, 11, true);
+    ctx.fillStyle = C.gold;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(n + '.', cx + 42, y + 9);
+    setFont(ctx, 11);
+    ctx.fillStyle = C.text;
+    ctx.fillText('  ' + label, cx + 58, y + 9);
+  }
+
+  // Последовательность сообщений
+  let y = lifelineTop + 30;
+  const step = 50;
+
+  msg(y, 0, 1, 1, 'Выбор объекта и дат'); y += step;
+  msg(y, 1, 2, 2, 'POST /bookings {propertyId, dateFrom, dateTo}'); y += step;
+  msg(y, 2, 3, 3, 'SELECT bookings WHERE conflicts'); y += step;
+  msg(y, 3, 2, 4, 'Нет пересечений', true); y += step;
+  msg(y, 2, 4, 5, 'POST /churn/predict (userId)'); y += step;
+  msg(y, 4, 2, 6, 'churn_score = 0.21', true); y += step;
+  selfMsg(y, 2, 7, 'Расчёт стоимости с учётом скидки'); y += step + 18;
+  msg(y, 2, 3, 8, 'INSERT booking (status=pending)'); y += step;
+  msg(y, 2, 3, 9, 'INSERT payment, UPDATE loyalty_card (баллы)'); y += step;
+  msg(y, 3, 2, 10, 'OK', true); y += step;
+  msg(y, 2, 1, 11, '201 Created  {bookingId, balance}', true); y += step;
+  selfMsg(y, 2, 12, 'sendPushNotification() через Expo Push API'); y += step + 18;
+  msg(y, 1, 0, 13, 'Экран «Подтверждение бронирования»', true); y += step;
+
+  caption(ctx, W, lifelineBottom + 20, 'Рисунок 2.2 — Последовательность взаимодействия при бронировании');
+
+  fs.writeFileSync(path.join(OUT, 'fig_2_2.png'), canvas.toBuffer('image/png'));
+  console.log('✓ fig_2_2.png');
+}
+
 genFig21();
+genFig22();
 genFig23();
 genFig24();
 console.log('\nВсе диаграммы готовы в vkr/assets/');
