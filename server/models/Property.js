@@ -11,7 +11,7 @@ const Property = sequelize.define('Property', {
     allowNull: false,
   },
   description: DataTypes.TEXT,
-  price: DataTypes.STRING,
+  price: DataTypes.TEXT,
   priceNumber: DataTypes.INTEGER,
   depositAmount: {
     type: DataTypes.DECIMAL(12, 2),
@@ -26,7 +26,13 @@ const Property = sequelize.define('Property', {
     type: DataTypes.JSON,
     defaultValue: [],
   },
-  image: DataTypes.STRING,
+  image: DataTypes.TEXT,
+  photos: {
+    type: DataTypes.JSONB,
+    defaultValue: [],
+    allowNull: false,
+    comment: 'Массив относительных путей к фото в /uploads/properties/<id>/.',
+  },
   status: {
     type: DataTypes.ENUM('available', 'unavailable'),
     defaultValue: 'available',
