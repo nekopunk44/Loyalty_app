@@ -155,10 +155,13 @@ export default function AdminStats() {
     animateSwitch(() => setActiveTab(id));
   }, [activeTab, animateSwitch]);
 
+  // Смена периода — без fade-анимации всего экрана.
+  // React диффит и сам обновит только зависящие от периода узлы (метрики, график),
+  // остальные subtree-ы (AI-блок целиком на users-табе и т.п.) не перерисуются.
   const handlePeriodChange = useCallback((id) => {
     if (id === selectedPeriod) return;
-    animateSwitch(() => setSelectedPeriod(id));
-  }, [selectedPeriod, animateSwitch]);
+    setSelectedPeriod(id);
+  }, [selectedPeriod]);
 
   const load = useCallback(async () => {
     try {
@@ -365,49 +368,6 @@ export default function AdminStats() {
 
   // ── Render helpers ─────────────────────────────────────────────────────────
 
-  const StatCard = ({ icon, label, value, color, hint }) => (
-    <View style={[styles.statCard, {
-      backgroundColor: theme.colors.cardBg,
-      borderColor: theme.colors.border,
-    }]}>
-      <View style={[styles.iconBox, { backgroundColor: `${color}1A` }]}>
-        <MaterialIcons name={icon} size={16} color={color} />
-      </View>
-      <View style={styles.statCardText}>
-        <Text
-          style={[styles.statValue, { color: theme.colors.text }]}
-          numberOfLines={1}
-          adjustsFontSizeToFit
-          minimumFontScale={0.7}
-        >
-          {value}
-        </Text>
-        <Text
-          style={[styles.statLabel, { color: theme.colors.textSecondary }]}
-          numberOfLines={1}
-        >
-          {label}
-        </Text>
-        {!!hint && <Text style={[styles.statHint, { color }]} numberOfLines={1}>{hint}</Text>}
-      </View>
-    </View>
-  );
-
-  const InsightCard = ({ item }) => (
-    <View style={[styles.insightCard, { backgroundColor: theme.colors.cardBg, borderColor: `${item.color}30` }]}>
-      <View style={[styles.insightIcon, { backgroundColor: `${item.color}18` }]}>
-        <MaterialIcons name={item.icon} size={22} color={item.color} />
-      </View>
-      <View style={styles.insightContent}>
-        <Text style={[styles.insightTitle, { color: theme.colors.text }]}>{item.title}</Text>
-        <Text style={[styles.insightText,  { color: theme.colors.textSecondary }]}>{item.body}</Text>
-        <View style={[styles.impactBadge, { backgroundColor: `${item.color}18` }]}>
-          <Text style={[styles.insightImpact, { color: item.color }]}>{item.impact}</Text>
-        </View>
-      </View>
-    </View>
-  );
-
   const renderOverview = () => (
     <>
       <View style={[styles.hero, {
@@ -434,10 +394,10 @@ export default function AdminStats() {
       </View>
 
       <View style={styles.statGrid}>
-        <StatCard icon="people"             label="Клиентов"     value={fmtNum(metrics.users)}     color={theme.colors.primary} />
-        <StatCard icon="shopping-bag"       label="Бронирований" value={fmtNum(metrics.purchases)} color="#06B6D4" />
-        <StatCard icon="payments"           label="Оборот"       value={fmtMoney(metrics.revenue)} color="#10B981" />
-        <StatCard icon="workspace-premium"  label="Premium"      value={fmtNum(metrics.premium)}   color="#8B5CF6" />
+        <StatCard theme={theme} icon="people"             label="Клиентов"     value={fmtNum(metrics.users)}     color={theme.colors.primary} />
+        <StatCard theme={theme} icon="shopping-bag"       label="Бронирований" value={fmtNum(metrics.purchases)} color="#06B6D4" />
+        <StatCard theme={theme} icon="payments"           label="Оборот"       value={fmtMoney(metrics.revenue)} color="#10B981" />
+        <StatCard theme={theme} icon="workspace-premium"  label="Premium"      value={fmtNum(metrics.premium)}   color="#8B5CF6" />
       </View>
 
       {renderRevenueChart()}
@@ -524,7 +484,7 @@ export default function AdminStats() {
             Авто-рекомендации по данным
           </Text>
           {model.recommendations.map(item => (
-            <InsightCard key={item.title} item={item} />
+            <InsightCard key={item.title} item={item} theme={theme} />
           ))}
 
           <View style={[styles.panel, { backgroundColor: theme.colors.cardBg, borderColor: theme.colors.border }]}>
@@ -862,21 +822,32 @@ function AnimatedBarChart({ values, labels, theme, primary }) {
     [values.length] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
+  // Анимация бегущих столбиков играется только на первом монтировании.
+  // При последующих апдейтах (смена периода) высоты выставляются мгновенно,
+  // чтобы фрейм карточки не «моргал» — обновляются только сами столбики.
+  const isFirstRunRef = useRef(true);
+
   useEffect(() => {
-    anims.forEach(a => a.setValue(0));
-    Animated.stagger(
-      35,
-      anims.map((a, i) => {
-        const v = values[i] || 0;
-        const target = v > 0 ? Math.max((v / maxVal) * trackH, 8) : 3;
-        return Animated.timing(a, {
-          toValue: target,
+    const targets = anims.map((_, i) => {
+      const v = values[i] || 0;
+      return v > 0 ? Math.max((v / maxVal) * trackH, 8) : 3;
+    });
+
+    if (isFirstRunRef.current) {
+      isFirstRunRef.current = false;
+      anims.forEach(a => a.setValue(0));
+      Animated.stagger(
+        35,
+        anims.map((a, i) => Animated.timing(a, {
+          toValue: targets[i],
           duration: 420,
           easing: Easing.out(Easing.cubic),
           useNativeDriver: false,
-        });
-      })
-    ).start();
+        })),
+      ).start();
+    } else {
+      anims.forEach((a, i) => a.setValue(targets[i]));
+    }
   }, [values, maxVal, trackH, anims]);
 
   const isDense = values.length > 6;
@@ -984,6 +955,53 @@ function EmptyState({ text, theme }) {
     </View>
   );
 }
+
+const StatCard = React.memo(function StatCard({ icon, label, value, color, hint, theme }) {
+  return (
+    <View style={[styles.statCard, {
+      backgroundColor: theme.colors.cardBg,
+      borderColor: theme.colors.border,
+    }]}>
+      <View style={[styles.iconBox, { backgroundColor: `${color}1A` }]}>
+        <MaterialIcons name={icon} size={16} color={color} />
+      </View>
+      <View style={styles.statCardText}>
+        <Text
+          style={[styles.statValue, { color: theme.colors.text }]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.7}
+        >
+          {value}
+        </Text>
+        <Text
+          style={[styles.statLabel, { color: theme.colors.textSecondary }]}
+          numberOfLines={1}
+        >
+          {label}
+        </Text>
+        {!!hint && <Text style={[styles.statHint, { color }]} numberOfLines={1}>{hint}</Text>}
+      </View>
+    </View>
+  );
+});
+
+const InsightCard = React.memo(function InsightCard({ item, theme }) {
+  return (
+    <View style={[styles.insightCard, { backgroundColor: theme.colors.cardBg, borderColor: `${item.color}30` }]}>
+      <View style={[styles.insightIcon, { backgroundColor: `${item.color}18` }]}>
+        <MaterialIcons name={item.icon} size={22} color={item.color} />
+      </View>
+      <View style={styles.insightContent}>
+        <Text style={[styles.insightTitle, { color: theme.colors.text }]}>{item.title}</Text>
+        <Text style={[styles.insightText,  { color: theme.colors.textSecondary }]}>{item.body}</Text>
+        <View style={[styles.impactBadge, { backgroundColor: `${item.color}18` }]}>
+          <Text style={[styles.insightImpact, { color: item.color }]}>{item.impact}</Text>
+        </View>
+      </View>
+    </View>
+  );
+});
 
 const styles = StyleSheet.create({
   screen:    { flex: 1 },
