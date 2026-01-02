@@ -422,7 +422,14 @@ export default function LoginScreen() {
       </KeyboardAvoidingView>
 
       {/* ── Reset password modal ── */}
-      <Modal visible={resetVisible} transparent animationType="fade" onRequestClose={handleCloseReset}>
+      <Modal
+        visible={resetVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={handleCloseReset}
+        statusBarTranslucent
+        navigationBarTranslucent
+      >
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
 
