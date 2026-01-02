@@ -39,6 +39,9 @@ build/
 *.mobileprovision
 *.orig.*
 
+# Native folders (managed Expo workflow — пересоздаются через `expo prebuild`)
+/android/
+
 # Firebase
 .firebase/
 .firebaserc
