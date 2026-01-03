@@ -452,7 +452,11 @@ export default function AdminBookings() {
                 },
               ]}
             >
-              <Text style={[styles.filterPillText, { color: active ? '#fff' : theme.colors.textSecondary }]}>
+              <Text
+                style={[styles.filterPillText, { color: active ? '#fff' : theme.colors.textSecondary }]}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
                 {f.label}
               </Text>
               {counts[f.id] > 0 && (
@@ -850,15 +854,15 @@ const styles = StyleSheet.create({
   filterRow: {
     flexDirection: 'row', gap: 6,
     paddingHorizontal: spacing.md, paddingBottom: spacing.sm,
-    flexWrap: 'nowrap',
   },
   filterPill: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    paddingHorizontal: 10, paddingVertical: 7,
+    flexGrow: 1, flexShrink: 1, flexBasis: 0,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5,
+    paddingHorizontal: 8, paddingVertical: 7,
     borderRadius: 999, borderWidth: 1,
   },
-  filterPillText: { fontSize: 12, fontWeight: '700' },
-  filterCount: { borderRadius: 999, paddingHorizontal: 5, paddingVertical: 1 },
+  filterPillText: { fontSize: 12, fontWeight: '700', flexShrink: 1 },
+  filterCount: { minWidth: 18, borderRadius: 999, paddingHorizontal: 5, paddingVertical: 1, alignItems: 'center' },
   filterCountText: { fontSize: 10, fontWeight: '900' },
 
   list: { paddingHorizontal: spacing.md, paddingBottom: 130 },
