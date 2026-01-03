@@ -87,14 +87,13 @@ module.exports = function createCardRouter({ isDbConnected }) {
           userId,
           balance:         parsedAmount,
           totalSpent:      0,
-          totalEarned:     parsedAmount,
+          totalEarned:     0,
           cashbackRate:    5,
           membershipLevel: 'Bronze',
         }, { transaction: t });
       } else {
         await loyaltyCard.update({
-          balance:     balanceAfter,
-          totalEarned: parseFloat((parseFloat(loyaltyCard.totalEarned) + parsedAmount).toFixed(2)),
+          balance: balanceAfter,
         }, { transaction: t });
       }
 
