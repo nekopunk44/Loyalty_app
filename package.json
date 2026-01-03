@@ -26,6 +26,7 @@
     "@sentry/react-native": "~7.11.0",
     "@stripe/stripe-react-native": "0.63.0",
     "axios": "^1.16.0",
+    "eslint-config-expo": "~55.0.1",
     "expo": "^55.0.23",
     "expo-camera": "~55.0.18",
     "expo-iap": "^4.3.1",
@@ -36,6 +37,7 @@
     "expo-system-ui": "~55.0.18",
     "expo-web-browser": "~55.0.16",
     "react": "19.2.0",
+    "react-dom": "19.2.0",
     "react-native": "0.83.6",
     "react-native-gesture-handler": "~2.30.0",
     "react-native-qrcode-svg": "^6.2.2",
@@ -50,11 +52,9 @@
   "devDependencies": {
     "@babel/core": "^7.12.9",
     "@babel/eslint-parser": "^7.28.6",
-    "@expo/config-plugins": "^55.0.8",
     "@types/react": "~19.2.10",
     "babel-plugin-transform-remove-console": "^6.9.4",
     "eslint": "^8.57.1",
-    "eslint-config-expo": "^8.0.1",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^4.6.2"
   },
