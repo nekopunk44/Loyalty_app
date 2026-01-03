@@ -250,8 +250,11 @@ export default function BookingScreen({ navigation }) {
   const [properties, setProperties] = useState([]);
   const [selectedProperty, setSelectedProperty] = useState(null);
 
-  // Имя номера по ID — нужно для форматирования контекстных бронирований.
-  const getPropertyName = React.useCallback((propertyId) => {
+  // Имя номера по ID. Приоритет: денормализованное propertyName с сервера
+  // (живёт даже для unavailable/удалённых номеров) → каталог /properties
+  // (только available) → фолбэк «Номер N».
+  const getPropertyName = React.useCallback((propertyId, fromServer) => {
+    if (fromServer) return fromServer;
     const found = properties.find(p => String(p.id) === String(propertyId));
     return found?.name || `Номер ${propertyId}`;
   }, [properties]);
@@ -369,7 +372,7 @@ export default function BookingScreen({ navigation }) {
 
         return {
           id: booking.id,
-          property: getPropertyName(booking.propertyId),
+          property: getPropertyName(booking.propertyId, booking.propertyName),
           date: `${booking.checkInDate} - ${booking.checkOutDate}`,
           checkIn: booking.checkInDate,
           checkOut: booking.checkOutDate,
