@@ -32,6 +32,7 @@ import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { spacing } from '../../constants/theme';
 import { useTheme } from '../../context/ThemeContext';
 import PropertyService from '../../services/PropertyService';
+import PropertyCard from '../../components/booking/PropertyCard';
 
 const SCREEN_H = Dimensions.get('window').height;
 const SHEET_H  = SCREEN_H * 0.92;
@@ -311,37 +312,15 @@ export default function AdminProperties() {
         )}
         {list.map((item) => {
           const meta = STATUS_META[item.status] || STATUS_META.unavailable;
-          const cover = item.photos?.[0] || item.image;
           return (
-            <TouchableOpacity
+            <PropertyCard
               key={item.id}
-              style={[styles.card, { backgroundColor: colors.cardBg, borderColor: colors.border }]}
-              onPress={() => handleOpenEdit(item)}
-              activeOpacity={0.85}
-            >
-              {cover ? (
-                <Image source={{ uri: cover }} style={styles.cardImage} />
-              ) : (
-                <View style={[styles.cardImage, styles.cardImagePlaceholder]}>
-                  <MaterialIcons name="image" size={28} color={colors.textSecondary} />
-                </View>
-              )}
-              <View style={styles.cardBody}>
-                <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={1}>
-                  {item.name}
-                </Text>
-                <Text style={[styles.cardPrice, { color: colors.primary }]} numberOfLines={1}>
-                  {item.price}
-                </Text>
-                <Text style={[styles.cardMeta, { color: colors.textSecondary }]} numberOfLines={1}>
-                  {item.rooms ? `${item.rooms} комн.  • ` : ''}до {item.guests || '—'} гостей  •  фото: {item.photos?.length || 0}
-                </Text>
-              </View>
-              <View style={[styles.statusPill, { backgroundColor: `${meta.color}1A` }]}>
-                <View style={[styles.statusDot, { backgroundColor: meta.color }]} />
-                <Text style={[styles.statusText, { color: meta.color }]}>{meta.label}</Text>
-              </View>
-            </TouchableOpacity>
+              item={item}
+              onSelect={handleOpenEdit}
+              actionLabel="Редактировать"
+              actionIcon="edit"
+              statusBadge={meta}
+            />
           );
         })}
         <View style={{ height: 40 }} />
@@ -571,20 +550,9 @@ const makeStyles = (colors) => StyleSheet.create({
   subtitle:    { fontSize: 12, marginTop: 4, fontWeight: '600' },
   addBtn:      { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.primary, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12 },
   addBtnText:  { color: '#fff', fontWeight: '800', fontSize: 13 },
-  listContent: { paddingHorizontal: 16, paddingBottom: 24 },
+  listContent: { paddingBottom: 24 },
   empty:       { alignItems: 'center', paddingVertical: 60, gap: 12 },
   emptyText:   { fontSize: 14, fontWeight: '600' },
-
-  card:        { flexDirection: 'row', borderWidth: 1, borderRadius: 14, marginBottom: 10, overflow: 'hidden', padding: 10, gap: 12, alignItems: 'center' },
-  cardImage:   { width: 72, height: 72, borderRadius: 10, backgroundColor: colors.border },
-  cardImagePlaceholder: { alignItems: 'center', justifyContent: 'center' },
-  cardBody:    { flex: 1, gap: 3 },
-  cardTitle:   { fontSize: 15, fontWeight: '800' },
-  cardPrice:   { fontSize: 13, fontWeight: '700' },
-  cardMeta:    { fontSize: 11, fontWeight: '600' },
-  statusPill:  { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-  statusDot:   { width: 6, height: 6, borderRadius: 3 },
-  statusText:  { fontSize: 10, fontWeight: '800' },
 
   sheetBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   sheet:       { borderTopLeftRadius: 22, borderTopRightRadius: 22, overflow: 'hidden' },
