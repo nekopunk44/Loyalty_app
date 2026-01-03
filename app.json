@@ -72,7 +72,8 @@
           "defaultChannel": "default",
           "sounds": []
         }
-      ]
+      ],
+      "expo-iap"
     ],
     "platforms": [
       "ios",

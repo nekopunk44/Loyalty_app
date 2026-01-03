@@ -1,5 +1,5 @@
 /**
- * Обёртка над react-native-iap для Google Play Billing.
+ * Обёртка над expo-iap для Google Play Billing.
  *
  * Работает только на физическом Android-устройстве с приложением, установленным
  * из Google Play (включая Internal Testing). В iOS / Web / Expo Go вернёт
@@ -7,8 +7,8 @@
  *
  * Поток покупки:
  *   1. initConnection() — однократно при mount компонента
- *   2. getProducts({ skus }) — подгрузить цены и название из Play
- *   3. requestPurchase({ skus: [productId] }) — открывает нативный диалог
+ *   2. fetchProducts({ skus, type: 'in-app' }) — подгрузить цены и название из Play
+ *   3. requestPurchase({ request: { android: { skus } }, type: 'in-app' }) — открывает нативный диалог
  *   4. purchase event приходит через purchaseUpdatedListener
  *   5. Серверная валидация через /api/payments/google-play/verify
  *   6. finishTransaction({ purchase, isConsumable: true }) — «потребляем» товар
@@ -19,7 +19,7 @@
  */
 import { Platform } from 'react-native';
 
-let RNIap = null;
+let IAP = null;
 let isAvailableCached = null;
 
 const SKUS = [
@@ -70,8 +70,8 @@ export function isGooglePlayAvailable() {
   }
   try {
     // eslint-disable-next-line global-require
-    RNIap = require('react-native-iap');
-    isAvailableCached = !!(RNIap && typeof RNIap.initConnection === 'function');
+    IAP = require('expo-iap');
+    isAvailableCached = !!(IAP && typeof IAP.initConnection === 'function');
   } catch (_) {
     isAvailableCached = false;
   }
@@ -91,7 +91,7 @@ export async function initIAP() {
     throw new Error('Google Play Billing недоступен на этом устройстве');
   }
   if (!connectionPromise) {
-    connectionPromise = RNIap.initConnection();
+    connectionPromise = IAP.initConnection();
   }
   return connectionPromise;
 }
@@ -111,7 +111,7 @@ export async function endIAP() {
       errorListener.remove();
       errorListener = null;
     }
-    await RNIap.endConnection();
+    await IAP.endConnection();
   } catch (_) { /* noop */ }
   connectionPromise = null;
 }
@@ -124,8 +124,8 @@ export async function fetchProducts() {
   if (!isGooglePlayAvailable()) return [];
   await initIAP();
   try {
-    const products = await RNIap.getProducts({ skus: SKUS });
-    return products || [];
+    const products = await IAP.fetchProducts({ skus: SKUS, type: 'in-app' });
+    return Array.isArray(products) ? products : [];
   } catch (err) {
     if (__DEV__) {
       // В Expo Go или Internal Test до настройки SKU это нормально.
@@ -144,8 +144,8 @@ export async function fetchProducts() {
  */
 export function attachPurchaseListeners(onPurchase, onError) {
   if (!isGooglePlayAvailable()) return () => {};
-  purchaseListener = RNIap.purchaseUpdatedListener(onPurchase);
-  errorListener = RNIap.purchaseErrorListener(onError);
+  purchaseListener = IAP.purchaseUpdatedListener(onPurchase);
+  errorListener = IAP.purchaseErrorListener(onError);
   return () => {
     if (purchaseListener) { purchaseListener.remove(); purchaseListener = null; }
     if (errorListener)    { errorListener.remove();    errorListener = null; }
@@ -160,7 +160,10 @@ export async function requestPurchase(productId) {
     throw new Error('Google Play Billing недоступен');
   }
   await initIAP();
-  return RNIap.requestPurchase({ skus: [productId] });
+  return IAP.requestPurchase({
+    request: { android: { skus: [productId] } },
+    type: 'in-app',
+  });
 }
 
 /**
@@ -170,7 +173,7 @@ export async function requestPurchase(productId) {
 export async function finishPurchase(purchase) {
   if (!isGooglePlayAvailable()) return;
   try {
-    await RNIap.finishTransaction({ purchase, isConsumable: true });
+    await IAP.finishTransaction({ purchase, isConsumable: true });
   } catch (err) {
     if (__DEV__) {
       // eslint-disable-next-line no-console
