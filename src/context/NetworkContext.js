@@ -42,7 +42,7 @@ export function NetworkProvider({ children }) {
     timerRef.current = setInterval(check, CHECK_INTERVAL_MS);
 
     return () => {
-      sub.remove();
+      sub?.remove?.();
       clearInterval(timerRef.current);
     };
   }, [check]);

@@ -136,7 +136,7 @@ export const NotificationProvider = ({ children }) => {
         connectSSE(userId, token);
       }
     });
-    return () => sub.remove();
+    return () => sub?.remove?.();
   }, [connectSSE]);
 
   // Инициализация уведомлений
@@ -152,12 +152,13 @@ export const NotificationProvider = ({ children }) => {
       clearTimeout(sseReconnectTimer.current);
       sseParamsRef.current = { userId: null, token: null };
 
-      if (Notifications && notificationListener.current) {
-        Notifications.removeNotificationSubscription(notificationListener.current);
-      }
-      if (Notifications && responseListener.current) {
-        Notifications.removeNotificationSubscription(responseListener.current);
-      }
+      // В expo-notifications для SDK 47+ статический removeNotificationSubscription удалён —
+      // отписка только через subscription.remove(). Optional chain страхует от undefined,
+      // если подписка не была создана (Expo Go / web / отказ от пермишена).
+      notificationListener.current?.remove?.();
+      responseListener.current?.remove?.();
+      notificationListener.current = null;
+      responseListener.current = null;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
