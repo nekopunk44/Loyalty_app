@@ -121,13 +121,92 @@ export default function Navbar() {
       <div style={{ height: 2, background: 'var(--r-gold)', width: `${progress}%`, transition: 'width 0.1s linear', opacity: 0.7 }} />
 
       {open && (
-        <div style={{ background: 'rgba(247,242,232,0.98)', backdropFilter: 'blur(20px)', borderTop: '1px solid var(--r-line)', padding: '24px clamp(20px,4vw,60px) 32px' }}>
-          {LINKS.map(l => (
-            <a key={l.id} href={`#${l.id}`} onClick={e => { e.preventDefault(); scrollTo(l.id); }}
-              style={{ display: 'block', fontFamily: 'var(--r-serif)', fontSize: 28, fontWeight: 300, color: active === l.id ? 'var(--r-gold)' : 'var(--r-text)', marginBottom: 20, textDecoration: 'none' }}>
-              {l.label}
-            </a>
-          ))}
+        <div style={{
+          background: 'rgba(247,242,232,0.98)',
+          backdropFilter: 'blur(24px) saturate(1.2)',
+          WebkitBackdropFilter: 'blur(24px) saturate(1.2)',
+          borderTop: '1px solid var(--r-line)',
+          padding: '28px clamp(20px,5vw,40px) 32px',
+          boxShadow: '0 24px 48px -16px rgba(28,18,8,0.18)',
+          animation: 'fadeIn 0.35s ease-out',
+        }}>
+          {/* Eyebrow */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+            <span style={{ width: 28, height: 1, background: 'var(--r-gold)', opacity: 0.6 }} />
+            <span style={{ fontSize: 9, fontWeight: 500, letterSpacing: '0.32em', textTransform: 'uppercase', color: 'var(--r-muted)' }}>Навигация</span>
+          </div>
+
+          {/* Links */}
+          {LINKS.map((l, i) => {
+            const isActive = active === l.id;
+            return (
+              <a key={l.id} href={`#${l.id}`} onClick={e => { e.preventDefault(); scrollTo(l.id); }}
+                style={{
+                  display: 'flex', alignItems: 'baseline', gap: 18,
+                  padding: '14px 0',
+                  borderBottom: i === LINKS.length - 1 ? 'none' : '1px solid var(--r-line)',
+                  textDecoration: 'none',
+                  opacity: 0,
+                  animation: `fadeSlideUp 0.5s cubic-bezier(0.16,1,0.3,1) ${i * 60 + 80}ms forwards`,
+                }}>
+                <span style={{
+                  fontFamily: 'var(--r-sans)',
+                  fontSize: 10, fontWeight: 500, letterSpacing: '0.18em',
+                  color: isActive ? 'var(--r-gold)' : 'var(--r-muted)',
+                  minWidth: 22,
+                }}>
+                  0{i + 1}
+                </span>
+                <span style={{
+                  flex: 1,
+                  fontFamily: 'var(--r-serif)', fontSize: 30, fontWeight: 300,
+                  lineHeight: 1.1, letterSpacing: '-0.01em',
+                  color: isActive ? 'var(--r-gold)' : 'var(--r-text)',
+                  transition: 'color 0.3s ease',
+                }}>
+                  {l.label}
+                </span>
+                {isActive && (
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--r-gold)', alignSelf: 'center' }} />
+                )}
+              </a>
+            );
+          })}
+
+          {/* CTA */}
+          <button
+            onClick={() => { setOpen(false); window.dispatchEvent(new CustomEvent('open-booking-modal')); }}
+            style={{
+              marginTop: 28, width: '100%',
+              padding: '16px 24px',
+              background: 'var(--r-text)', color: 'var(--r-bg)',
+              border: 'none', borderRadius: 999,
+              fontSize: 12, letterSpacing: '0.16em', textTransform: 'uppercase',
+              fontWeight: 500, fontFamily: 'inherit', cursor: 'pointer',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+              opacity: 0,
+              animation: `fadeSlideUp 0.5s cubic-bezier(0.16,1,0.3,1) ${LINKS.length * 60 + 140}ms forwards`,
+            }}>
+            Забронировать <span style={{ color: 'var(--r-gold-light)' }}>→</span>
+          </button>
+
+          {/* Contacts */}
+          <div style={{
+            display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 16,
+            marginTop: 22,
+            opacity: 0,
+            animation: `fadeSlideUp 0.5s cubic-bezier(0.16,1,0.3,1) ${LINKS.length * 60 + 200}ms forwards`,
+          }}>
+            <a href="tel:+3737791002" style={{
+              fontSize: 10, fontWeight: 500, letterSpacing: '0.14em', textTransform: 'uppercase',
+              color: 'var(--r-text-soft)', textDecoration: 'none',
+            }}>+373 779 10-02</a>
+            <span style={{ width: 1, height: 10, background: 'var(--r-line-strong)' }} />
+            <a href="https://www.instagram.com/villa_jaconda_relax" target="_blank" rel="noreferrer" style={{
+              fontSize: 10, fontWeight: 500, letterSpacing: '0.14em', textTransform: 'uppercase',
+              color: 'var(--r-text-soft)', textDecoration: 'none',
+            }}>Instagram</a>
+          </div>
         </div>
       )}
     </header>

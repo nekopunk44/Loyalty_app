@@ -15,13 +15,9 @@ export default function LoyaltyApp() {
   const t = TIERS[active];
 
   return (
-    <section id="loyalty" style={{
+    <section id="loyalty" className="loyalty-section" style={{
       background: 'linear-gradient(180deg, #0a0805 0%, #0d0a07 100%)',
-      height: 'calc(100svh - 72px)',
-      paddingTop: 'clamp(16px,2.5vh,36px)',
-      paddingBottom: 'clamp(16px,2.5vh,36px)',
       position: 'relative', overflow: 'hidden',
-      display: 'flex', flexDirection: 'column', justifyContent: 'center',
     }}>
       <style>{`
         @keyframes glowPulse {
@@ -36,10 +32,31 @@ export default function LoyaltyApp() {
           0%, 100% { transform: translateY(0) perspective(900px) rotateY(-14deg) rotateX(2deg); }
           50%      { transform: translateY(-10px) perspective(900px) rotateY(-14deg) rotateX(2deg); }
         }
+        .loyalty-section {
+          height: calc(100svh - 72px);
+          padding-top: clamp(16px, 2.5vh, 36px);
+          padding-bottom: clamp(16px, 2.5vh, 36px);
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+        }
         .loyalty-grid { display: grid; gap: clamp(12px, 1.5vw, 20px); grid-template-columns: minmax(0, 1fr) minmax(0, 320px); align-items: center; }
         @media (max-width: 980px) {
           .loyalty-grid { grid-template-columns: 1fr !important; }
           .loyalty-phone-wrap { justify-self: center; }
+        }
+        @media (max-width: 720px) {
+          .loyalty-section {
+            height: auto;
+            min-height: auto;
+            padding: clamp(56px, 10vh, 96px) 0;
+            justify-content: flex-start;
+          }
+          .loyalty-phone-row {
+            flex-direction: column !important;
+            transform: none !important;
+            gap: 28px !important;
+          }
         }
       `}</style>
 
@@ -189,7 +206,7 @@ export default function LoyaltyApp() {
           <div className="loyalty-phone-wrap" style={{ display: 'flex', justifyContent: 'center' }}>
 
             {/* Враппер: телефон слева, кнопки справа, всё сдвинуто влево */}
-            <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 40, transform: 'translateX(-120px)' }}>
+            <div className="loyalty-phone-row" style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 40, transform: 'translateX(-120px)' }}>
 
               {/* Phone mockup */}
               <div style={{ position: 'relative', animation: 'phoneFloat 8s ease-in-out infinite', flexShrink: 0 }}>
