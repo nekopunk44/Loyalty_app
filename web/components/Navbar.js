@@ -55,80 +55,33 @@ export default function Navbar() {
     setOpen(false);
   };
 
+  // Блокируем скролл body, когда мобильное меню открыто
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, [open]);
+
+  // Когда меню открыто, лого и иконки на десктопе остаются по логике scrolled,
+  // а на мобильном — всегда тёмные (т.к. позади них кремовый full-screen overlay).
+  const isDark = scrolled || open;
+
   return (
-    <header style={{
-      position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50,
-      backdropFilter: scrolled ? 'blur(20px) saturate(1.2)' : 'none',
-      WebkitBackdropFilter: scrolled ? 'blur(20px) saturate(1.2)' : 'none',
-      background: scrolled ? 'rgba(247,242,232,0.92)' : 'transparent',
-      borderBottom: `1px solid ${scrolled ? 'rgba(160,120,60,0.15)' : 'rgba(212,164,94,0.12)'}`,
-      transition: 'all 0.5s ease',
-    }}>
-      <div style={{ maxWidth: 1440, margin: '0 auto', padding: '0 clamp(20px,4vw,60px)', height: scrolled ? 64 : 88, display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: 'height 0.4s ease' }}>
-
-        {/* Логотип: светлый на Hero, тёмный после скролла */}
-        <a href="#" onClick={e => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-          style={{ display: 'flex', alignItems: 'center', gap: 11, textDecoration: 'none', color: scrolled ? 'var(--r-text)' : '#f5ede0', transition: 'color 0.5s ease' }}>
-          <VJMonogram size={36}
-            mainColor={scrolled ? '#1c1208' : '#f5ede0'}
-            accentColor="#d4a45e"
-            animate delay={400} fast />
-          <span style={{ fontFamily: 'var(--r-serif)', fontSize: 20, fontWeight: 300, letterSpacing: '0.04em' }}>
-            VILLA <span style={{ color: '#d4a45e' }}>JACONDA</span>
-          </span>
-        </a>
-
-        <nav className="hidden md:flex" style={{ alignItems: 'center', gap: 32 }}>
-          {LINKS.map(l => {
-            const linkColor = scrolled
-              ? (active === l.id ? 'var(--r-gold)' : 'var(--r-text-soft)')
-              : (active === l.id ? '#d4a45e' : 'rgba(245,237,224,0.72)');
-            return (
-              <a key={l.id} href={`#${l.id}`}
-                onClick={e => { e.preventDefault(); scrollTo(l.id); }}
-                style={{ fontSize: 12, letterSpacing: '0.16em', textTransform: 'uppercase', color: linkColor, fontWeight: active === l.id ? 500 : 400, transition: 'color 0.4s ease', textDecoration: 'none' }}
-                onMouseEnter={e => { e.currentTarget.style.color = '#d4a45e'; }}
-                onMouseLeave={e => { e.currentTarget.style.color = linkColor; }}>
-                {l.label}
-              </a>
-            );
-          })}
-          <button
-            onClick={() => window.dispatchEvent(new CustomEvent('open-booking-modal'))}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 8, padding: '11px 22px',
-              background: scrolled ? 'var(--r-text)' : 'transparent',
-              color: scrolled ? 'var(--r-bg)' : '#f5ede0',
-              border: scrolled ? 'none' : '1px solid rgba(245,237,224,0.30)',
-              borderRadius: 999, fontSize: 12, letterSpacing: '0.12em',
-              textTransform: 'uppercase', fontWeight: 500, cursor: 'pointer',
-              fontFamily: 'inherit',
-              transition: 'all 0.4s ease',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.background = '#d4a45e'; e.currentTarget.style.color = '#080604'; e.currentTarget.style.borderColor = 'transparent'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = scrolled ? 'var(--r-text)' : 'transparent'; e.currentTarget.style.color = scrolled ? 'var(--r-bg)' : '#f5ede0'; e.currentTarget.style.borderColor = scrolled ? 'transparent' : 'rgba(245,237,224,0.30)'; }}>
-            Забронировать →
-          </button>
-        </nav>
-
-        <button className="md:hidden" onClick={() => setOpen(!open)} aria-label="Menu"
-          style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 8 }}>
-          <div style={{ width: 28, height: 1, background: scrolled ? 'var(--r-text)' : '#f5ede0', marginBottom: 8, transition: 'transform 0.3s, background 0.5s', transform: open ? 'translateY(4.5px) rotate(45deg)' : 'none' }} />
-          <div style={{ width: 28, height: 1, background: scrolled ? 'var(--r-text)' : '#f5ede0', transition: 'transform 0.3s, background 0.5s', transform: open ? 'translateY(-4.5px) rotate(-45deg)' : 'none' }} />
-        </button>
-      </div>
-
-      <div style={{ height: 2, background: 'var(--r-gold)', width: `${progress}%`, transition: 'width 0.1s linear', opacity: 0.7 }} />
-
-      {open && (
+    <>
+    {/* ═════════════ Full-screen overlay (только мобильное меню) ═════════════ */}
+    {open && (
+      <div className="md:hidden" style={{
+        position: 'fixed', inset: 0, zIndex: 45,
+        background: 'var(--r-bg)',
+        animation: 'fadeIn 0.35s ease-out',
+        overflowY: 'auto',
+        WebkitOverflowScrolling: 'touch',
+      }}>
         <div style={{
-          background: 'rgba(247,242,232,0.98)',
-          backdropFilter: 'blur(24px) saturate(1.2)',
-          WebkitBackdropFilter: 'blur(24px) saturate(1.2)',
-          borderTop: '1px solid var(--r-line)',
-          padding: '28px clamp(20px,5vw,40px) 32px',
-          boxShadow: '0 24px 48px -16px rgba(28,18,8,0.18)',
-          animation: 'fadeIn 0.35s ease-out',
+          minHeight: '100%',
+          padding: '92px clamp(20px,5vw,40px) 36px',
+          display: 'flex', flexDirection: 'column',
         }}>
           {/* Eyebrow */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
@@ -190,7 +143,7 @@ export default function Navbar() {
             Забронировать <span style={{ color: 'var(--r-gold-light)' }}>→</span>
           </button>
 
-          {/* Eyebrow «Приложение» + ссылки на скачивание */}
+          {/* Eyebrow «Приложение» */}
           <div style={{
             display: 'flex', alignItems: 'center', gap: 12,
             marginTop: 26, marginBottom: 14,
@@ -201,6 +154,7 @@ export default function Navbar() {
             <span style={{ fontSize: 9, fontWeight: 500, letterSpacing: '0.32em', textTransform: 'uppercase', color: 'var(--r-muted)' }}>Приложение</span>
           </div>
 
+          {/* App store links */}
           <div style={{
             display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10,
             opacity: 0,
@@ -237,10 +191,10 @@ export default function Navbar() {
             </a>
           </div>
 
-          {/* Contacts */}
+          {/* Contacts — прижаты к низу */}
           <div style={{
             display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 16,
-            marginTop: 22,
+            marginTop: 'auto', paddingTop: 28,
             opacity: 0,
             animation: `fadeSlideUp 0.5s cubic-bezier(0.16,1,0.3,1) ${LINKS.length * 60 + 280}ms forwards`,
           }}>
@@ -255,7 +209,73 @@ export default function Navbar() {
             }}>Instagram</a>
           </div>
         </div>
-      )}
+      </div>
+    )}
+
+    <header style={{
+      position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50,
+      backdropFilter: (scrolled && !open) ? 'blur(20px) saturate(1.2)' : 'none',
+      WebkitBackdropFilter: (scrolled && !open) ? 'blur(20px) saturate(1.2)' : 'none',
+      background: open ? 'transparent' : (scrolled ? 'rgba(247,242,232,0.92)' : 'transparent'),
+      borderBottom: open ? 'none' : `1px solid ${scrolled ? 'rgba(160,120,60,0.15)' : 'rgba(212,164,94,0.12)'}`,
+      transition: 'all 0.5s ease',
+    }}>
+      <div style={{ maxWidth: 1440, margin: '0 auto', padding: '0 clamp(20px,4vw,60px)', height: scrolled ? 64 : 88, display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: 'height 0.4s ease' }}>
+
+        {/* Логотип: светлый на Hero, тёмный после скролла или при открытом меню */}
+        <a href="#" onClick={e => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+          style={{ display: 'flex', alignItems: 'center', gap: 11, textDecoration: 'none', color: isDark ? 'var(--r-text)' : '#f5ede0', transition: 'color 0.5s ease' }}>
+          <VJMonogram size={36}
+            mainColor={isDark ? '#1c1208' : '#f5ede0'}
+            accentColor="#d4a45e"
+            animate delay={400} fast />
+          <span style={{ fontFamily: 'var(--r-serif)', fontSize: 20, fontWeight: 300, letterSpacing: '0.04em' }}>
+            VILLA <span style={{ color: '#d4a45e' }}>JACONDA</span>
+          </span>
+        </a>
+
+        <nav className="hidden md:flex" style={{ alignItems: 'center', gap: 32 }}>
+          {LINKS.map(l => {
+            const linkColor = scrolled
+              ? (active === l.id ? 'var(--r-gold)' : 'var(--r-text-soft)')
+              : (active === l.id ? '#d4a45e' : 'rgba(245,237,224,0.72)');
+            return (
+              <a key={l.id} href={`#${l.id}`}
+                onClick={e => { e.preventDefault(); scrollTo(l.id); }}
+                style={{ fontSize: 12, letterSpacing: '0.16em', textTransform: 'uppercase', color: linkColor, fontWeight: active === l.id ? 500 : 400, transition: 'color 0.4s ease', textDecoration: 'none' }}
+                onMouseEnter={e => { e.currentTarget.style.color = '#d4a45e'; }}
+                onMouseLeave={e => { e.currentTarget.style.color = linkColor; }}>
+                {l.label}
+              </a>
+            );
+          })}
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent('open-booking-modal'))}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 8, padding: '11px 22px',
+              background: scrolled ? 'var(--r-text)' : 'transparent',
+              color: scrolled ? 'var(--r-bg)' : '#f5ede0',
+              border: scrolled ? 'none' : '1px solid rgba(245,237,224,0.30)',
+              borderRadius: 999, fontSize: 12, letterSpacing: '0.12em',
+              textTransform: 'uppercase', fontWeight: 500, cursor: 'pointer',
+              fontFamily: 'inherit',
+              transition: 'all 0.4s ease',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = '#d4a45e'; e.currentTarget.style.color = '#080604'; e.currentTarget.style.borderColor = 'transparent'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = scrolled ? 'var(--r-text)' : 'transparent'; e.currentTarget.style.color = scrolled ? 'var(--r-bg)' : '#f5ede0'; e.currentTarget.style.borderColor = scrolled ? 'transparent' : 'rgba(245,237,224,0.30)'; }}>
+            Забронировать →
+          </button>
+        </nav>
+
+        <button className="md:hidden" onClick={() => setOpen(!open)} aria-label="Menu"
+          style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 8, position: 'relative', zIndex: 51 }}>
+          <div style={{ width: 28, height: 1, background: isDark ? 'var(--r-text)' : '#f5ede0', marginBottom: 8, transition: 'transform 0.3s, background 0.5s', transform: open ? 'translateY(4.5px) rotate(45deg)' : 'none' }} />
+          <div style={{ width: 28, height: 1, background: isDark ? 'var(--r-text)' : '#f5ede0', transition: 'transform 0.3s, background 0.5s', transform: open ? 'translateY(-4.5px) rotate(-45deg)' : 'none' }} />
+        </button>
+      </div>
+
+      <div style={{ height: 2, background: 'var(--r-gold)', width: `${progress}%`, transition: 'width 0.1s linear', opacity: 0.7 }} />
     </header>
+    </>
   );
 }
