@@ -62,7 +62,7 @@ export default function Rooms() {
   const letters = [...cur.name];
 
   return (
-    <section id="rooms" ref={sectionRef} style={{
+    <section id="rooms" ref={sectionRef} className="rooms-section" style={{
       position: 'relative', height: 'calc(100svh - 72px)', overflow: 'hidden',
       background: '#0a0805',
       display: 'grid', gridTemplateColumns: 'minmax(420px, 46%) 1fr',
@@ -107,9 +107,47 @@ export default function Rooms() {
         .line-draw  { transform-origin: left center; animation: lineDraw 0.7s cubic-bezier(0.16,1,0.3,1) both; }
         .letter     { display: inline-block; transform-origin: center bottom; }
         @media (max-width: 900px) {
-          .rooms-grid { grid-template-columns: 1fr !important; grid-template-rows: 50% 50% !important; }
-          .left-panel { padding-left: clamp(24px,5vw,40px) !important; padding-right: clamp(24px,5vw,40px) !important; }
+          .rooms-section {
+            display: flex !important;
+            flex-direction: column !important;
+            height: auto !important;
+          }
+          .right-panel {
+            order: -1;
+            height: 60vw !important;
+            min-height: 260px !important;
+            max-height: 380px !important;
+          }
+          .left-panel {
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+          }
+          .left-panel .content-pad {
+            padding: clamp(28px,6vw,40px) clamp(20px,5vw,32px) clamp(20px,4vw,28px) !important;
+          }
+          .rooms-vline { display: none !important; }
+          .rooms-nav {
+            display: grid !important;
+            grid-template-columns: 1fr 1fr !important;
+            gap: 1px;
+            padding: 0 !important;
+            background: rgba(212,164,94,0.10);
+          }
+          .rooms-nav > button {
+            border-right: none !important;
+            padding: 14px 16px !important;
+            background: rgba(10,8,5,0.85) !important;
+          }
           .ghost-num  { display: none !important; }
+          .photo-counter { display: none !important; }
+          .photo-controls {
+            bottom: clamp(16px,3vw,24px) !important;
+            right: clamp(16px,4vw,24px) !important;
+            gap: 14px !important;
+          }
+          .photo-controls .arrow-btn {
+            width: 36px !important; height: 36px !important;
+          }
         }
       `}</style>
 
@@ -134,7 +172,7 @@ export default function Rooms() {
         </div>
 
         {/* Основной контент */}
-        <div key={tKey} style={{
+        <div key={tKey} className="content-pad" style={{
           position: 'relative', zIndex: 2, flex: 1,
           padding: 'clamp(28px,4vh,48px) clamp(48px,5vw,80px) clamp(16px,2vh,24px)',
           display: 'flex', flexDirection: 'column', justifyContent: 'flex-start',
@@ -212,7 +250,7 @@ export default function Rooms() {
         </div>
 
         {/* Нижняя навигация по номерам */}
-        <div style={{
+        <div className="rooms-nav" style={{
           position: 'relative', zIndex: 2,
           padding: '0 clamp(48px,5vw,80px) clamp(20px,2.5vh,32px)',
           borderTop: '1px solid rgba(212,164,94,0.28)',
@@ -279,7 +317,7 @@ export default function Rooms() {
       </div>
 
       {/* ════════════════════ RIGHT PANEL ════════════════════ */}
-      <div style={{ position: 'relative', overflow: 'hidden', background: '#0a0805' }}>
+      <div className="right-panel" style={{ position: 'relative', overflow: 'hidden', background: '#0a0805' }}>
 
         {/* Все фото — простой crossfade */}
         {ROOMS.map((r, ri) => r.images.map((src, ii) => {
@@ -323,7 +361,7 @@ export default function Rooms() {
         }} />
 
         {/* Верхний правый — счётчик фото */}
-        <div key={`pcnt-${active}-${photo}`} style={{
+        <div key={`pcnt-${active}-${photo}`} className="photo-counter" style={{
           position: 'absolute', top: 'clamp(100px,13vh,130px)', right: 'clamp(40px,5vw,72px)',
           zIndex: 4, display: 'flex', alignItems: 'center', gap: 14,
           animation: 'numFlip 0.55s cubic-bezier(0.16,1,0.3,1) both',
@@ -338,7 +376,7 @@ export default function Rooms() {
         </div>
 
         {/* Нижняя правая — индикатор + стрелки */}
-        <div style={{
+        <div className="photo-controls" style={{
           position: 'absolute', bottom: 'clamp(36px,4.5vh,52px)', right: 'clamp(40px,5vw,72px)',
           zIndex: 4, display: 'flex', alignItems: 'center', gap: 22,
         }}>
@@ -357,6 +395,7 @@ export default function Rooms() {
 
           <div style={{ display: 'flex', gap: 10 }}>
             <button onClick={() => switchPhoto((photo - 1 + cur.images.length) % cur.images.length)}
+              className="arrow-btn"
               style={{
                 width: 42, height: 42, borderRadius: '50%',
                 background: 'transparent', border: '1px solid rgba(245,237,224,0.16)',
@@ -368,6 +407,7 @@ export default function Rooms() {
               <svg width="12" height="12" viewBox="0 0 12 12"><path d="M7.5 2.5L4 6l3.5 3.5" stroke="#f5ede0" strokeWidth="1" fill="none" strokeLinecap="round"/></svg>
             </button>
             <button onClick={() => switchPhoto((photo + 1) % cur.images.length)}
+              className="arrow-btn"
               style={{
                 width: 42, height: 42, borderRadius: '50%',
                 background: 'transparent', border: '1px solid rgba(245,237,224,0.16)',
@@ -383,7 +423,7 @@ export default function Rooms() {
       </div>
 
       {/* Золотая вертикаль на границе панелей */}
-      <div style={{
+      <div className="rooms-vline" style={{
         position: 'absolute', left: '46%',
         top: 0, bottom: 0, width: 1,
         background: 'linear-gradient(to bottom, transparent 0%, rgba(212,164,94,0.22) 18%, rgba(212,164,94,0.22) 82%, transparent 100%)',
