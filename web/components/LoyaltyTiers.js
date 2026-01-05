@@ -52,12 +52,7 @@ export default function LoyaltyApp() {
             padding: clamp(56px, 10vh, 96px) 0;
             justify-content: flex-start;
           }
-          .loyalty-phone-row {
-            flex-direction: column !important;
-            transform: none !important;
-            gap: 28px !important;
-          }
-          .loyalty-downloads { display: none !important; }
+          .loyalty-phone-wrap { display: none !important; }
         }
       `}</style>
 
