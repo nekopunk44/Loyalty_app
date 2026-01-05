@@ -42,7 +42,7 @@ yarn-debug.log*
 lcov.info
 lcov-report/
 
-# Documentation
+# Documentation / ВКР
 docs/
 vkr/
 
@@ -60,6 +60,9 @@ _vkr_metodichka.txt
 # Отдельные деплои (мобилке для билда не нужны)
 server/
 web/
+Dockerfile
+docker-compose.yml
+railway.json
 
 # Python venv'ы (ML-сервис)
 .venv/
@@ -69,13 +72,11 @@ web/
 .git/
 .github/
 
-# Тесты и анализ
+# Claude Code session artifacts
+.claude/
+
+# Тесты
 __tests__/
 *.test.js
 *.spec.js
 coverage/
-detailed_formatting_analysis.py
-
-# Прочее
-docker-compose.yml
-railway.json

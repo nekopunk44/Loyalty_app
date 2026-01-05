@@ -17,6 +17,9 @@ server/.env.local
 server/.env.*.local
 server/.env.production
 
+# Claude Code session artifacts
+.claude/
+
 # IDE
 .vscode/
 .idea/
