@@ -96,6 +96,14 @@ function start() {
   }
   if (process.env.NODE_ENV === 'test') return;
 
+  // ML_SERVICE_URL указывает на внешний хост (например, отдельный Railway-сервис)
+  // — локальный child-процесс не нужен и не запустится (в Node-контейнере нет Python).
+  const externalUrl = process.env.ML_SERVICE_URL;
+  if (externalUrl && !/^https?:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/i.test(externalUrl)) {
+    logger.info('[ml-process] ML_SERVICE_URL внешний — локальный процесс не запускается', { url: externalUrl });
+    return;
+  }
+
   if (!fs.existsSync(path.join(ML_DIR, 'main.py'))) {
     logger.warn('[ml-process] main.py не найден — ML-сервис не будет запущен', { dir: ML_DIR });
     return;
