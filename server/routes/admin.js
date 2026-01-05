@@ -14,6 +14,7 @@
  *   GET  /ltv-top                      — топ-N клиентов по предсказанному LTV (ML)
  *   GET  /forecast-revenue             — прогноз ежедневной выручки (ML)
  *   GET  /anomalies                    — транзакции с anomaly_score (ML)
+ *   POST /ml/rfm-recompute             — ручной запуск RFM-пересчёта (ML)
  */
 const express = require('express');
 const { Op } = require('sequelize');
@@ -958,6 +959,57 @@ module.exports = function createAdminRouter({ isDbConnected }) {
       return res.status(500).json({
         success: false,
         error: 'Ошибка при получении аномалий',
+        details: isDev() ? error.message : undefined,
+      });
+    }
+  });
+
+  /**
+   * POST /ml/rfm-recompute — ручной триггер пересчёта RFM-уровней.
+   *
+   * Выполняет ту же логику, что и ночной cron (mlJobs.runRfmRecompute):
+   * запрос к ML, обновление LoyaltyCard.membershipLevel + User.membershipLevel,
+   * рассылка уведомлений о повышении уровня. Для отладки и демо-сценариев
+   * (например, для скриншота в ВКР).
+   *
+   * Доступ — только admin (verifyAdmin).
+   * 200 → результат пересчёта; 4xx/5xx — ошибка ML-сервиса.
+   */
+  router.post('/ml/rfm-recompute', verifyAdmin, async (req, res) => {
+    try {
+      const mlJobs = require('../services/mlJobs');
+      const result = await mlJobs.runRfmRecompute();
+
+      if (result.skipped) {
+        return res.status(409).json({
+          success: false,
+          error: 'RFM-задача уже выполняется',
+        });
+      }
+
+      if (!result.ok) {
+        const status = result.status && result.status >= 400 && result.status < 500 ? 400 : 503;
+        return res.status(status).json({
+          success: false,
+          error: 'ML-сервис вернул ошибку',
+          detail: result.error,
+          mlStatus: result.status,
+        });
+      }
+
+      return res.status(200).json({
+        success: true,
+        updated: result.updated,
+        upgrades: result.upgrades,
+        downgrades: result.downgrades,
+        distribution: result.distribution,
+        silhouette: result.silhouette,
+      });
+    } catch (error) {
+      logger.error('admin rfm-recompute error', { error: error.message, stack: error.stack });
+      return res.status(500).json({
+        success: false,
+        error: 'Ошибка при запуске RFM-пересчёта',
         details: isDev() ? error.message : undefined,
       });
     }
