@@ -474,6 +474,15 @@ const connectDB = async () => {
     await sequelize.query(`UPDATE properties SET deposit_amount = 500  WHERE id = 3 AND deposit_amount = 0;`);
     await sequelize.query(`UPDATE properties SET deposit_amount = 2500 WHERE id = 4 AND deposit_amount = 0;`);
 
+    // Sprint A ВКР: enum_admin_transactions_type — расширяем под deposit/remaining
+    // /cashback/refund-операции. Источник — migrations/020_admin_transaction_types.sql.
+    // Без этого pay-deposit и cancel падают с PG 22P02.
+    await sequelize.query(`ALTER TYPE enum_admin_transactions_type ADD VALUE IF NOT EXISTS 'booking_deposit';`);
+    await sequelize.query(`ALTER TYPE enum_admin_transactions_type ADD VALUE IF NOT EXISTS 'booking_remaining';`);
+    await sequelize.query(`ALTER TYPE enum_admin_transactions_type ADD VALUE IF NOT EXISTS 'cashback_payout';`);
+    await sequelize.query(`ALTER TYPE enum_admin_transactions_type ADD VALUE IF NOT EXISTS 'booking_refund';`);
+    await sequelize.query(`ALTER TYPE enum_admin_transactions_type ADD VALUE IF NOT EXISTS 'cashback_revert';`);
+
     // Sprint B ВКР: классификация транзакций и админ-корректировки.
     //   category    — узкий код типа операции для фильтрации и иконок в UI.
     //   performedBy — adminId, инициировавший операцию (для admin_adjustment).

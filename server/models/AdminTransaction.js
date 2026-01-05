@@ -16,7 +16,20 @@ const AdminTransaction = sequelize.define('AdminTransaction', {
     allowNull: false,
   },
   type: {
-    type: DataTypes.ENUM('booking_payment', 'topup_commission', 'withdrawal', 'refund', 'adjustment'),
+    type: DataTypes.ENUM(
+      'booking_payment',
+      'topup_commission',
+      'withdrawal',
+      'refund',
+      'adjustment',
+      // Sprint A: гибридная оплата (deposit + remaining). См. migrations/020.
+      'booking_deposit',
+      'booking_remaining',
+      'cashback_payout',
+      // отмена/возврат — см. routes/bookings.js cancel-логику
+      'booking_refund',
+      'cashback_revert',
+    ),
     allowNull: false,
   },
   amount: {
