@@ -213,6 +213,7 @@ module.exports = function createBookingsRouter({ isDbConnected }) {
             conflictingBookings.push({
               id:           b.id,
               status:       b.status,
+              userId:       b.userId,
               checkInDate:  b.checkInDate,
               checkOutDate: b.checkOutDate,
               paymentDeadline: b.paymentDeadline,
@@ -230,6 +231,22 @@ module.exports = function createBookingsRouter({ isDbConnected }) {
             requested:  { checkInDate, checkOutDate },
             conflicts:  conflictingBookings,
           });
+
+          // Если хотя бы один из конфликтов — pending_payment самого же
+          // пользователя, значит он повторно жмёт «Подтвердить» вместо того,
+          // чтобы оплатить уже существующую бронь. Подсказываем фронту.
+          const ownPending = conflictingBookings.find(
+            (c) => c.userId === userId && c.status === 'pending_payment',
+          );
+          if (ownPending) {
+            return res.status(409).json({
+              success: false,
+              error:   'У вас уже есть бронь на эти даты, ожидающая оплаты депозита',
+              ownPendingBookingId: ownPending.id,
+              ownPendingDeadline:  ownPending.paymentDeadline,
+              conflicts: conflictingBookings,
+            });
+          }
           return res.status(409).json({
             success: false,
             error:   'Выбранные даты уже заняты',
