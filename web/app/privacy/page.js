@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import LegalLayout from '@/components/LegalLayout';
 
 export const metadata = {
   title: 'Политика конфиденциальности',
@@ -8,11 +8,10 @@ export const metadata = {
   robots: { index: true, follow: true },
 };
 
-const UPDATED_AT = '5 июня 2026 г.';
-
 const SECTIONS = [
   {
     title: '1. Общие положения',
+    tocLabel: 'Общие положения',
     body: [
       'Настоящая Политика конфиденциальности (далее — «Политика») описывает, какую информацию о пользователях собирает сервис Villa Jaconda и мобильное приложение «Villa Jaconda Loyalty» (далее — «Сервис», «Приложение»), как мы её используем, храним и защищаем.',
       'Используя Сервис, вы подтверждаете, что прочитали и согласны с условиями настоящей Политики. Если вы не согласны с любым из условий — прекратите использование Сервиса.',
@@ -21,6 +20,7 @@ const SECTIONS = [
   },
   {
     title: '2. Оператор персональных данных',
+    tocLabel: 'Оператор данных',
     body: [
       'Оператором, осуществляющим сбор и обработку персональных данных, является владелец сервиса Villa Jaconda — приватной виллы в г. Слободзея, Приднестровье.',
       'Контакты для запросов по вопросам обработки персональных данных:',
@@ -31,6 +31,7 @@ const SECTIONS = [
   },
   {
     title: '3. Какие данные мы собираем',
+    tocLabel: 'Какие данные собираем',
     body: [
       '3.1. Данные, которые вы предоставляете при регистрации и использовании Сервиса:',
       '— имя и фамилия;',
@@ -57,6 +58,7 @@ const SECTIONS = [
   },
   {
     title: '4. Цели обработки данных',
+    tocLabel: 'Цели обработки',
     body: [
       'Мы используем собранные данные исключительно для следующих целей:',
       '— регистрация и аутентификация пользователя в Приложении;',
@@ -71,6 +73,7 @@ const SECTIONS = [
   },
   {
     title: '5. Правовое основание обработки',
+    tocLabel: 'Правовое основание',
     body: [
       'Мы обрабатываем персональные данные на следующих основаниях:',
       '— ваше согласие, выраженное при регистрации или при включении соответствующих функций (push-уведомления, доступ к камере);',
@@ -82,6 +85,7 @@ const SECTIONS = [
   },
   {
     title: '6. Передача данных третьим лицам',
+    tocLabel: 'Третьи лица',
     body: [
       'Мы не продаём и не передаём ваши персональные данные третьим лицам в маркетинговых целях. Передача возможна только в следующих случаях:',
       '6.1. Поставщикам технических услуг, обеспечивающим работу Приложения:',
@@ -96,6 +100,7 @@ const SECTIONS = [
   },
   {
     title: '7. Срок хранения данных',
+    tocLabel: 'Срок хранения',
     body: [
       'Мы храним персональные данные в течение всего срока действия учётной записи и:',
       '— данные бронирований — 3 года после оказания услуги (для целей бухгалтерского и налогового учёта);',
@@ -107,6 +112,7 @@ const SECTIONS = [
   },
   {
     title: '8. Ваши права',
+    tocLabel: 'Ваши права',
     body: [
       'В отношении ваших персональных данных вы имеете следующие права:',
       '— право на доступ — получить копию обрабатываемых о вас данных;',
@@ -123,6 +129,7 @@ const SECTIONS = [
   },
   {
     title: '9. Безопасность данных',
+    tocLabel: 'Безопасность',
     body: [
       'Мы принимаем организационные и технические меры для защиты ваших данных:',
       '— передача данных между Приложением и сервером осуществляется по протоколу HTTPS (TLS);',
@@ -135,6 +142,7 @@ const SECTIONS = [
   },
   {
     title: '10. Данные несовершеннолетних',
+    tocLabel: 'Несовершеннолетние',
     body: [
       'Сервис не ориентирован на лиц младше 16 лет. Мы сознательно не собираем данные таких лиц.',
       'Если вы являетесь родителем или законным представителем и обнаружили, что ваш ребёнок предоставил нам данные без вашего согласия, свяжитесь с нами по адресу privacy@villajaconda.com — мы удалим соответствующие данные.',
@@ -142,6 +150,7 @@ const SECTIONS = [
   },
   {
     title: '11. Cookies и аналогичные технологии',
+    tocLabel: 'Cookies',
     body: [
       'Веб-сайт villajaconda.com использует минимальный набор технических cookies, необходимых для работы сайта и анализа посещаемости в обезличенном виде.',
       'Мобильное приложение не использует cookies, однако сохраняет локальные данные сессии (токен авторизации, настройки) в защищённом хранилище устройства.',
@@ -149,6 +158,7 @@ const SECTIONS = [
   },
   {
     title: '12. Изменения Политики',
+    tocLabel: 'Изменения',
     body: [
       'Мы вправе обновлять настоящую Политику. Актуальная редакция всегда доступна по адресу villajaconda.com/privacy. О существенных изменениях мы уведомим вас через Приложение или по электронной почте не менее чем за 14 дней до вступления изменений в силу.',
       'Продолжение использования Сервиса после публикации изменений означает ваше согласие с новой редакцией.',
@@ -156,6 +166,7 @@ const SECTIONS = [
   },
   {
     title: '13. Контакты',
+    tocLabel: 'Контакты',
     body: [
       'По любым вопросам, связанным с обработкой персональных данных, обращайтесь:',
       '— Электронная почта: privacy@villajaconda.com',
@@ -165,139 +176,16 @@ const SECTIONS = [
   },
 ];
 
-const styles = {
-  page: {
-    minHeight: '100vh',
-    background: 'var(--r-bg)',
-    color: 'var(--r-text)',
-    paddingTop: 'clamp(80px, 12vh, 140px)',
-    paddingBottom: 'clamp(80px, 10vh, 120px)',
-  },
-  shell: {
-    maxWidth: 820,
-    margin: '0 auto',
-    padding: '0 clamp(20px, 5vw, 48px)',
-  },
-  back: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: 8,
-    fontSize: 11,
-    letterSpacing: '0.22em',
-    textTransform: 'uppercase',
-    color: 'var(--r-muted)',
-    textDecoration: 'none',
-    marginBottom: 32,
-  },
-  eyebrow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 14,
-    marginBottom: 18,
-  },
-  eyebrowLine: {
-    width: 28,
-    height: 1,
-    background: 'var(--r-gold)',
-    opacity: 0.65,
-  },
-  eyebrowText: {
-    fontSize: 10,
-    letterSpacing: '0.38em',
-    textTransform: 'uppercase',
-    color: 'var(--r-muted)',
-    fontWeight: 500,
-  },
-  h1: {
-    fontFamily: 'var(--r-serif)',
-    fontSize: 'clamp(2.4rem, 5vw, 4rem)',
-    fontWeight: 300,
-    lineHeight: 1.05,
-    letterSpacing: '-0.025em',
-    margin: '0 0 18px',
-  },
-  h1em: {
-    fontStyle: 'italic',
-    color: 'var(--r-gold)',
-  },
-  updated: {
-    fontSize: 12,
-    color: 'var(--r-muted)',
-    letterSpacing: '0.06em',
-    marginBottom: 56,
-  },
-  section: {
-    paddingTop: 36,
-    paddingBottom: 6,
-    borderTop: '1px solid var(--r-line)',
-  },
-  h2: {
-    fontFamily: 'var(--r-serif)',
-    fontSize: 'clamp(1.3rem, 2.4vw, 1.65rem)',
-    fontWeight: 400,
-    letterSpacing: '-0.01em',
-    margin: '0 0 18px',
-    color: 'var(--r-text)',
-  },
-  p: {
-    fontSize: 15,
-    lineHeight: 1.78,
-    color: 'var(--r-text-soft)',
-    margin: '0 0 14px',
-  },
-  footer: {
-    marginTop: 64,
-    paddingTop: 28,
-    borderTop: '1px solid var(--r-line)',
-    fontSize: 12,
-    color: 'var(--r-muted)',
-    letterSpacing: '0.08em',
-  },
-  footerLink: {
-    color: 'var(--r-gold)',
-    textDecoration: 'none',
-    borderBottom: '1px solid transparent',
-  },
-};
-
 export default function PrivacyPage() {
   return (
-    <main style={styles.page}>
-      <div style={styles.shell}>
-        <Link href="/" style={styles.back}>
-          ← На главную
-        </Link>
-
-        <div style={styles.eyebrow}>
-          <span style={styles.eyebrowLine} />
-          <span style={styles.eyebrowText}>Юридическая информация</span>
-        </div>
-
-        <h1 style={styles.h1}>
-          Политика <em style={styles.h1em}>конфиденциальности</em>
-        </h1>
-
-        <p style={styles.updated}>Редакция от {UPDATED_AT}</p>
-
-        {SECTIONS.map((s) => (
-          <section key={s.title} style={styles.section}>
-            <h2 style={styles.h2}>{s.title}</h2>
-            {s.body.map((para, i) => (
-              <p key={i} style={styles.p}>
-                {para}
-              </p>
-            ))}
-          </section>
-        ))}
-
-        <div style={styles.footer}>
-          См. также:{' '}
-          <Link href="/terms" style={styles.footerLink}>
-            Условия использования
-          </Link>{' '}
-          · © {new Date().getFullYear()} Villa Jaconda
-        </div>
-      </div>
-    </main>
+    <LegalLayout
+      eyebrow="Юридическая · Данные"
+      title="Политика"
+      titleEm="конфиденциальности"
+      updatedAt="5 июня 2026 г."
+      sections={SECTIONS}
+      relatedLink={{ href: '/terms', label: 'Условия использования →' }}
+      decorChar="?"
+    />
   );
 }

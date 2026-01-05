@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import LegalLayout from '@/components/LegalLayout';
 
 export const metadata = {
   title: 'Условия использования',
@@ -8,11 +8,10 @@ export const metadata = {
   robots: { index: true, follow: true },
 };
 
-const UPDATED_AT = '5 июня 2026 г.';
-
 const SECTIONS = [
   {
     title: '1. Общие положения',
+    tocLabel: 'Общие положения',
     body: [
       'Настоящие Условия использования (далее — «Условия») регулируют отношения между владельцем сервиса Villa Jaconda (далее — «Сервис», «мы») и пользователем (далее — «Пользователь», «вы») при использовании веб-сайта villajaconda.com и мобильного приложения «Villa Jaconda Loyalty» (далее — «Приложение»).',
       'Используя Сервис или Приложение, вы подтверждаете, что прочитали, поняли и согласились с настоящими Условиями в полном объёме. Если вы не согласны с какой-либо частью Условий, прекратите использование Сервиса.',
@@ -21,6 +20,7 @@ const SECTIONS = [
   },
   {
     title: '2. Описание сервиса',
+    tocLabel: 'Описание сервиса',
     body: [
       'Villa Jaconda — приватная вилла в г. Слободзея, расположенная на берегу реки Днестр. Сервис предоставляет возможность:',
       '— ознакомиться с информацией о номерах, услугах и событиях;',
@@ -32,6 +32,7 @@ const SECTIONS = [
   },
   {
     title: '3. Регистрация и учётная запись',
+    tocLabel: 'Регистрация',
     body: [
       'Для использования Приложения требуется создание учётной записи с указанием имени, номера телефона и адреса электронной почты. Регистрируясь, вы подтверждаете, что предоставленные данные достоверны и принадлежат вам.',
       'Вы несёте ответственность за сохранность данных доступа (пароль, код подтверждения). Любые действия, совершённые с использованием вашей учётной записи, считаются совершёнными вами.',
@@ -41,6 +42,7 @@ const SECTIONS = [
   },
   {
     title: '4. Бронирование и оплата',
+    tocLabel: 'Бронирование',
     body: [
       'Бронирование номера или выкуп виллы осуществляется через Приложение, сайт или по контактным каналам. Бронь считается подтверждённой после получения от нас соответствующего сообщения.',
       'Стоимость услуг указывается в приднестровских рублях (PRB). Оплата производится наличными при заезде, безналичным переводом или с использованием баланса карты лояльности.',
@@ -50,6 +52,7 @@ const SECTIONS = [
   },
   {
     title: '5. Программа лояльности',
+    tocLabel: 'Программа лояльности',
     body: [
       'Карта лояльности Villa Jaconda — это персональная программа поощрения постоянных гостей. Баллы (PRB) начисляются за каждое подтверждённое бронирование и пополнение карты.',
       'Уровни лояльности и соответствующий процент кешбэка:',
@@ -64,6 +67,7 @@ const SECTIONS = [
   },
   {
     title: '6. Права и обязанности Пользователя',
+    tocLabel: 'Права и обязанности',
     body: [
       'Используя Сервис, Пользователь обязуется:',
       '— соблюдать применимое законодательство и настоящие Условия;',
@@ -75,6 +79,7 @@ const SECTIONS = [
   },
   {
     title: '7. Интеллектуальная собственность',
+    tocLabel: 'Интеллектуальная собственность',
     body: [
       'Все материалы Сервиса — тексты, изображения, видео, графика, программный код, торговые знаки «Villa Jaconda», логотипы и фирменный стиль — являются объектами интеллектуальной собственности и охраняются законом.',
       'Любое копирование, распространение, публикация или иное использование материалов без письменного согласия правообладателя не допускается, за исключением случаев, прямо предусмотренных законодательством.',
@@ -82,6 +87,7 @@ const SECTIONS = [
   },
   {
     title: '8. Ограничение ответственности',
+    tocLabel: 'Ответственность',
     body: [
       'Сервис предоставляется «как есть» (as is). Мы прилагаем разумные усилия для обеспечения корректной работы Приложения, однако не гарантируем его непрерывное и безошибочное функционирование.',
       'Мы не несём ответственности за:',
@@ -93,6 +99,7 @@ const SECTIONS = [
   },
   {
     title: '9. Защита персональных данных',
+    tocLabel: 'Защита данных',
     body: [
       'Обработка персональных данных Пользователя осуществляется в соответствии с Политикой конфиденциальности, размещённой по адресу villajaconda.com/privacy.',
       'Используя Сервис, Пользователь подтверждает согласие с условиями обработки своих персональных данных, изложенными в Политике конфиденциальности.',
@@ -100,6 +107,7 @@ const SECTIONS = [
   },
   {
     title: '10. Прекращение использования',
+    tocLabel: 'Прекращение',
     body: [
       'Пользователь вправе в любое время прекратить использование Сервиса и удалить учётную запись через настройки Приложения или направив запрос на адрес, указанный в разделе 11.',
       'Мы вправе ограничить или прекратить доступ к Сервису в случае грубого или повторного нарушения настоящих Условий, в том числе без предварительного уведомления.',
@@ -108,6 +116,7 @@ const SECTIONS = [
   },
   {
     title: '11. Применимое право и контакты',
+    tocLabel: 'Право и контакты',
     body: [
       'Настоящие Условия регулируются законодательством, применимым по месту нахождения владельца Сервиса. Все споры подлежат разрешению путём переговоров; при недостижении согласия — в порядке, установленном применимым законодательством.',
       'Контакты для связи:',
@@ -119,139 +128,16 @@ const SECTIONS = [
   },
 ];
 
-const styles = {
-  page: {
-    minHeight: '100vh',
-    background: 'var(--r-bg)',
-    color: 'var(--r-text)',
-    paddingTop: 'clamp(80px, 12vh, 140px)',
-    paddingBottom: 'clamp(80px, 10vh, 120px)',
-  },
-  shell: {
-    maxWidth: 820,
-    margin: '0 auto',
-    padding: '0 clamp(20px, 5vw, 48px)',
-  },
-  back: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: 8,
-    fontSize: 11,
-    letterSpacing: '0.22em',
-    textTransform: 'uppercase',
-    color: 'var(--r-muted)',
-    textDecoration: 'none',
-    marginBottom: 32,
-  },
-  eyebrow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 14,
-    marginBottom: 18,
-  },
-  eyebrowLine: {
-    width: 28,
-    height: 1,
-    background: 'var(--r-gold)',
-    opacity: 0.65,
-  },
-  eyebrowText: {
-    fontSize: 10,
-    letterSpacing: '0.38em',
-    textTransform: 'uppercase',
-    color: 'var(--r-muted)',
-    fontWeight: 500,
-  },
-  h1: {
-    fontFamily: 'var(--r-serif)',
-    fontSize: 'clamp(2.4rem, 5vw, 4rem)',
-    fontWeight: 300,
-    lineHeight: 1.05,
-    letterSpacing: '-0.025em',
-    margin: '0 0 18px',
-  },
-  h1em: {
-    fontStyle: 'italic',
-    color: 'var(--r-gold)',
-  },
-  updated: {
-    fontSize: 12,
-    color: 'var(--r-muted)',
-    letterSpacing: '0.06em',
-    marginBottom: 56,
-  },
-  section: {
-    paddingTop: 36,
-    paddingBottom: 6,
-    borderTop: '1px solid var(--r-line)',
-  },
-  h2: {
-    fontFamily: 'var(--r-serif)',
-    fontSize: 'clamp(1.3rem, 2.4vw, 1.65rem)',
-    fontWeight: 400,
-    letterSpacing: '-0.01em',
-    margin: '0 0 18px',
-    color: 'var(--r-text)',
-  },
-  p: {
-    fontSize: 15,
-    lineHeight: 1.78,
-    color: 'var(--r-text-soft)',
-    margin: '0 0 14px',
-  },
-  footer: {
-    marginTop: 64,
-    paddingTop: 28,
-    borderTop: '1px solid var(--r-line)',
-    fontSize: 12,
-    color: 'var(--r-muted)',
-    letterSpacing: '0.08em',
-  },
-  footerLink: {
-    color: 'var(--r-gold)',
-    textDecoration: 'none',
-    borderBottom: '1px solid transparent',
-  },
-};
-
 export default function TermsPage() {
   return (
-    <main style={styles.page}>
-      <div style={styles.shell}>
-        <Link href="/" style={styles.back}>
-          ← На главную
-        </Link>
-
-        <div style={styles.eyebrow}>
-          <span style={styles.eyebrowLine} />
-          <span style={styles.eyebrowText}>Юридическая информация</span>
-        </div>
-
-        <h1 style={styles.h1}>
-          Условия <em style={styles.h1em}>использования</em>
-        </h1>
-
-        <p style={styles.updated}>Редакция от {UPDATED_AT}</p>
-
-        {SECTIONS.map((s) => (
-          <section key={s.title} style={styles.section}>
-            <h2 style={styles.h2}>{s.title}</h2>
-            {s.body.map((para, i) => (
-              <p key={i} style={styles.p}>
-                {para}
-              </p>
-            ))}
-          </section>
-        ))}
-
-        <div style={styles.footer}>
-          См. также:{' '}
-          <Link href="/privacy" style={styles.footerLink}>
-            Политика конфиденциальности
-          </Link>{' '}
-          · © {new Date().getFullYear()} Villa Jaconda
-        </div>
-      </div>
-    </main>
+    <LegalLayout
+      eyebrow="Юридическая · Сервис"
+      title="Условия"
+      titleEm="использования"
+      updatedAt="5 июня 2026 г."
+      sections={SECTIONS}
+      relatedLink={{ href: '/privacy', label: 'Политика конфиденциальности →' }}
+      decorChar="§"
+    />
   );
 }
