@@ -142,10 +142,15 @@ module.exports = function createBookingsRouter({ isDbConnected }) {
    */
   router.post('/', verifyToken, validate(schemas.createBooking), async (req, res) => {
     try {
-      const { propertyId, checkInDate, checkOutDate, guests, notes, totalPrice, saunaHours, kitchenware } = req.body;
+      const { checkInDate, checkOutDate, guests, notes, totalPrice, saunaHours, kitchenware } = req.body;
       const userId = req.userId;
+      // zod union пропускает propertyId как число ИЛИ строку. Booking.propertyId
+      // — TEXT-колонка, Property.id — INTEGER. Если не нормализовать здесь,
+      // в WHERE летят разные типы и Postgres падает с «operator does not exist».
+      const propertyIdStr = String(req.body.propertyId);
+      const propertyIdInt = parseInt(propertyIdStr, 10);
 
-      if (!propertyId || !userId || !checkInDate || !checkOutDate || !guests) {
+      if (!propertyIdStr || !userId || !checkInDate || !checkOutDate || !guests) {
         return res.status(400).json({ success: false, error: 'Отсутствуют обязательные поля' });
       }
       if (!isDbConnected()) {
@@ -178,12 +183,15 @@ module.exports = function createBookingsRouter({ isDbConnected }) {
       let depositAmount   = 0;
       let remainingAmount = 0;
       let paymentDeadline;
+      // Hoisted: используются и в транзакции, и в блоке уведомлений ниже.
+      const bookingPrice = parseFloat(totalPrice) || 0;
+      const guestsInt    = Math.max(1, parseInt(guests) || 1);
       try {
         // Конфликт = любая не-отменённая/не-просроченная бронь. pending_payment тоже
         // блокирует слот до своего expiry (Sprint A: 12ч TTL, см. §3.1 ВКР).
         const conflicts = await Booking.findAll({
           where: {
-            propertyId,
+            propertyId: propertyIdStr,
             status: { [Op.in]: ['pending_payment', 'pending', 'confirmed', 'completed'] },
           },
           lock: bookingTxn.LOCK.UPDATE,
@@ -218,8 +226,7 @@ module.exports = function createBookingsRouter({ isDbConnected }) {
 
         // Депозит — snapshot из Property на момент создания. Если у Property его нет
         // (legacy=0) — депозит = totalPrice, остатка нет, юзер платит сразу всё.
-        const property = await Property.findByPk(propertyId, { transaction: bookingTxn });
-        const bookingPrice    = parseFloat(totalPrice) || 0;
+        const property = await Property.findByPk(propertyIdInt, { transaction: bookingTxn });
         const propertyDeposit = parseFloat(property?.depositAmount) || 0;
         depositAmount   = propertyDeposit > 0
           ? Math.min(propertyDeposit, bookingPrice)
@@ -228,10 +235,8 @@ module.exports = function createBookingsRouter({ isDbConnected }) {
         // 12 часов на оплату депозита (см. §3.1 ВКР: anti-squat механизм).
         paymentDeadline = new Date(Date.now() + 12 * 60 * 60 * 1000);
 
-        const guestsInt = Math.max(1, parseInt(guests) || 1);
-
         booking = await Booking.create({
-          propertyId,
+          propertyId:       propertyIdStr,
           userId,
           checkInDate,
           checkOutDate,
@@ -252,12 +257,12 @@ module.exports = function createBookingsRouter({ isDbConnected }) {
         throw txnErr;
       }
 
-      await invalidateBookedDatesCache(propertyId);
+      await invalidateBookedDatesCache(propertyIdStr);
 
       // Уведомление администраторов о новом (ещё не оплаченном) бронировании — best-effort
       try {
         const bookingUser = await User.findOne({ where: { userId } });
-        const property    = await Property.findByPk(propertyId);
+        const property    = await Property.findByPk(propertyIdInt);
 
         const services = [];
         if (booking.saunaHours > 0) services.push(`сауна ${booking.saunaHours}ч.`);
@@ -266,7 +271,7 @@ module.exports = function createBookingsRouter({ isDbConnected }) {
 
         const adminMsg =
           `Новое бронирование от ${bookingUser?.name || 'пользователь'}` +
-          ` (${bookingUser?.email || userId}): ${property?.name || `объект ${propertyId}`}.` +
+          ` (${bookingUser?.email || userId}): ${property?.name || `объект ${propertyIdStr}`}.` +
           ` Заезд: ${checkInDate}, выезд: ${checkOutDate}.` +
           ` Гостей: ${guestsInt}. Сумма: ${bookingPrice} PRB${servicesStr}.` +
           ` Ожидает оплаты.`;
@@ -277,7 +282,7 @@ module.exports = function createBookingsRouter({ isDbConnected }) {
           type:    'new_booking',
           data: {
             bookingId: booking.id,
-            propertyId,
+            propertyId: propertyIdStr,
             userId,
             userName: bookingUser?.name,
             checkInDate,
@@ -288,7 +293,7 @@ module.exports = function createBookingsRouter({ isDbConnected }) {
           },
         });
       } catch (notifyErr) {
-        logger.error('booking create notify error', { error: notifyErr.message });
+        logger.error('booking create notify error', { error: notifyErr.message, stack: notifyErr.stack });
       }
 
       return res.status(201).json({
@@ -306,11 +311,18 @@ module.exports = function createBookingsRouter({ isDbConnected }) {
         },
       });
     } catch (error) {
-      logger.error('booking create error', { error: error.message });
+      logger.error('booking create error', {
+        error:     error.message,
+        sqlOriginal: error.original?.message,
+        sqlDetail:   error.original?.detail,
+        sqlHint:     error.original?.hint,
+        sqlCode:     error.original?.code,
+        stack:     error.stack,
+      });
       return res.status(500).json({
         success: false,
         error:   'Ошибка при создании бронирования',
-        details: isDev() ? error.message : undefined,
+        details: error.message,
       });
     }
   });
@@ -385,7 +397,10 @@ module.exports = function createBookingsRouter({ isDbConnected }) {
 
       // Подтягиваем актуальные имена номеров — каталог /api/properties отдаёт
       // только status='available', а в истории встречаются и снятые с продажи.
-      const propIds = [...new Set(rawBookings.map(b => b.propertyId).filter(Boolean))];
+      // Booking.propertyId — TEXT, Property.id — INTEGER, поэтому кастуем в число.
+      const propIds = [...new Set(
+        rawBookings.map(b => parseInt(b.propertyId, 10)).filter(Number.isFinite)
+      )];
       const properties = propIds.length
         ? await Property.findAll({ where: { id: { [Op.in]: propIds } }, attributes: ['id', 'name'] })
         : [];
