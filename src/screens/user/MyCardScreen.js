@@ -548,7 +548,10 @@ export default function ProfileScreen() {
             <View {...topUpPanResponder.panHandlers} style={S.topUpHandleArea}>
               <View style={S.topUpHandle} />
             </View>
-            <CardTopUpScreen onClose={closeTopUpSheet} />
+            <CardTopUpScreen
+              onClose={closeTopUpSheet}
+              onSuccess={() => { closeTopUpSheet(); loadCardData(); }}
+            />
           </Animated.View>
         </Animated.View>
       </Modal>

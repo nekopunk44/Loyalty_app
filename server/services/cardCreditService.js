@@ -180,10 +180,23 @@ async function creditCard(params) {
  */
 async function sendTopupNotifications({ userId, amount, balanceAfter, balanceBefore, provider }) {
   try {
+    // Доставка в реальном времени: SSE для онлайн-клиентов + Expo Push для офлайна.
+    // Без этого уведомление лишь оседает в БД и всплывает только при следующем
+    // открытии приложения (живого баннера/обновления не было).
+    const { sendExpoPush } = require('../utils/expoPush');
+    const { pushNotificationToUser } = require('../routes/notifications');
+
+    const deliver = (recipientId, notification, pushToken) => {
+      try { pushNotificationToUser(recipientId, notification); } catch (_) { /* нет онлайн-клиентов */ }
+      if (pushToken) {
+        sendExpoPush(pushToken, notification.title, notification.message, notification.data || {}).catch(() => {});
+      }
+    };
+
     const user = await User.findOne({ where: { userId } });
     const userName = user?.displayName || 'Пользователь';
 
-    await Notification.create({
+    const userNotification = await Notification.create({
       userId,
       title: 'Баланс пополнен',
       message: `Ваша карта лояльности пополнена на ${amount} PRB. Новый баланс: ${balanceAfter} PRB`,
@@ -191,18 +204,20 @@ async function sendTopupNotifications({ userId, amount, balanceAfter, balanceBef
       data: { amount, newBalance: balanceAfter, oldBalance: balanceBefore, paymentMethod: provider },
       read: false,
     });
+    deliver(userId, userNotification, user?.pushToken);
 
     const admins = await User.findAll({ where: { role: 'admin' } });
-    await Promise.all(admins.map((admin) =>
-      Notification.create({
+    await Promise.all(admins.map(async (admin) => {
+      const adminNotification = await Notification.create({
         userId: admin.userId,
         title: 'Пополнение баланса пользователем',
         message: `${userName} пополнил карту на ${amount} PRB через ${provider}. Новый баланс: ${balanceAfter} PRB`,
         type: 'user_balance_replenishment',
         data: { userId, userName, amount, newBalance: balanceAfter, oldBalance: balanceBefore, paymentMethod: provider },
         read: false,
-      })
-    ));
+      });
+      deliver(admin.userId, adminNotification, admin.pushToken);
+    }));
   } catch (notifErr) {
     logger.error('topup notify error', { error: notifErr.message });
   }
