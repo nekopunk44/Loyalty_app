@@ -104,3 +104,9 @@ coverage/
 ._*
 .Spotlight-V100
 .Trashes
+
+# 3D models (Blender) — большие бинарники, не храним в git
+*.blend
+*.blend1
+*.glb
+*_preview.png
