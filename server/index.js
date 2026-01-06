@@ -504,6 +504,13 @@ const connectDB = async () => {
         ON transactions ("userId", "createdAt" DESC);
     `);
 
+    // Регистронезависимый вход: lower(email) = '...' должен использовать индекс,
+    // а не делать seq scan при росте таблицы. Источник — migrations/021_email_lower_index.sql.
+    await sequelize.query(`
+      CREATE INDEX IF NOT EXISTS idx_users_email_lower
+        ON users (lower(email));
+    `);
+
     // ВКР: Google Play purchaseToken — opaque base64 600–1000 символов,
     // не помещается в VARCHAR(255). Источник — migrations/017_widen_topup_id_columns.sql.
     // Имена колонок: transactionId без field-маппинга → "transactionId" (camelCase
@@ -639,6 +646,7 @@ app.use('/api/card',          require('./routes/card')({ isDbConnected: () => db
 app.use('/api/payments/stripe', require('./routes/stripe')({ isDbConnected: () => dbConnected }));
 app.use('/api/payments/google-play', require('./routes/googlePlay')({ isDbConnected: () => dbConnected }));
 app.use('/api/admin',         require('./routes/admin')({ isDbConnected: () => dbConnected }));
+app.use('/api/settings',      require('./routes/settings')({ isDbConnected: () => dbConnected }));
 
 /**
  * POST /api/analytics — запись аналитического события от клиента.

@@ -23,4 +23,5 @@ module.exports = {
   WithdrawalRequest:  require('./WithdrawalRequest'),
   WithdrawalAuditLog: require('./WithdrawalAuditLog'),
   AuctionBid:         require('./AuctionBid'),
+  AppSetting:         require('./AppSetting'),
 };
