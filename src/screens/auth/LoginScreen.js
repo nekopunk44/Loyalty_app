@@ -23,6 +23,18 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import VJMonogram from '../../components/auth/VJMonogram';
 
+// Требования к паролю должны совпадать с серверной политикой (server/validation.js):
+// минимум 8 символов, хотя бы одна заглавная буква и одна цифра.
+const PASSWORD_RULES = [
+  { test: (p) => p.length >= 8,   label: 'Минимум 8 символов' },
+  { test: (p) => /[A-Z]/.test(p), label: 'Заглавная буква (A–Z)' },
+  { test: (p) => /\d/.test(p),    label: 'Цифра (0–9)' },
+];
+const validatePassword = (pwd) => {
+  const failed = PASSWORD_RULES.find((r) => !r.test(pwd));
+  return failed ? failed.label : null;
+};
+
 function HeroGradientBackdrop({ palette, id }) {
   return (
     <Svg width="100%" height="100%" style={StyleSheet.absoluteFill} pointerEvents="none">
@@ -63,7 +75,10 @@ export default function LoginScreen() {
   const usernameInputRef = useRef(null);
   const passwordInputRef = useRef(null);
 
-  const { login, error, requestPasswordReset, setNewPassword } = useAuth();
+  const {
+    login, error, requestPasswordReset, setNewPassword,
+    biometricAvailable, biometricEnabled, loginWithBiometric,
+  } = useAuth();
   const { theme, isDark, toggleTheme } = useTheme();
   const colors = theme.colors;
   const useNative = false;
@@ -182,23 +197,28 @@ export default function LoginScreen() {
     if (!resetToken.trim()) {
       Alert.alert('Ошибка', 'Введите код из письма'); return;
     }
-    if (resetNewPwd.length < 8) {
-      Alert.alert('Ошибка', 'Пароль должен быть минимум 8 символов'); return;
+    const pwdError = validatePassword(resetNewPwd);
+    if (pwdError) {
+      Alert.alert('Пароль не подходит', pwdError); return;
     }
     if (resetNewPwd !== resetConfirm) {
       Alert.alert('Ошибка', 'Пароли не совпадают'); return;
     }
     setResetLoading(true);
     try {
-      await setNewPassword(resetToken.trim(), resetNewPwd, setupMode ? 'setup' : 'reset');
-      const wasSetup = setupMode;
+      const result = await setNewPassword(resetToken.trim(), resetNewPwd, setupMode ? 'setup' : 'reset');
+      // Сохраняем до очистки полей в handleCloseReset.
+      const accountEmail = result?.email;
+      const newPwd = resetNewPwd;
       handleCloseReset();
-      Alert.alert(
-        'Готово',
-        wasSetup
-          ? 'Пароль установлен. Войдите в аккаунт с новым паролем.'
-          : 'Пароль успешно изменён. Войдите с новым паролем.',
-      );
+
+      // Автоматический вход с тем же email, что был указан при создании
+      // пользователя (его возвращает сервер) — без повторного ручного входа.
+      if (accountEmail) {
+        const res = await login(accountEmail, newPwd);
+        if (res?.success) return; // приложение само перейдёт в основной поток
+      }
+      Alert.alert('Готово', 'Пароль сохранён. Войдите с новым паролем.');
     } catch (e) {
       Alert.alert('Ошибка', e.message || 'Не удалось сменить пароль');
     } finally {
@@ -230,6 +250,18 @@ export default function LoginScreen() {
 
     if (!result?.success) {
       Alert.alert('Ошибка входа', error || 'Неверные учётные данные. Попробуйте ещё раз');
+    }
+  };
+
+  const handleBiometricLogin = async () => {
+    const res = await loginWithBiometric();
+    if (res?.success || res?.error === 'cancelled') return;
+    if (res?.error === 'expired') {
+      Alert.alert('Сессия истекла', 'Войдите по паролю — вход по биометрии отключён.');
+    } else if (res?.error === 'no-credentials') {
+      Alert.alert('Недоступно', 'Сначала войдите по паролю и включите вход по биометрии в настройках.');
+    } else {
+      Alert.alert('Ошибка', 'Не удалось войти по биометрии');
     }
   };
 
@@ -383,6 +415,20 @@ export default function LoginScreen() {
               )}
             </TouchableOpacity>
 
+            {/* Biometric login — показывается, если включено в настройках */}
+            {biometricAvailable && biometricEnabled && (
+              <TouchableOpacity
+                style={[styles.biometricBtn, { borderColor: themePalette.inputBorder }]}
+                onPress={handleBiometricLogin}
+                activeOpacity={0.85}
+              >
+                <MaterialIcons name="fingerprint" size={22} color={themePalette.brandText} style={{ marginRight: 8 }} />
+                <Text style={[styles.biometricBtnText, { color: themePalette.brandText }]}>
+                  Войти по биометрии
+                </Text>
+              </TouchableOpacity>
+            )}
+
             {/* Forgot password */}
             <TouchableOpacity
               style={styles.forgotBtn}
@@ -528,6 +574,25 @@ export default function LoginScreen() {
                   <TouchableOpacity onPress={() => setShowResetPwd(v => !v)} disabled={!resetNewPwd}>
                     <MaterialIcons name={showResetPwd ? 'visibility' : 'visibility-off'} size={18} color={resetNewPwd ? NAVY : '#CBD5E1'} />
                   </TouchableOpacity>
+                </View>
+
+                {/* Требования к паролю — подсказка снизу, отмечается по мере ввода */}
+                <View style={styles.pwdRules}>
+                  {PASSWORD_RULES.map((r) => {
+                    const ok = r.test(resetNewPwd);
+                    return (
+                      <View key={r.label} style={styles.pwdRuleRow}>
+                        <MaterialIcons
+                          name={ok ? 'check-circle' : 'radio-button-unchecked'}
+                          size={14}
+                          color={ok ? '#10B981' : '#CBD5E1'}
+                        />
+                        <Text style={[styles.pwdRuleText, { color: ok ? '#10B981' : '#94A3B8' }]}>
+                          {r.label}
+                        </Text>
+                      </View>
+                    );
+                  })}
                 </View>
 
                 <View style={[styles.modalInputRow, { borderColor: '#E2E8F0' }]}>
@@ -737,6 +802,21 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
 
+  biometricBtn: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 12,
+    paddingVertical: 13,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1.5,
+  },
+  biometricBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+
   loadingHint: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -793,6 +873,21 @@ const styles = StyleSheet.create({
   modalInput: {
     flex: 1, fontSize: 14, color: '#1E293B',
     paddingVertical: 12,
+  },
+  pwdRules: {
+    marginTop: -2,
+    marginBottom: 12,
+    paddingHorizontal: 4,
+    gap: 4,
+  },
+  pwdRuleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  pwdRuleText: {
+    fontSize: 12,
+    fontWeight: '500',
   },
   stepRow: {
     flexDirection: 'row',

@@ -5,6 +5,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getApiUrl } from './apiUrl';
+import { updateBiometricToken } from './biometricAuth';
 
 const AUTH_TOKEN_KEY    = '@auth_token';
 const REFRESH_TOKEN_KEY = '@refresh_token';
@@ -49,6 +50,10 @@ const refreshAccessToken = async () => {
       await AsyncStorage.setItem(AUTH_TOKEN_KEY, newAccess);
       if (newRefresh) {
         await AsyncStorage.setItem(REFRESH_TOKEN_KEY, newRefresh);
+        // Этот путь ротации тоже должен обновлять биометрическую копию токена,
+        // иначе в SecureStore останется инвалидированный refresh и вход по
+        // биометрии будет падать (откатываясь на пароль).
+        updateBiometricToken(newRefresh);
       }
 
       return newAccess;
@@ -174,6 +179,7 @@ export const apiCall = async (url, options = {}, _isRetry = false) => {
       const detailStr = typeof data.details === 'string' ? data.details : '';
       const err = new Error(data.error || `HTTP Error: ${response.status}`);
       err.status = response.status;
+      err.data = data;
       if (detailStr) err.details = detailStr;
       throw err;
     }
@@ -186,10 +192,16 @@ export const apiCall = async (url, options = {}, _isRetry = false) => {
     }
     if (error.status === 429) {
       console.warn('API rate-limited (429):', url);
-      return { success: false, error: error.message, rateLimited: true };
+      return { success: false, error: error.message, rateLimited: true, data: error.data };
     }
     console.error('API Error:', error, error.details ? `[details: ${error.details}]` : '');
-    return { success: false, error: error.message, details: error.details };
+    return {
+      success: false,
+      error:   error.message,
+      details: error.details,
+      status:  error.status,
+      data:    error.data,
+    };
   }
 };
 

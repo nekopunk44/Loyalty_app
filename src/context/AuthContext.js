@@ -1,19 +1,34 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as DatabaseService from '../services/DatabaseService';
 import { getApiUrl } from '../utils/apiUrl';
+import {
+  isBiometricAvailable,
+  isBiometricEnabled,
+  authenticate as biometricAuthenticate,
+  saveBiometricCredentials,
+  updateBiometricToken,
+  getBiometricCredentials,
+  clearBiometric,
+} from '../utils/biometricAuth';
 
 const STORAGE_KEYS = {
   AUTH_TOKEN:    '@auth_token',
   REFRESH_TOKEN: '@refresh_token',
   USER:          '@user',
   USER_ID:       '@user_id',
+  LAST_ACTIVE:   '@last_active',
 };
 
 // Access-токен живёт 15 минут. Обновляем за 2 минуты до истечения.
 const ACCESS_TTL_MS   = 15 * 60 * 1000;
 const REFRESH_BEFORE  =  2 * 60 * 1000;
 const REFRESH_INTERVAL = ACCESS_TTL_MS - REFRESH_BEFORE; // ~13 мин
+
+// Автовыход по бездействию: если приложение не открывали дольше этого времени —
+// при следующем открытии требуем повторный вход.
+const INACTIVITY_LIMIT_MS = 2 * 60 * 60 * 1000; // 2 часа
 
 const AuthContext = createContext();
 
@@ -22,6 +37,8 @@ export const AuthProvider = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [authToken, setAuthToken] = useState(null);
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [biometricEnabled, setBiometricEnabled] = useState(false);
 
   const heartbeatIntervalRef = React.useRef(null);
   const refreshIntervalRef   = React.useRef(null);
@@ -55,6 +72,8 @@ export const AuthProvider = ({ children }) => {
         await AsyncStorage.setItem(STORAGE_KEYS.AUTH_TOKEN,    newAccess);
         await AsyncStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, newRefresh);
         setAuthToken(newAccess);
+        // Держим биометрический refresh-токен актуальным при ротации
+        updateBiometricToken(newRefresh);
 
         return newAccess;
       } catch (e) {
@@ -93,6 +112,7 @@ export const AuthProvider = ({ children }) => {
       STORAGE_KEYS.REFRESH_TOKEN,
       STORAGE_KEYS.USER,
       STORAGE_KEYS.USER_ID,
+      STORAGE_KEYS.LAST_ACTIVE,
     ]);
     setAuthToken(null);
     setUser(null);
@@ -109,14 +129,28 @@ export const AuthProvider = ({ children }) => {
         ]);
 
         if (savedToken && savedUser) {
-          const parsedUser = JSON.parse(savedUser);
-          setAuthToken(savedToken);
-          setUser(parsedUser);
-          // Сразу пробуем обновить токен — он мог устареть пока приложение было закрыто
-          _startRefreshTimer();
-          refreshAccessToken();
-          // Без heartbeat сервер считает пользователя offline сразу после рестарта
-          _startHeartbeat(parsedUser.id);
+          // Автовыход по бездействию: если приложение не открывали дольше лимита —
+          // не восстанавливаем сессию, чистим хранилище и требуем повторный вход.
+          const lastActiveRaw = await AsyncStorage.getItem(STORAGE_KEYS.LAST_ACTIVE);
+          const lastActive = lastActiveRaw ? parseInt(lastActiveRaw, 10) : null;
+          if (lastActive && Date.now() - lastActive > INACTIVITY_LIMIT_MS) {
+            await AsyncStorage.multiRemove([
+              STORAGE_KEYS.AUTH_TOKEN,
+              STORAGE_KEYS.REFRESH_TOKEN,
+              STORAGE_KEYS.USER,
+              STORAGE_KEYS.USER_ID,
+              STORAGE_KEYS.LAST_ACTIVE,
+            ]);
+          } else {
+            const parsedUser = JSON.parse(savedUser);
+            setAuthToken(savedToken);
+            setUser(parsedUser);
+            // Сразу пробуем обновить токен — он мог устареть пока приложение было закрыто
+            _startRefreshTimer();
+            refreshAccessToken();
+            // Без heartbeat сервер считает пользователя offline сразу после рестарта
+            _startHeartbeat(parsedUser.id);
+          }
         }
       } catch (e) {
         console.error('Ошибка при восстановлении сессии:', e);
@@ -130,6 +164,44 @@ export const AuthProvider = ({ children }) => {
     };
   }, []);
 
+  // ─── Автовыход по бездействию ──────────────────────────────────────────────
+  // Уходя в фон, запоминаем время. При возврате в приложение, если прошло больше
+  // лимита — принудительно разлогиниваем и требуем повторный вход.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', async (next) => {
+      try {
+        if (next === 'active') {
+          const [token, lastRaw] = await Promise.all([
+            AsyncStorage.getItem(STORAGE_KEYS.AUTH_TOKEN),
+            AsyncStorage.getItem(STORAGE_KEYS.LAST_ACTIVE),
+          ]);
+          const last = lastRaw ? parseInt(lastRaw, 10) : null;
+          if (token && last && Date.now() - last > INACTIVITY_LIMIT_MS) {
+            // Локальный выход, но биометрию сохраняем — чтобы вернуться по Face ID
+            await _clearSession();
+          }
+        } else {
+          // background / inactive — фиксируем момент ухода
+          AsyncStorage.setItem(STORAGE_KEYS.LAST_ACTIVE, String(Date.now())).catch(() => {});
+        }
+      } catch (_) { /* фоновая проверка, ошибки не критичны */ }
+    });
+    return () => sub?.remove?.();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ─── Доступность и состояние биометрии ─────────────────────────────────────
+  useEffect(() => {
+    (async () => {
+      const [available, enabled] = await Promise.all([
+        isBiometricAvailable(),
+        isBiometricEnabled(),
+      ]);
+      setBiometricAvailable(available);
+      setBiometricEnabled(enabled);
+    })();
+  }, []);
+
   // ─── Сохранение токенов и запуск таймеров ──────────────────────────────────
   const _persistSession = async (accessToken, refreshToken, userData) => {
     await Promise.all([
@@ -141,6 +213,8 @@ export const AuthProvider = ({ children }) => {
     setAuthToken(accessToken);
     setUser(userData);
     _startRefreshTimer();
+    // Если биометрия включена — обновляем сохранённый refresh-токен
+    updateBiometricToken(refreshToken);
   };
 
   // ─── Регистрация ────────────────────────────────────────────────────────────
@@ -251,6 +325,9 @@ export const AuthProvider = ({ children }) => {
         }
       }
       await _clearSession();
+      // Явный выход — отключаем биометрию (требуется повторное включение)
+      await clearBiometric();
+      setBiometricEnabled(false);
       return true;
     } catch (e) {
       console.error('Ошибка выхода:', e);
@@ -296,7 +373,8 @@ export const AuthProvider = ({ children }) => {
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Ошибка смены пароля');
-    return true;
+    // Возвращаем data (содержит email аккаунта) — нужно для автоматического входа.
+    return data;
   };
 
   // ─── Подтверждение email ────────────────────────────────────────────────────
@@ -316,11 +394,71 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // ─── Биометрия: включение/выключение/вход ─────────────────────────────────
+  const enableBiometric = async () => {
+    try {
+      if (!user) return false;
+      const ok = await biometricAuthenticate('Включить вход по биометрии');
+      if (!ok) return false;
+      const refresh = await AsyncStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN);
+      if (!refresh) return false;
+      await saveBiometricCredentials(refresh, user);
+      setBiometricEnabled(true);
+      return true;
+    } catch (e) {
+      console.error('Ошибка включения биометрии:', e);
+      return false;
+    }
+  };
+
+  const disableBiometric = async () => {
+    await clearBiometric();
+    setBiometricEnabled(false);
+  };
+
+  // Вход по Face ID/отпечатку: refresh-токен из защищённого хранилища меняем на
+  // новую пару токенов и восстанавливаем сессию. Протух — откат на пароль.
+  const loginWithBiometric = async () => {
+    try {
+      const ok = await biometricAuthenticate('Вход по биометрии');
+      if (!ok) return { success: false, error: 'cancelled' };
+
+      const creds = await getBiometricCredentials();
+      if (!creds) return { success: false, error: 'no-credentials' };
+
+      const response = await fetch(`${getApiUrl()}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken: creds.refreshToken }),
+      });
+
+      if (!response.ok) {
+        // Токен истёк/отозван — чистим биометрию, нужен вход по паролю
+        await clearBiometric();
+        setBiometricEnabled(false);
+        return { success: false, error: 'expired' };
+      }
+
+      const data = await response.json();
+      await _persistSession(data.token, data.refreshToken, creds.user);
+      _startHeartbeat(creds.user.id);
+      return { success: true };
+    } catch (e) {
+      console.error('Ошибка входа по биометрии:', e);
+      return { success: false, error: e.message };
+    }
+  };
+
   const value = {
     user,
     isLoading,
     error,
     authToken,
+    biometricAvailable,
+    biometricEnabled,
+    enableBiometric,
+    disableBiometric,
+    loginWithBiometric,
     register,
     login,
     logout,

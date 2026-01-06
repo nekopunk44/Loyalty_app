@@ -24,7 +24,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.villajaconda.loyalty",
       "infoPlist": {
-        "NSCameraUsageDescription": "Разрешить доступ к камере для сканирования QR-кодов"
+        "NSCameraUsageDescription": "Разрешить доступ к камере для сканирования QR-кодов",
+        "NSFaceIDUsageDescription": "Используйте Face ID для быстрого и безопасного входа в приложение"
       }
     },
     "android": {
@@ -56,6 +57,12 @@
         }
       ],
       "expo-secure-store",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Используйте Face ID для быстрого и безопасного входа в приложение"
+        }
+      ],
       [
         "@sentry/react-native/expo",
         {
