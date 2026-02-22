@@ -1,0 +1,39 @@
+{
+  "expo": {
+    "name": "Villa Jaconda Loyalty",
+    "slug": "villa-jaconda-loyalty",
+    "version": "1.0.0",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTabletMode": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#ffffff"
+      },
+      "jsEngine": "jsc"
+    },
+    "web": {},
+    "plugins": [
+      [
+        "expo-barcode-scanner",
+        {
+          "cameraPermission": "Разрешить доступ к камере для сканирования QR кодов"
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Разрешить доступ к камере"
+        }
+      ]
+    ],
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ]
+  }
+}
