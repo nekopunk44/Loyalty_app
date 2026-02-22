@@ -12,7 +12,7 @@ import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { spacing, borderRadius } from '../constants/theme';
 import * as FirebaseService from '../services/FirebaseService';
 
-export default function UserDeleteConfirmModal({ visible, onClose, user, theme, onUserDeleted }) {
+export default function UserDeleteConfirmModal({ visible, onClose, user, theme, onUserDeleted, onNotify }) {
   const colors = theme.colors;
   const [loading, setLoading] = useState(false);
 
@@ -21,19 +21,16 @@ export default function UserDeleteConfirmModal({ visible, onClose, user, theme, 
     try {
       await FirebaseService.deleteUserAsAdmin(user.id);
       
-      Alert.alert(
-        '✅ Удалено',
-        `Пользователь ${user.displayName || user.name} успешно удален`,
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              if (onUserDeleted) onUserDeleted(user.id);
-              onClose();
-            },
-          },
-        ]
-      );
+      // Отправляем уведомление
+      if (onNotify) {
+        onNotify(user.displayName || user.name, user.email);
+      }
+      
+      // Закрываем модаль
+      onClose();
+      
+      // Вызываем callback об удалении
+      if (onUserDeleted) onUserDeleted(user.id);
     } catch (error) {
       console.error('Ошибка удаления:', error);
       Alert.alert('❌ Ошибка', error.message || 'Не удалось удалить пользователя');

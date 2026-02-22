@@ -47,10 +47,19 @@ export default function PropertyReviewsScreen({ route, navigation }) {
 
   const loadReviews = async () => {
     try {
-      await getPropertyReviews(propertyId, 'all');
-      const reviewStats = await getReviewStats(propertyId);
-      setStats(reviewStats);
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5002';
+      const response = await fetch(`${apiUrl}/api/reviews/property/${propertyId}?filter=approved`);
+      
+      if (response.ok) {
+        const data = await response.json();
+        setStats(data.stats);
+        // Обновляем локальные отзывы
+        if (getPropertyReviews) {
+          await getPropertyReviews(propertyId, 'all');
+        }
+      }
     } catch (err) {
+      console.error('Ошибка загрузки отзывов:', err);
       Alert.alert('Ошибка', 'Не удалось загрузить отзывы');
     }
   };
@@ -107,20 +116,31 @@ export default function PropertyReviewsScreen({ route, navigation }) {
         });
         Alert.alert('Успех', 'Отзыв обновлён');
       } else {
-        // Создать новый отзыв
-        await createReview({
-          propertyId,
-          userId: user.uid,
-          userName: user.displayName || user.email,
-          rating,
-          title: title.trim(),
-          text: reviewText.trim(),
-          approved: false, // На модерации
-          helpful: 0,
-          helpfulBy: [],
-          createdAt: new Date().toISOString(),
+        // Создать новый отзыв через API
+        const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5002';
+        const response = await fetch(`${apiUrl}/api/reviews`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            propertyId,
+            userId: user.uid,
+            userName: user.displayName || user.email,
+            rating,
+            title: title.trim(),
+            text: reviewText.trim(),
+          }),
         });
-        Alert.alert('Успех', 'Отзыв отправлен на модерацию');
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Ошибка при создании отзыва');
+        }
+
+        const result = await response.json();
+        console.log('✅ Отзыв создан:', result.review);
+        Alert.alert('Успех', result.message || 'Отзыв отправлен на модерацию');
       }
       
       await loadReviews();

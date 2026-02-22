@@ -25,6 +25,8 @@ export const HorizontalScrollView = ({
   navButtonColor = '#666',
   navButtonSize = 24,
   forceShowButtons = false,
+  itemWidth = null, // Ширина одного элемента для умного скроллинга
+  itemGap = 0, // Расстояние между элементами
 }) => {
   const scrollViewRef = useRef(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -44,9 +46,12 @@ export const HorizontalScrollView = ({
     // Левая кнопка показывается при скролле
     setCanScrollLeft(scrollX > 5);
     
-    // Правая кнопка зависит от позиции скрола
-    const canScroll = cSize.width > layoutMeasurement.width;
-    setCanScrollRight(canScroll && scrollX < cSize.width - layoutMeasurement.width - 5);
+    // Правая кнопка зависит от позиции скрола и доступности контента
+    const hasMoreContent = cSize.width > layoutMeasurement.width;
+    const canScrollMore = scrollX < cSize.width - layoutMeasurement.width - 5;
+    
+    // Кнопка показывается если контент больше контейнера и мы еще не в конце
+    setCanScrollRight(hasMoreContent && canScrollMore);
 
     if (onScroll) {
       onScroll(event);
@@ -55,30 +60,35 @@ export const HorizontalScrollView = ({
 
   const handleContentSizeChange = (width) => {
     setContentSize(width);
-    // Если forceShowButtons, показываем кнопку при инициализации
-    if (forceShowButtons && width > layoutWidth) {
-      setCanScrollRight(true);
-    } else if (!forceShowButtons && width > layoutWidth) {
-      setCanScrollRight(true);
-    } else {
-      setCanScrollRight(false);
-    }
   };
 
   const handleLayout = (event) => {
     const width = event.nativeEvent.layout.width;
     setLayoutWidth(width);
-    // Показываем кнопку прокрутки если контент шире контейнера
-    if (contentSize > width) {
-      setCanScrollRight(forceShowButtons ? true : true);
+  };
+
+  // Обновляем видимость кнопок при изменении размеров
+  React.useEffect(() => {
+    if (layoutWidth > 0 && contentSize > layoutWidth) {
+      // Если контент больше контейнера
+      if (forceShowButtons) {
+        setCanScrollRight(true);
+      } else {
+        // Показываем кнопку если есть еще контент не виден
+        setCanScrollRight(currentScrollX < contentSize - layoutWidth - 5);
+      }
+    } else if (forceShowButtons && contentSize > 0) {
+      // При forceShowButtons показываем даже если пока не видно
+      setCanScrollRight(true);
     } else {
       setCanScrollRight(false);
     }
-  };
+  }, [layoutWidth, contentSize, currentScrollX, forceShowButtons]);
 
   const scroll = (direction) => {
     if (scrollViewRef.current) {
-      const scrollAmount = 200; // Расстояние прокрутки
+      // Если указана ширина элемента, скроллим на размер одного элемента + gap
+      const scrollAmount = itemWidth ? (itemWidth + itemGap) : 300;
       const newScrollX = direction === 'left'
         ? Math.max(0, currentScrollX - scrollAmount)
         : currentScrollX + scrollAmount;

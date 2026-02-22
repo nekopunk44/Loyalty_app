@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -7,21 +7,24 @@ import {
   TouchableOpacity,
   ScrollView,
   Platform,
+  Modal,
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { spacing, borderRadius } from '../constants/theme';
 import { useNotification } from '../context/NotificationContext';
 import { useTheme } from '../context/ThemeContext';
 import HorizontalScrollView from '../components/HorizontalScrollView';
+import { pluralize } from '../utils/pluralize';
 
-export default function NotificationCenter() {
+export default function NotificationCenter({ onClose }) {
   const { notifications, markAsRead, deleteNotification, notificationsEnabled } = useNotification();
   const { isDark, theme } = useTheme();
-  const [filterType, setFilterType] = useState('all');
+  const [filterType, setFilterType] = useState('payment');
+  const [selectedNotification, setSelectedNotification] = useState(null);
   const colors = theme.colors;
 
   // Стили с доступом к переменным компонента
-  const styles = StyleSheet.create({
+  const styles = useMemo(() => StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: colors.background,
@@ -170,40 +173,166 @@ export default function NotificationCenter() {
       marginTop: spacing.sm,
       textAlign: 'center',
     },
-  });
+    // Новые стили для структурированного вида бронирований
+    bookingDetails: {
+      backgroundColor: colors.background,
+      borderRadius: borderRadius.md,
+      padding: spacing.md,
+      marginVertical: spacing.xs,
+      gap: spacing.sm,
+    },
+    detailRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+    },
+    detailText: {
+      fontSize: 12,
+      color: colors.text,
+      fontWeight: '500',
+      flex: 1,
+    },
+    // Модальные стили
+    modalBackdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'flex-end',
+    },
+    modalContent: {
+      backgroundColor: colors.background,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      maxHeight: '80%',
+      paddingTop: spacing.lg,
+      paddingHorizontal: spacing.lg,
+      paddingBottom: spacing.xl,
+    },
+    modalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: spacing.lg,
+    },
+    modalTitle: {
+      fontSize: 18,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    modalSection: {
+      marginBottom: spacing.lg,
+    },
+    sectionLabel: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: colors.textSecondary,
+      textTransform: 'uppercase',
+      marginBottom: spacing.sm,
+      letterSpacing: 0.5,
+    },
+    detailItem: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: spacing.sm,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    detailLabel: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      fontWeight: '500',
+    },
+    detailValue: {
+      fontSize: 14,
+      color: colors.text,
+      fontWeight: '600',
+    },
+  }), [colors]);
 
   const notificationTypes = [
-    { id: 'all', label: 'Все', icon: 'inbox' },
     { id: 'payment', label: 'Платежи', icon: 'payment' },
     { id: 'booking', label: 'Бронирование', icon: 'event' },
     { id: 'referral', label: 'Рефералы', icon: 'group' },
     { id: 'review', label: 'Отзывы', icon: 'star' },
   ];
 
-  const filteredNotifications = filterType === 'all' 
-    ? notifications 
-    : notifications.filter(n => {
-        if (filterType === 'payment') return n.type === 'paymentSuccess';
-        if (filterType === 'booking') return n.type === 'newBooking';
-        if (filterType === 'referral') return n.type === 'referralNotification';
-        if (filterType === 'review') return n.type === 'reviewNotification';
-        return true;
-      });
+  // Логирование для отладки
+  console.log('NotificationCenter DEBUG:', {
+    totalNotifications: notifications.length,
+    allNotifications: notifications.map(n => ({ type: n.type, title: n.title, message: n.message })),
+    filterType,
+    filteredCount: notifications.filter(n => {
+      if (filterType === 'payment') {
+        return ['paymentSuccess', 'paymentFailed', 'cashbackReceived', 'topup', 'balance_replenishment', 'user_balance_replenishment'].includes(n.type);
+      }
+      if (filterType === 'booking') {
+        return ['newBooking', 'bookingConfirmed', 'bookingCompleted', 'bookingCancelled', 'bookingPending', 'new_booking', 'admin_event'].includes(n.type);
+      }
+      if (filterType === 'referral') {
+        return ['referralNotification', 'referralBonus', 'friendJoined'].includes(n.type);
+      }
+      if (filterType === 'review') {
+        return ['reviewNotification', 'newReview', 'reviewReply'].includes(n.type);
+      }
+      return true;
+    }).length,
+  });
+
+  const filteredNotifications = notifications.filter(n => {
+    // Группируем типы уведомлений по категориям
+    if (filterType === 'payment') {
+      return ['paymentSuccess', 'paymentFailed', 'cashbackReceived', 'topup', 'balance_replenishment', 'user_balance_replenishment'].includes(n.type);
+    }
+    if (filterType === 'booking') {
+      const isBooking = ['newBooking', 'bookingConfirmed', 'bookingCompleted', 'bookingCancelled', 'bookingPending', 'new_booking', 'admin_event'].includes(n.type);
+      if (isBooking) console.log('🎫 Найдено уведомление о бронировании:', { type: n.type, title: n.title });
+      return isBooking;
+    }
+    if (filterType === 'referral') {
+      return ['referralNotification', 'referralBonus', 'friendJoined'].includes(n.type);
+    }
+    if (filterType === 'review') {
+      return ['reviewNotification', 'newReview', 'reviewReply'].includes(n.type);
+    }
+    return true;
+  });
+
+  console.log('📋 NotificationCenter - Все уведомления:', notifications.map(n => ({ type: n.type, title: n.title }))); 
+  console.log(`📊 Выбранный фильтр: ${filterType}, Отфильтровано: ${filteredNotifications.length} из ${notifications.length}`);
 
   const getNotificationIcon = (type) => {
     switch (type) {
+      // Бронирования
       case 'newBooking':
+      case 'new_booking':
+      case 'bookingConfirmed':
+      case 'bookingPending':
+      case 'admin_event':
         return 'event-note';
+      case 'bookingCompleted':
+        return 'event-available';
+      case 'bookingCancelled':
+        return 'event-busy';
+      // Платежи
       case 'paymentSuccess':
+      case 'topup':
+      case 'balance_replenishment':
+      case 'user_balance_replenishment':
         return 'check-circle';
-      case 'eventNotification':
-        return 'notifications-active';
+      case 'paymentFailed':
+        return 'cancel';
+      case 'cashbackReceived':
+        return 'card-giftcard';
+      // Рефералы
       case 'referralNotification':
+      case 'referralBonus':
+      case 'friendJoined':
         return 'people';
+      // Отзывы
       case 'reviewNotification':
-        return 'comment';
-      case 'adminEvent':
-        return 'admin-panel-settings';
+      case 'newReview':
+      case 'reviewReply':
+        return 'star';
       default:
         return 'notifications';
     }
@@ -211,13 +340,35 @@ export default function NotificationCenter() {
 
   const getNotificationColor = (type) => {
     switch (type) {
+      // Платежи - зеленый
       case 'paymentSuccess':
+      case 'cashbackReceived':
+      case 'topup':
+      case 'balance_replenishment':
+      case 'user_balance_replenishment':
         return colors.success;
+      case 'paymentFailed':
+        return '#ff6b6b';
+      // Бронирования - первичный цвет
       case 'newBooking':
+      case 'new_booking':
+      case 'bookingConfirmed':
+      case 'bookingPending':
+      case 'admin_event':
         return colors.primary;
+      case 'bookingCompleted':
+        return colors.success;
+      case 'bookingCancelled':
+        return '#ff6b6b';
+      // Рефералы - акцент
       case 'referralNotification':
+      case 'referralBonus':
+      case 'friendJoined':
         return colors.accent;
+      // Отзывы - вторичный цвет
       case 'reviewNotification':
+      case 'newReview':
+      case 'reviewReply':
         return colors.secondary;
       default:
         return colors.primary;
@@ -226,24 +377,55 @@ export default function NotificationCenter() {
 
   const getNotificationTitle = (type) => {
     switch (type) {
+      // Бронирования
       case 'newBooking':
+      case 'new_booking':
+      case 'admin_event':
         return 'Новое бронирование';
+      case 'bookingConfirmed':
+        return 'Бронирование подтверждено';
+      case 'bookingCompleted':
+        return 'Бронирование завершено';
+      case 'bookingCancelled':
+        return 'Бронирование отменено';
+      case 'bookingPending':
+        return 'Ожидание оплаты';
+      // Платежи
       case 'paymentSuccess':
         return 'Платёж успешен';
-      case 'eventNotification':
-        return 'Событие';
+      case 'paymentFailed':
+        return 'Платёж не прошел';
+      case 'cashbackReceived':
+        return 'Кэшбек получен';
+      case 'topup':
+        return 'Баланс пополнен';
+      case 'balance_replenishment':
+        return 'Баланс пополнен';
+      case 'user_balance_replenishment':
+        return 'Пополнение баланса пользователем';
+      // Рефералы
       case 'referralNotification':
         return 'Бонус реферала';
+      case 'referralBonus':
+        return 'Вы получили бонус';
+      case 'friendJoined':
+        return 'Друг присоединился';
+      // Отзывы
       case 'reviewNotification':
         return 'Новый отзыв';
-      case 'adminEvent':
-        return 'Уведомление администратора';
+      case 'newReview':
+        return 'Оставьте отзыв';
+      case 'reviewReply':
+        return 'Ответ на ваш отзыв';
       default:
         return 'Уведомление';
     }
   };
 
-  const formatTime = (date) => {
+  const formatTime = (dateInput) => {
+    // Преобразуем строку в объект Date если необходимо
+    const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
+    
     const now = new Date();
     const diff = now - date;
     const minutes = Math.floor(diff / 60000);
@@ -258,35 +440,99 @@ export default function NotificationCenter() {
     return date.toLocaleDateString('ru-RU');
   };
 
-  const renderNotificationItem = ({ item }) => (
-    <TouchableOpacity 
-      style={[
-        styles.notificationCard,
-        !item.read && styles.notificationCardUnread,
-      ]}
-      onPress={() => markAsRead(item.id)}
-    >
-      <View style={[styles.iconContainer, { backgroundColor: getNotificationColor(item.type) }]}>
-        <MaterialIcons name={getNotificationIcon(item.type)} size={20} color="#fff" />
-      </View>
+  const renderNotificationItem = ({ item }) => {
+    // Для бронирований показываем структурированный вид
+    const isBookingNotification = ['newBooking', 'new_booking', 'bookingConfirmed', 'bookingCompleted', 'bookingCancelled', 'bookingPending', 'admin_event'].includes(item.type);
 
-      <View style={styles.contentContainer}>
-        <View style={styles.headerRow}>
-          <Text style={styles.title}>{getNotificationTitle(item.type)}</Text>
-          {!item.read && <View style={styles.unreadDot} />}
-        </View>
-        <Text style={styles.message}>{item.message}</Text>
-        <Text style={styles.time}>{formatTime(item.createdAt)}</Text>
-      </View>
-
+    return (
       <TouchableOpacity 
-        style={styles.deleteButton}
-        onPress={() => deleteNotification(item.id)}
+        style={[
+          styles.notificationCard,
+          !item.read && styles.notificationCardUnread,
+        ]}
+        onPress={() => {
+          markAsRead(item.id);
+          if (isBookingNotification) {
+            setSelectedNotification(item);
+          }
+        }}
       >
-        <MaterialIcons name="close" size={18} color={colors.textSecondary} />
+        <View style={[styles.iconContainer, { backgroundColor: getNotificationColor(item.type) }]}>
+          <MaterialIcons name={getNotificationIcon(item.type)} size={20} color="#fff" />
+        </View>
+
+        <View style={styles.contentContainer}>
+          <View style={styles.headerRow}>
+            <Text style={styles.title}>{getNotificationTitle(item.type)}</Text>
+            {!item.read && <View style={styles.unreadDot} />}
+          </View>
+          
+          {/* Структурированный вид для бронирований */}
+          {isBookingNotification ? (
+            <View style={styles.bookingDetails}>
+              {/* Если есть структурированные данные, показываем их */}
+              {item.data && (
+                <>
+                  {item.data.guestName && (
+                    <View style={styles.detailRow}>
+                      <MaterialIcons name="person" size={14} color={colors.textSecondary} />
+                      <Text style={styles.detailText}>{item.data.guestName}</Text>
+                    </View>
+                  )}
+                  {item.data.checkInDate && item.data.checkOutDate && (
+                    <View style={styles.detailRow}>
+                      <MaterialIcons name="calendar-today" size={14} color={colors.textSecondary} />
+                      <Text style={styles.detailText}>{item.data.checkInDate} - {item.data.checkOutDate}</Text>
+                    </View>
+                  )}
+                  {item.data.guests && (
+                    <View style={styles.detailRow}>
+                      <MaterialIcons name="group" size={14} color={colors.textSecondary} />
+                      <Text style={styles.detailText}>{item.data.guests} {pluralize(item.data.guests, 'гость', 'гостя', 'гостей')}</Text>
+                    </View>
+                  )}
+                  {item.data.totalPrice && (
+                    <View style={styles.detailRow}>
+                      <MaterialIcons name="attach-money" size={14} color={colors.textSecondary} />
+                      <Text style={styles.detailText}>{item.data.totalPrice} PRB</Text>
+                    </View>
+                  )}
+                  {item.data.saunaHours > 0 && (
+                    <View style={styles.detailRow}>
+                      <MaterialIcons name="hot-tub" size={14} color={colors.textSecondary} />
+                      <Text style={styles.detailText}>Сауна: {item.data.saunaHours}ч</Text>
+                    </View>
+                  )}
+                  {item.data.kitchenware && (
+                    <View style={styles.detailRow}>
+                      <MaterialIcons name="kitchen" size={14} color={colors.textSecondary} />
+                      <Text style={styles.detailText}>Посуда и кухня</Text>
+                    </View>
+                  )}
+                </>
+              )}
+              
+              {/* Если нет структурированных данных, показываем сообщение */}
+              {!item.data && item.message && (
+                <Text style={styles.detailText}>{item.message}</Text>
+              )}
+            </View>
+          ) : (
+            <Text style={styles.message}>{item.message}</Text>
+          )}
+          
+          <Text style={styles.time}>{formatTime(item.createdAt)}</Text>
+        </View>
+
+        <TouchableOpacity 
+          style={styles.deleteButton}
+          onPress={() => deleteNotification(item.id)}
+        >
+          <MaterialIcons name="close" size={18} color={colors.textSecondary} />
+        </TouchableOpacity>
       </TouchableOpacity>
-    </TouchableOpacity>
-  );
+    );
+  };
 
   const emptyState = (
     <View style={styles.emptyContainer}>
@@ -297,23 +543,31 @@ export default function NotificationCenter() {
   );
 
   const unreadCount = notifications.filter(n => !n.read).length;
+  const unreadLabel = pluralize(unreadCount, 'новое', 'новых', 'новых');
 
   return (
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={styles.headerTitle}>Уведомления</Text>
           {unreadCount > 0 && (
-            <Text style={styles.unreadCount}>{unreadCount} новых</Text>
+            <Text style={styles.unreadCount}>{unreadCount} {unreadLabel}</Text>
           )}
         </View>
-        <View style={styles.enabledBadge}>
-          <MaterialIcons 
-            name={notificationsEnabled ? 'notifications' : 'notifications-off'} 
-            size={20} 
-            color={notificationsEnabled ? colors.success : colors.textSecondary}
-          />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+          <View style={styles.enabledBadge}>
+            <MaterialIcons 
+              name={notificationsEnabled ? 'notifications' : 'notifications-off'} 
+              size={20} 
+              color={notificationsEnabled ? colors.success : colors.textSecondary}
+            />
+          </View>
+          {onClose && (
+            <TouchableOpacity onPress={onClose}>
+              <MaterialIcons name="close" size={24} color={colors.text} />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -335,7 +589,7 @@ export default function NotificationCenter() {
             <MaterialIcons 
               name={type.icon} 
               size={16} 
-              color={filterType === type.id ? colors.primary : colors.textSecondary}
+              color={filterType === type.id ? '#fff' : colors.textSecondary}
             />
             <Text 
               style={[
@@ -360,6 +614,110 @@ export default function NotificationCenter() {
         />
       ) : (
         emptyState
+      )}
+
+      {/* Detail Modal for Booking Notifications */}
+      {selectedNotification && (
+        <Modal
+          visible={!!selectedNotification}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setSelectedNotification(null)}
+        >
+          <View style={styles.modalBackdrop}>
+            <ScrollView style={styles.modalContent}>
+              {/* Header */}
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>{getNotificationTitle(selectedNotification.type)}</Text>
+                <TouchableOpacity onPress={() => setSelectedNotification(null)}>
+                  <MaterialIcons name="close" size={24} color={colors.text} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Booking Details */}
+              {selectedNotification.data && (
+                <>
+                  {/* Property Info */}
+                  {selectedNotification.data.propertyName && (
+                    <View style={styles.modalSection}>
+                      <Text style={styles.sectionLabel}>Объект</Text>
+                      <View style={[styles.detailItem, { borderBottomWidth: 0 }]}>
+                        <MaterialIcons name="home" size={16} color={colors.primary} />
+                        <Text style={styles.detailValue}>{selectedNotification.data.propertyName}</Text>
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Guest Info */}
+                  {selectedNotification.data.guestName && (
+                    <View style={styles.modalSection}>
+                      <Text style={styles.sectionLabel}>Гость</Text>
+                      <View style={[styles.detailItem, { borderBottomWidth: 0 }]}>
+                        <MaterialIcons name="person" size={16} color={colors.primary} />
+                        <Text style={styles.detailValue}>{selectedNotification.data.guestName}</Text>
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Dates */}
+                  {selectedNotification.data.checkInDate && selectedNotification.data.checkOutDate && (
+                    <View style={styles.modalSection}>
+                      <Text style={styles.sectionLabel}>Даты проживания</Text>
+                      <View style={styles.detailItem}>
+                        <Text style={styles.detailLabel}>Заезд</Text>
+                        <Text style={styles.detailValue}>{selectedNotification.data.checkInDate}</Text>
+                      </View>
+                      <View style={[styles.detailItem, { borderBottomWidth: 0 }]}>
+                        <Text style={styles.detailLabel}>Выезд</Text>
+                        <Text style={styles.detailValue}>{selectedNotification.data.checkOutDate}</Text>
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Guests and Services */}
+                  <View style={styles.modalSection}>
+                    <Text style={styles.sectionLabel}>Детали бронирования</Text>
+                    {selectedNotification.data.guests && (
+                      <View style={styles.detailItem}>
+                        <Text style={styles.detailLabel}>Гостей</Text>
+                        <Text style={styles.detailValue}>{selectedNotification.data.guests} {pluralize(selectedNotification.data.guests, 'чел.', 'чел.', 'чел.')}</Text>
+                      </View>
+                    )}
+                    {selectedNotification.data.saunaHours > 0 && (
+                      <View style={styles.detailItem}>
+                        <Text style={styles.detailLabel}>Сауна</Text>
+                        <Text style={styles.detailValue}>{selectedNotification.data.saunaHours}ч</Text>
+                      </View>
+                    )}
+                    {selectedNotification.data.kitchenware && (
+                      <View style={[styles.detailItem, { borderBottomWidth: 0 }]}>
+                        <Text style={styles.detailLabel}>Посуда и кухня</Text>
+                        <Text style={styles.detailValue}>✓</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Price */}
+                  {selectedNotification.data.totalPrice && (
+                    <View style={[styles.modalSection, { borderTopWidth: 1, borderTopColor: colors.border, paddingTopStyle: spacing.lg }]}>
+                      <View style={[styles.detailItem, { borderBottomWidth: 0 }]}>
+                        <Text style={[styles.detailLabel, { fontSize: 14, fontWeight: '700' }]}>Сумма</Text>
+                        <Text style={[styles.detailValue, { fontSize: 16, color: colors.primary }]}>{selectedNotification.data.totalPrice} PRB</Text>
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Timestamp */}
+                  <View style={[styles.modalSection, { marginTop: spacing.xl }]}>
+                    <Text style={[styles.detailText, { textAlign: 'center', color: colors.textSecondary }]}>
+                      {formatTime(selectedNotification.createdAt)}
+                    </Text>
+                  </View>
+                </>
+              )}
+            </ScrollView>
+          </View>
+        </Modal>
       )}
     </View>
   );

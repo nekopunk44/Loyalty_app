@@ -181,3 +181,49 @@ export const SlideInBottomCard = ({ children, delay = 0, style }) => {
     </Animated.View>
   );
 };
+
+/**
+ * Компонент с плавным fade-out удалением
+ * Используется когда элемент нужно убрать со страницы
+ */
+export const FadeOutCard = ({ children, delay = 0, style, onRemove, isRemoving = false }) => {
+  const fadeAnim = React.useRef(new Animated.Value(1)).current;
+  const scaleAnim = React.useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (isRemoving) {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 400,
+          delay: delay,
+          useNativeDriver: USE_NATIVE,
+        }),
+        Animated.timing(scaleAnim, {
+          toValue: 0.95,
+          duration: 400,
+          delay: delay,
+          useNativeDriver: USE_NATIVE,
+        }),
+      ]).start(() => {
+        if (onRemove) {
+          onRemove();
+        }
+      });
+    }
+  }, [isRemoving, fadeAnim, scaleAnim, delay]);
+
+  return (
+    <Animated.View
+      style={[
+        {
+          opacity: fadeAnim,
+          transform: [{ scale: scaleAnim }],
+        },
+        style,
+      ]}
+    >
+      {children}
+    </Animated.View>
+  );
+};

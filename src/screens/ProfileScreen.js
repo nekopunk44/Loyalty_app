@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, TextInput,
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, spacing, borderRadius } from '../constants/theme';
+import { GradientView } from '../components/GradientView';
 import { useTheme } from '../context/ThemeContext';
 import { useBookings } from '../context/BookingContext';
 import { useReferral } from '../context/ReferralContext';
@@ -62,6 +63,26 @@ export default function ProfileScreen() {
     }
   };
 
+  const getTierGradient = () => {
+    switch (tier) {
+      case 'Platinum': return ['#E5D4FF', '#D8B8FF', '#B366FF'];
+      case 'Gold': return ['#FFE66D', '#FFD700', '#FFA500'];
+      case 'Silver': return ['#E8E8E8', '#C0C0C0', '#A9A9A9'];
+      case 'Bronze': return ['#D4A574', '#CD7F32', '#8B4513'];
+      default: return ['#FF6B35', '#FF8C42', '#FF6B35'];
+    }
+  };
+
+  const getTierBorderColor = () => {
+    switch (tier) {
+      case 'Bronze': return '#8B4513';
+      case 'Silver': return '#A9A9A9';
+      case 'Gold': return '#FFA500';
+      case 'Platinum': return '#B366FF';
+      default: return theme.colors.primary;
+    }
+  };
+
   const openReviewModal = (booking) => {
     setSelectedBooking(booking);
     setRating(booking.rating || 0);
@@ -106,22 +127,31 @@ export default function ProfileScreen() {
   const ProfileContent = () => (
     <ScrollView contentContainerStyle={[styles.container, { backgroundColor: theme.colors.background }]}>
       {/* Card Display */}
-      <View style={[styles.cardDisplay, { borderLeftColor: getTierColor(), backgroundColor: theme.colors.cardBg }]}>
+      <View style={[styles.cardDisplay, { borderLeftColor: getTierBorderColor(), borderColor: getTierBorderColor(), overflow: 'hidden' }]}>
+        <GradientView
+          colors={getTierGradient()}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+        <View style={[styles.cardGradientDecor1]} />
+        <View style={[styles.cardGradientDecor2]} />
+        
         <View style={styles.cardHeader}>
           <View>
-            <Text style={[styles.cardNumber, { color: theme.colors.textSecondary }]}>•••• •••• •••• 7249</Text>
-            <Text style={[styles.cardHolder, { color: theme.colors.text }]}>Villa Jaconda</Text>
+            <Text style={[styles.cardNumber, { color: '#fff', fontWeight: '500' }]}>•••• •••• •••• 7249</Text>
+            <Text style={[styles.cardHolder, { color: '#fff', fontWeight: '600' }]}>Villa Jaconda</Text>
           </View>
-          <View style={[styles.tierBadge, { backgroundColor: getTierColor() }]}>
+          <View style={[styles.tierBadge, { backgroundColor: 'rgba(255, 255, 255, 0.25)', borderWidth: 1, borderColor: '#fff' }]}>
             <MaterialIcons name="star" size={16} color="#fff" />
-            <Text style={styles.tierText}>{tier}</Text>
+            <Text style={[styles.tierText, { color: '#fff' }]}>{tier}</Text>
           </View>
         </View>
 
         {/* Balance Section */}
-        <View style={[styles.balanceSection, { borderTopColor: theme.colors.border }]}>
-          <Text style={[styles.balanceLabel, { color: theme.colors.textSecondary }]}>Ваш баланс</Text>
-          <Text style={[styles.balanceValue, { color: theme.colors.primary }]}>{balance.toFixed(2)} ₽</Text>
+        <View style={[styles.balanceSection, { borderTopColor: 'rgba(255, 255, 255, 0.3)' }]}>
+          <Text style={[styles.balanceLabel, { color: 'rgba(255, 255, 255, 0.8)' }]}>Ваш баланс</Text>
+          <Text style={[styles.balanceValue, { color: '#fff', fontWeight: '700' }]}>{balance.toFixed(2)} PRB</Text>
         </View>
       </View>
 
@@ -157,19 +187,19 @@ export default function ProfileScreen() {
         <Text style={[styles.tierInfoTitle, { color: theme.colors.text }]}>Статусы членства</Text>
         <View style={[styles.tierItem, { borderBottomColor: theme.colors.border }]}>
           <Text style={[styles.tierName, { color: theme.colors.text }]}>🥉 Bronze</Text>
-          <Text style={[styles.tierRequirement, { color: theme.colors.textSecondary }]}>0 - 499 ₽</Text>
+          <Text style={[styles.tierRequirement, { color: theme.colors.textSecondary }]}>0 - 499 PRB</Text>
         </View>
         <View style={[styles.tierItem, { borderBottomColor: theme.colors.border }]}>
           <Text style={[styles.tierName, { color: theme.colors.text }]}>🥈 Silver</Text>
-          <Text style={[styles.tierRequirement, { color: theme.colors.textSecondary }]}>500 - 1999 ₽</Text>
+          <Text style={[styles.tierRequirement, { color: theme.colors.textSecondary }]}>500 - 1999 PRB</Text>
         </View>
         <View style={[styles.tierItem, { borderBottomColor: theme.colors.border }]}>
           <Text style={[styles.tierName, { color: theme.colors.text }]}>🥇 Gold</Text>
-          <Text style={[styles.tierRequirement, { color: theme.colors.textSecondary }]}>2000 - 4999 ₽</Text>
+          <Text style={[styles.tierRequirement, { color: theme.colors.textSecondary }]}>2000 - 4999 PRB</Text>
         </View>
         <View style={styles.tierItem}>
           <Text style={[styles.tierName, { color: theme.colors.text }]}>💎 Platinum</Text>
-          <Text style={[styles.tierRequirement, { color: theme.colors.textSecondary }]}>5000+ ₽</Text>
+          <Text style={[styles.tierRequirement, { color: theme.colors.textSecondary }]}>5000+ PRB</Text>
         </View>
       </View>
     </ScrollView>
@@ -197,7 +227,7 @@ export default function ProfileScreen() {
               <Text style={[styles.bookingDetail, { color: theme.colors.text }]}>Гость: {booking.guestName}</Text>
             )}
             {booking.amount && (
-              <Text style={[styles.bookingAmount, { color: theme.colors.success }]}>Сумма: {booking.amount} ₽</Text>
+              <Text style={[styles.bookingAmount, { color: theme.colors.success }]}>Сумма: {booking.amount} PRB</Text>
             )}
             {booking.rating > 0 && (
               <View style={styles.ratingDisplay}>
@@ -256,7 +286,7 @@ export default function ProfileScreen() {
       <View style={[styles.bonusCard, { backgroundColor: theme.colors.primary }]}>
         <MaterialIcons name="card-giftcard" size={28} color="#fff" />
         <View style={{ marginLeft: spacing.md }}>
-          <Text style={styles.bonusAmount}>{bonusEarned} ₽</Text>
+          <Text style={styles.bonusAmount}>{bonusEarned} PRB</Text>
           <Text style={styles.bonusLabel}>Бонусов заработано</Text>
         </View>
       </View>
@@ -273,7 +303,7 @@ export default function ProfileScreen() {
           <View key={friend.id} style={[styles.friendCard, { backgroundColor: theme.colors.cardBg, borderColor: theme.colors.border }]}>
             <View style={styles.friendInfo}>
               <Text style={[styles.friendName, { color: theme.colors.text }]}>{friend.name}</Text>
-              <Text style={[styles.friendBonus, { color: theme.colors.success }]}>+{friend.bonus} ₽</Text>
+              <Text style={[styles.friendBonus, { color: theme.colors.success }]}>+{friend.bonus} PRB</Text>
             </View>
             <View style={[styles.statusBadge, { backgroundColor: friend.status === 'completed' ? theme.colors.success : theme.colors.textSecondary }]}>
               <Text style={styles.statusText}>{friend.status === 'completed' ? '✓' : 'Ожидание'}</Text>
@@ -449,18 +479,48 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     borderRadius: borderRadius.lg,
     marginBottom: spacing.lg,
-    borderLeftWidth: 4,
+    borderWidth: 2,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 6,
+    overflow: 'hidden',
+    backgroundColor: '#fff',
+  },
+  cardGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 0,
+  },
+  cardGradientDecor1: {
+    position: 'absolute',
+    top: -50,
+    right: -50,
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  cardGradientDecor2: {
+    position: 'absolute',
+    bottom: -40,
+    left: -40,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: spacing.lg,
+    position: 'relative',
+    zIndex: 1,
   },
   cardNumber: {
     fontSize: 14,
@@ -488,6 +548,8 @@ const styles = StyleSheet.create({
   balanceSection: {
     borderTopWidth: 1,
     paddingTop: spacing.md,
+    position: 'relative',
+    zIndex: 1,
   },
   balanceLabel: {
     fontSize: 12,

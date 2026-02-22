@@ -1,231 +1,598 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Alert, Modal, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Alert, Modal, TextInput, Animated } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { colors, spacing, borderRadius } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
-import { useTheme } from '../context/ThemeContext';
+import { useTheme, lightTheme, darkTheme } from '../context/ThemeContext';
 import { ScaleInCard, FadeInCard } from '../components/AnimatedCard';
+import NotificationCenter from './NotificationCenter';
 
 export default function SettingsScreen() {
   const [notifications, setNotifications] = React.useState(true);
-  const [email, setEmail] = React.useState(true);
-  const [instagram, setInstagram] = React.useState(false);
-  const [viber, setViber] = React.useState(false);
-  const [whatsapp, setWhatsapp] = React.useState(false);
+  const [notificationsAnim] = React.useState(new Animated.Value(notifications ? 1 : 0));
   const [rulesModalVisible, setRulesModalVisible] = React.useState(false);
-  const [socialsExpanded, setSocialsExpanded] = React.useState(false);
+  const [notificationCenterVisible, setNotificationCenterVisible] = React.useState(false);
   const [platformInfo, setPlatformInfo] = React.useState('Программа лояльности Villa Jaconda v1.0.0\n\nОригинальное приложение для управления бронированиями и программой лояльности.');
   const [platformInfoModalVisible, setPlatformInfoModalVisible] = React.useState(false);
   const [isEditingPlatformInfo, setIsEditingPlatformInfo] = React.useState(false);
   const { logout, isAdmin, user } = useAuth();
-  const { isDark, toggleTheme, theme } = useTheme();
+  const { isDark, toggleTheme, theme, isThemeLoaded } = useTheme();
 
-  const handleSocialConnect = (platform, value, setter) => {
+  // Инициализируем анимации с правильным значением темы
+  const [darkModeAnim] = React.useState(new Animated.Value(isThemeLoaded ? (isDark ? 1 : 0) : 0));
+  const [bgColorAnim] = React.useState(new Animated.Value(isThemeLoaded ? (isDark ? 1 : 0) : 0));
+  const [cardColorAnim] = React.useState(new Animated.Value(isThemeLoaded ? (isDark ? 1 : 0) : 0));
+  const [textColorAnim] = React.useState(new Animated.Value(isThemeLoaded ? (isDark ? 1 : 0) : 0));
+
+  // Синхронизируем анимации с текущей темой после загрузки
+  React.useEffect(() => {
+    if (isThemeLoaded) {
+      darkModeAnim.setValue(isDark ? 1 : 0);
+      bgColorAnim.setValue(isDark ? 1 : 0);
+      cardColorAnim.setValue(isDark ? 1 : 0);
+      textColorAnim.setValue(isDark ? 1 : 0);
+    }
+  }, [isThemeLoaded]);
+
+  const handleThemeToggle = () => {
+    // Плавная анимация переключателя темы и цветов элементов
+    Animated.parallel([
+      Animated.timing(darkModeAnim, {
+        toValue: isDark ? 0 : 1,
+        duration: 500,
+        useNativeDriver: false,
+      }),
+      Animated.timing(bgColorAnim, {
+        toValue: isDark ? 0 : 1,
+        duration: 500,
+        useNativeDriver: false,
+      }),
+      Animated.timing(cardColorAnim, {
+        toValue: isDark ? 0 : 1,
+        duration: 500,
+        useNativeDriver: false,
+      }),
+      Animated.timing(textColorAnim, {
+        toValue: isDark ? 0 : 1,
+        duration: 500,
+        useNativeDriver: false,
+      }),
+    ]).start();
+    
+    toggleTheme();
+  };
+
+  // Создаём стили динамически на основе текущей темы
+  const dynamicStyles = React.useMemo(() => {
+    return StyleSheet.create({
+      container: {
+        backgroundColor: theme.colors.background,
+        paddingVertical: spacing.md,
+        flexGrow: 1,
+      },
+      userCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: theme.colors.cardBg,
+        marginHorizontal: spacing.md,
+        marginBottom: spacing.lg,
+        padding: spacing.lg,
+        borderRadius: borderRadius.lg,
+        shadowColor: theme.colors.shadow,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 3,
+        elevation: 2,
+      },
+      userAvatar: {
+        width: 50,
+        height: 50,
+        borderRadius: 25,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: spacing.md,
+      },
+      userName: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: theme.colors.text,
+      },
+      userRole: {
+        fontSize: 12,
+        color: theme.colors.textSecondary,
+        marginTop: spacing.xs,
+      },
+      userEmail: {
+        fontSize: 12,
+        color: theme.colors.textSecondary,
+      },
+      section: {
+        marginBottom: spacing.lg,
+        backgroundColor: theme.colors.cardBg,
+        marginHorizontal: spacing.md,
+        borderRadius: borderRadius.lg,
+        overflow: 'hidden',
+        shadowColor: theme.colors.shadow,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 3,
+        elevation: 2,
+      },
+      sectionTitle: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: theme.colors.textSecondary,
+        textTransform: 'uppercase',
+        paddingHorizontal: spacing.md,
+        paddingTop: spacing.md,
+        paddingBottom: spacing.sm,
+        letterSpacing: 0.5,
+      },
+      settingItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: spacing.md,
+        paddingVertical: spacing.md,
+        borderBottomWidth: 1,
+        borderBottomColor: theme.colors.border,
+      },
+      settingLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+      },
+      settingIcon: {
+        width: 40,
+        height: 40,
+        borderRadius: 8,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: spacing.md,
+      },
+      settingText: {
+        flex: 1,
+      },
+      settingTitle: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: theme.colors.text,
+      },
+      settingDesc: {
+        fontSize: 12,
+        color: theme.colors.textSecondary,
+        marginTop: 2,
+      },
+      toggleSwitch: {
+        width: 50,
+        height: 28,
+        borderRadius: 14,
+        padding: 2,
+        justifyContent: 'center',
+        alignItems: 'flex-start',
+      },
+      toggleThumb: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 3,
+        elevation: 3,
+      },
+      rulesCard: {
+        marginHorizontal: spacing.md,
+        marginBottom: spacing.lg,
+        backgroundColor: theme.colors.cardBg,
+        padding: spacing.md,
+        borderRadius: borderRadius.lg,
+        borderLeftWidth: 4,
+        borderLeftColor: theme.colors.primary,
+      },
+      rulesTitle: {
+        fontSize: 15,
+        fontWeight: '700',
+        color: theme.colors.text,
+        marginBottom: spacing.sm,
+      },
+      rulesText: {
+        fontSize: 13,
+        color: theme.colors.textSecondary,
+        lineHeight: 20,
+      },
+      logoutButton: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginHorizontal: spacing.md,
+        marginVertical: spacing.lg,
+        backgroundColor: theme.colors.danger,
+        paddingVertical: spacing.md,
+        borderRadius: borderRadius.md,
+      },
+      logoutButtonText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: '700',
+        marginLeft: spacing.sm,
+      },
+      modalContainer: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'flex-end',
+      },
+      modalContent: {
+        backgroundColor: theme.colors.cardBg,
+        borderTopLeftRadius: borderRadius.xl,
+        borderTopRightRadius: borderRadius.xl,
+        maxHeight: '95%',
+        borderTopWidth: 2,
+        borderTopColor: theme.colors.primary,
+      },
+      modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: spacing.lg,
+        paddingVertical: spacing.lg,
+        borderBottomWidth: 1,
+        borderBottomColor: theme.colors.border,
+      },
+      modalTitle: {
+        fontSize: 20,
+        fontWeight: '700',
+        color: theme.colors.text,
+      },
+      modalBody: {
+        padding: spacing.lg,
+        paddingBottom: spacing.xl,
+      },
+      platformInfoCard: {
+        backgroundColor: theme.colors.background,
+        padding: spacing.lg,
+        borderRadius: borderRadius.lg,
+        marginBottom: spacing.lg,
+        alignItems: 'center',
+      },
+      platformInfoText: {
+        fontSize: 13,
+        color: theme.colors.text,
+        marginTop: spacing.md,
+        textAlign: 'center',
+        lineHeight: 20,
+      },
+      platformEditInput: {
+        backgroundColor: theme.colors.background,
+        borderColor: theme.colors.border,
+        borderWidth: 1,
+        borderRadius: borderRadius.md,
+        padding: spacing.md,
+        marginBottom: spacing.lg,
+        color: theme.colors.text,
+        minHeight: 100,
+      },
+      actionButton: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingVertical: spacing.md,
+        borderRadius: borderRadius.md,
+        marginBottom: spacing.md,
+      },
+      actionButtonText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: '700',
+        marginLeft: spacing.sm,
+      },
+      rulesSection: {
+        marginBottom: spacing.xl,
+      },
+      rulesSectionTitle: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: theme.colors.text,
+        marginBottom: spacing.md,
+        paddingBottom: spacing.sm,
+        borderBottomWidth: 2,
+        borderBottomColor: theme.colors.primary,
+      },
+      ruleItem: {
+        flexDirection: 'row',
+        marginBottom: spacing.md,
+        paddingVertical: spacing.sm,
+      },
+      ruleBullet: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: theme.colors.primary,
+        marginRight: spacing.md,
+        marginTop: 6,
+        flexShrink: 0,
+      },
+      ruleItemText: {
+        flex: 1,
+        fontSize: 14,
+        color: theme.colors.text,
+        lineHeight: 22,
+      },
+      levelCard: {
+        flexDirection: 'row',
+        backgroundColor: theme.colors.background,
+        borderRadius: borderRadius.lg,
+        padding: spacing.md,
+        marginBottom: spacing.md,
+        alignItems: 'center',
+        borderLeftWidth: 4,
+        borderLeftColor: theme.colors.primary,
+      },
+      levelIcon: {
+        width: 50,
+        height: 50,
+        borderRadius: 25,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: spacing.md,
+        flexShrink: 0,
+      },
+      levelIconText: {
+        fontSize: 24,
+      },
+      levelInfo: {
+        flex: 1,
+      },
+      levelName: {
+        fontSize: 15,
+        fontWeight: '700',
+        color: theme.colors.text,
+        marginBottom: spacing.xs,
+      },
+      levelRange: {
+        fontSize: 12,
+        color: theme.colors.textSecondary,
+        marginBottom: spacing.xs,
+        fontWeight: '500',
+      },
+      levelBenefit: {
+        fontSize: 13,
+        color: theme.colors.primary,
+        fontWeight: '600',
+      },
+    });
+  }, [theme]);
+
+  const handleNotificationsToggle = (value) => {
+    setNotifications(value);
+    // Плавная анимация переключателя
+    Animated.timing(notificationsAnim, {
+      toValue: value ? 1 : 0,
+      duration: 500,
+      useNativeDriver: false,
+    }).start();
+    
     if (value) {
       Alert.alert(
-        `Отключить ${platform}`,
-        `Вы уверены, что хотите отключить получение уведомлений в ${platform}?`,
-        [
-          { text: 'Отмена', onPress: () => {} },
-          { text: 'Отключить', onPress: () => setter(false) },
-        ]
+        'Push-уведомления включены',
+        'Вы будете получать уведомления о бронированиях, промоакциях и других важных событиях.',
+        [{ text: 'OK', onPress: () => {} }]
       );
     } else {
       Alert.alert(
-        `Подключить ${platform}`,
-        `Чтобы подключить ${platform}, пожалуйста, отсканируйте QR-код в приложении.`,
-        [{ text: 'OK', onPress: () => setter(true) }]
+        'Push-уведомления отключены',
+        'Вы не будете получать push-уведомления до включения этой опции.',
+        [{ text: 'OK', onPress: () => {} }]
       );
     }
   };
 
-  const renderSettingItem = (icon, title, description, value, onToggle, isSocial = false) => (
-    <View style={styles.settingItem}>
-      <View style={styles.settingLeft}>
-        <View style={[
-          styles.settingIcon, 
-          { backgroundColor: isSocial ? colors.accent : colors.primary }
-        ]}>
-          <MaterialIcons name={icon} size={20} color="#fff" />
+  const renderSettingItem = (icon, title, description, value, onToggle, isSocial = false, animValue = null) => {
+    const translateX = animValue ? animValue.interpolate({
+      inputRange: [0, 1],
+      outputRange: [2, 24],
+    }) : (value ? 24 : 2);
+
+    return (
+      <View style={dynamicStyles.settingItem}>
+        <View style={dynamicStyles.settingLeft}>
+          <View style={[
+            dynamicStyles.settingIcon, 
+            { backgroundColor: isSocial ? theme.colors.accent : theme.colors.primary }
+          ]}>
+            <MaterialIcons name={icon} size={20} color="#fff" />
+          </View>
+          <View style={dynamicStyles.settingText}>
+            <Text style={[dynamicStyles.settingTitle, { color: theme.colors.text }]}>{title}</Text>
+            <Text style={[dynamicStyles.settingDesc, { color: theme.colors.textSecondary }]}>{description}</Text>
+          </View>
         </View>
-        <View style={styles.settingText}>
-          <Text style={styles.settingTitle}>{title}</Text>
-          <Text style={styles.settingDesc}>{description}</Text>
-        </View>
+        {onToggle && (
+          <TouchableOpacity 
+            style={[
+              dynamicStyles.toggleSwitch,
+              { backgroundColor: value ? theme.colors.primary : theme.colors.border }
+            ]}
+            onPress={() => onToggle(!value)}
+            activeOpacity={0.8}
+          >
+            <Animated.View 
+              style={[
+                dynamicStyles.toggleThumb,
+                { 
+                  transform: [{ translateX }],
+                  backgroundColor: '#fff'
+                }
+              ]}
+            >
+              <MaterialIcons 
+                name={value ? 'check' : 'close'} 
+                size={14} 
+                color={value ? theme.colors.primary : theme.colors.border}
+              />
+            </Animated.View>
+          </TouchableOpacity>
+        )}
+        {!onToggle && <MaterialIcons name="chevron-right" size={24} color={theme.colors.textSecondary} />}
       </View>
-      {onToggle && (
-        <Switch
-          value={value}
-          onValueChange={onToggle}
-          trackColor={{ false: colors.border, true: colors.primary }}
-          thumbColor="#fff"
-        />
-      )}
-      {!onToggle && <MaterialIcons name="chevron-right" size={24} color={colors.textSecondary} />}
-    </View>
-  );
+    );
+  };
 
   return (
-    <ScrollView contentContainerStyle={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <View style={{ flex: 1 }}>
+      <Animated.ScrollView 
+        contentContainerStyle={[
+          dynamicStyles.container, 
+          {
+            backgroundColor: bgColorAnim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [lightTheme.colors.background, darkTheme.colors.background],
+            }),
+          }
+        ]}
+      >
       {/* User Info */}
-      <View style={[styles.userCard, { backgroundColor: theme.colors.cardBg }]}>
+      <Animated.View style={[dynamicStyles.userCard, { 
+        backgroundColor: cardColorAnim.interpolate({
+          inputRange: [0, 1],
+          outputRange: [lightTheme.colors.cardBg, darkTheme.colors.cardBg],
+        })
+      }]}>
         <View
           style={[
-            styles.userAvatar,
+            dynamicStyles.userAvatar,
             { backgroundColor: isAdmin ? theme.colors.secondary : theme.colors.primary },
           ]}
         >
           <MaterialIcons name={isAdmin ? 'admin-panel-settings' : 'person'} size={32} color="#fff" />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.userName, { color: theme.colors.text }]}>{user?.name || user?.displayName || 'Пользователь'}</Text>
-          <Text style={[styles.userRole, { color: theme.colors.textSecondary }]}>{isAdmin ? '👤 Администратор' : '👥 Пользователь'}</Text>
-          <Text style={[styles.userEmail, { color: theme.colors.textSecondary, fontSize: 12, marginTop: 4 }]}>{user?.email}</Text>
+          <Text style={[dynamicStyles.userName, { color: theme.colors.text }]}>{user?.name || user?.displayName || 'Пользователь'}</Text>
+          <Text style={[dynamicStyles.userRole, { color: theme.colors.textSecondary }]}>{isAdmin ? '👤 Администратор' : '👥 Пользователь'}</Text>
+          <Text style={[dynamicStyles.userEmail, { color: theme.colors.textSecondary, fontSize: 12, marginTop: 4 }]}>{user?.email}</Text>
         </View>
-      </View>
+      </Animated.View>
 
       {/* Уведомления */}
-      <View style={[styles.section, { backgroundColor: theme.colors.cardBg }]}>
-        <Text style={[styles.sectionTitle, { color: theme.colors.textSecondary }]}>Уведомления</Text>
+      <Animated.View style={[dynamicStyles.section, { 
+        backgroundColor: cardColorAnim.interpolate({
+          inputRange: [0, 1],
+          outputRange: [lightTheme.colors.cardBg, darkTheme.colors.cardBg],
+        })
+      }]}>
+        <Text style={[dynamicStyles.sectionTitle, { color: theme.colors.textSecondary }]}>Уведомления</Text>
         {renderSettingItem(
           'notifications-active',
           'Push-уведомления',
           'Получайте уведомления о событиях',
           notifications,
-          setNotifications
+          handleNotificationsToggle,
+          false,
+          notificationsAnim
         )}
-        {renderSettingItem(
-          'email',
-          'Email-рассылка',
-          'Получайте новости на почту',
-          email,
-          setEmail
-        )}
-      </View>
+        <TouchableOpacity
+          style={dynamicStyles.settingItem}
+          onPress={() => setNotificationCenterVisible(true)}
+        >
+          <View style={dynamicStyles.settingLeft}>
+            <View style={[dynamicStyles.settingIcon, { backgroundColor: theme.colors.primary }]}>
+              <MaterialIcons name="notifications" size={20} color="#fff" />
+            </View>
+            <View style={dynamicStyles.settingText}>
+              <Text style={[dynamicStyles.settingTitle, { color: theme.colors.text }]}>Центр уведомлений</Text>
+              <Text style={[dynamicStyles.settingDesc, { color: theme.colors.textSecondary }]}>Просмотрите все уведомления</Text>
+            </View>
+          </View>
+          <MaterialIcons name="chevron-right" size={24} color={theme.colors.textSecondary} />
+        </TouchableOpacity>
+      </Animated.View>
 
       {/* Тема оформления */}
-      <View style={[styles.section, { backgroundColor: theme.colors.cardBg }]}>
-        <Text style={[styles.sectionTitle, { color: theme.colors.textSecondary }]}>Оформление</Text>
+      <Animated.View style={[dynamicStyles.section, { 
+        backgroundColor: cardColorAnim.interpolate({
+          inputRange: [0, 1],
+          outputRange: [lightTheme.colors.cardBg, darkTheme.colors.cardBg],
+        })
+      }]}>
+        <Text style={[dynamicStyles.sectionTitle, { color: theme.colors.textSecondary }]}>Оформление</Text>
         {renderSettingItem(
           isDark ? 'brightness-4' : 'brightness-7',
           'Тёмный режим',
           isDark ? 'Включён' : 'Выключен',
           isDark,
-          toggleTheme
+          handleThemeToggle,
+          false,
+          darkModeAnim
         )}
-      </View>
-
-      {/* Социальные сети */}
-      <FadeInCard delay={200} style={{ paddingHorizontal: spacing.md, marginBottom: spacing.lg }}>
-        <View style={styles.section}>
-          <TouchableOpacity
-            style={styles.settingItem}
-            onPress={() => setSocialsExpanded(!socialsExpanded)}
-          >
-            <View style={styles.settingLeft}>
-              <View style={[styles.settingIcon, { backgroundColor: colors.accent }]}>
-                <MaterialIcons name="link" size={20} color="#fff" />
-              </View>
-              <View style={styles.settingText}>
-                <Text style={styles.settingTitle}>Подключить соц сети</Text>
-                <Text style={styles.settingDesc}>Получайте уведомления удобным вам способом</Text>
-              </View>
-            </View>
-            <MaterialIcons 
-              name={socialsExpanded ? 'expand-less' : 'expand-more'} 
-              size={24} 
-              color={colors.textSecondary} 
-            />
-          </TouchableOpacity>
-
-          {socialsExpanded && (
-            <>
-              {renderSettingItem(
-                'logo-instagram',
-                'Instagram',
-                instagram ? 'Подключено' : 'Нажмите для подключения',
-                instagram,
-                () => handleSocialConnect('Instagram', instagram, setInstagram),
-                true
-              )}
-
-              {renderSettingItem(
-                'message',
-                'Viber',
-                viber ? 'Подключено' : 'Нажмите для подключения',
-                viber,
-                () => handleSocialConnect('Viber', viber, setViber),
-                true
-              )}
-
-              {renderSettingItem(
-                'whatsapp',
-                'WhatsApp',
-                whatsapp ? 'Подключено' : 'Нажмите для подключения',
-                whatsapp,
-                () => handleSocialConnect('WhatsApp', whatsapp, setWhatsapp),
-                true
-              )}
-            </>
-          )}
-        </View>
-      </FadeInCard>
+      </Animated.View>
 
       {/* Правила программы */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Программа лояльности</Text>
+      <Animated.View style={[dynamicStyles.section, { 
+        backgroundColor: cardColorAnim.interpolate({
+          inputRange: [0, 1],
+          outputRange: [lightTheme.colors.cardBg, darkTheme.colors.cardBg],
+        })
+      }]}>
+        <Text style={dynamicStyles.sectionTitle}>Программа лояльности</Text>
         <TouchableOpacity 
-          style={styles.settingItem}
+          style={dynamicStyles.settingItem}
           onPress={() => setRulesModalVisible(true)}
         >
-          <View style={styles.settingLeft}>
-            <View style={[styles.settingIcon, { backgroundColor: colors.accent }]}>
+          <View style={dynamicStyles.settingLeft}>
+            <View style={[dynamicStyles.settingIcon, { backgroundColor: theme.colors.accent }]}>
               <MaterialIcons name="book" size={20} color="#fff" />
             </View>
-            <View style={styles.settingText}>
-              <Text style={styles.settingTitle}>Правила программы</Text>
-              <Text style={styles.settingDesc}>Как работает наша программа</Text>
+            <View style={dynamicStyles.settingText}>
+              <Text style={[dynamicStyles.settingTitle, { color: theme.colors.text }]}>Правила программы</Text>
+              <Text style={[dynamicStyles.settingDesc, { color: theme.colors.textSecondary }]}>Как работает наша программа</Text>
             </View>
           </View>
-          <MaterialIcons name="chevron-right" size={24} color={colors.textSecondary} />
+          <MaterialIcons name="chevron-right" size={24} color={theme.colors.textSecondary} />
         </TouchableOpacity>
 
         <TouchableOpacity 
-          style={styles.settingItem}
+          style={dynamicStyles.settingItem}
           onPress={() => setPlatformInfoModalVisible(true)}
         >
-          <View style={styles.settingLeft}>
-            <View style={[styles.settingIcon, { backgroundColor: colors.success }]}>
+          <View style={dynamicStyles.settingLeft}>
+            <View style={[dynamicStyles.settingIcon, { backgroundColor: theme.colors.success }]}>
               <MaterialIcons name="info" size={20} color="#fff" />
             </View>
-            <View style={styles.settingText}>
-              <Text style={styles.settingTitle}>О платформе</Text>
-              <Text style={styles.settingDesc}>Информация и версия</Text>
+            <View style={dynamicStyles.settingText}>
+              <Text style={[dynamicStyles.settingTitle, { color: theme.colors.text }]}>О платформе</Text>
+              <Text style={[dynamicStyles.settingDesc, { color: theme.colors.textSecondary }]}>Информация и версия</Text>
             </View>
           </View>
-          <MaterialIcons name="chevron-right" size={24} color={colors.textSecondary} />
+          <MaterialIcons name="chevron-right" size={24} color={theme.colors.textSecondary} />
         </TouchableOpacity>
-      </View>
+      </Animated.View>
 
       {/* Помощь */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Помощь</Text>
-        <TouchableOpacity style={styles.settingItem}>
-          <View style={styles.settingLeft}>
-            <View style={[styles.settingIcon, { backgroundColor: colors.secondary }]}>
+      <Animated.View style={[dynamicStyles.section, { 
+        backgroundColor: cardColorAnim.interpolate({
+          inputRange: [0, 1],
+          outputRange: [lightTheme.colors.cardBg, darkTheme.colors.cardBg],
+        })
+      }]}>
+        <Text style={[dynamicStyles.sectionTitle, { color: theme.colors.textSecondary }]}>Помощь</Text>
+        <TouchableOpacity style={dynamicStyles.settingItem}>
+          <View style={dynamicStyles.settingLeft}>
+            <View style={[dynamicStyles.settingIcon, { backgroundColor: theme.colors.secondary }]}>
               <MaterialIcons name="help" size={20} color="#fff" />
             </View>
-            <View style={styles.settingText}>
-              <Text style={styles.settingTitle}>FAQ</Text>
-              <Text style={styles.settingDesc}>Часто задаваемые вопросы</Text>
+            <View style={dynamicStyles.settingText}>
+              <Text style={[dynamicStyles.settingTitle, { color: theme.colors.text }]}>FAQ</Text>
+              <Text style={[dynamicStyles.settingDesc, { color: theme.colors.textSecondary }]}>Часто задаваемые вопросы</Text>
             </View>
           </View>
-          <MaterialIcons name="chevron-right" size={24} color={colors.textSecondary} />
+          <MaterialIcons name="chevron-right" size={24} color={theme.colors.textSecondary} />
         </TouchableOpacity>
 
         <TouchableOpacity 
-          style={styles.settingItem}
+          style={dynamicStyles.settingItem}
           onPress={() => Alert.alert(
             '📱 Свяжитесь с нами',
             'Выберите удобный способ связи:',
@@ -254,77 +621,78 @@ export default function SettingsScreen() {
             ]
           )}
         >
-          <View style={styles.settingLeft}>
-            <View style={[styles.settingIcon, { backgroundColor: '#E67E22' }]}>
+          <View style={dynamicStyles.settingLeft}>
+            <View style={[dynamicStyles.settingIcon, { backgroundColor: '#E67E22' }]}>
               <MaterialIcons name="mail" size={20} color="#fff" />
             </View>
-            <View style={styles.settingText}>
-              <Text style={styles.settingTitle}>Связаться с нами</Text>
-              <Text style={styles.settingDesc}>Выберите удобный способ</Text>
+            <View style={dynamicStyles.settingText}>
+              <Text style={[dynamicStyles.settingTitle, { color: theme.colors.text }]}>Связаться с нами</Text>
+              <Text style={[dynamicStyles.settingDesc, { color: theme.colors.textSecondary }]}>Выберите удобный способ</Text>
             </View>
           </View>
-          <MaterialIcons name="chevron-right" size={24} color={colors.textSecondary} />
+          <MaterialIcons name="chevron-right" size={24} color={theme.colors.textSecondary} />
         </TouchableOpacity>
-      </View>
+      </Animated.View>
 
       {/* Обзор правил */}
-      <View style={styles.rulesCard}>
-        <Text style={styles.rulesTitle}>📋 Основные правила</Text>
-        <Text style={styles.rulesText}>
+      <Animated.View style={[dynamicStyles.rulesCard, { 
+        backgroundColor: cardColorAnim.interpolate({
+          inputRange: [0, 1],
+          outputRange: [lightTheme.colors.cardBg, darkTheme.colors.cardBg],
+        })
+      }]}>
+        <Text style={[dynamicStyles.rulesTitle, { color: theme.colors.text }]}>📋 Основные правила</Text>
+        <Text style={[dynamicStyles.rulesText, { color: theme.colors.textSecondary }]}>
           • Каждая покупка дает 1% кешбека{'\n'}
           • Бонусы можно использовать как оплату{'\n'}
           • Статус зависит от накопленной суммы{'\n'}
           • Участие в аукционах автоматическое{'\n'}
           • Льготы зависят от вашего уровня
         </Text>
-      </View>
+      </Animated.View>
 
       {/* Logout Button */}
-      <TouchableOpacity style={styles.logoutButton} onPress={() => logout()}>
+      <TouchableOpacity style={dynamicStyles.logoutButton} onPress={() => logout()}>
         <MaterialIcons name="logout" size={20} color="#fff" />
-        <Text style={styles.logoutButtonText}>Выход</Text>
+        <Text style={dynamicStyles.logoutButtonText}>Выход</Text>
       </TouchableOpacity>
 
       {/* Platform Info Modal (Admin Only) */}
       {isAdmin && (
         <Modal visible={platformInfoModalVisible} animationType="slide" transparent>
-          <View style={styles.modalContainer}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>О платформе</Text>
+          <View style={dynamicStyles.modalContainer}>
+            <View style={dynamicStyles.modalContent}>
+              <View style={dynamicStyles.modalHeader}>
+                <Text style={dynamicStyles.modalTitle}>О платформе</Text>
                 <TouchableOpacity onPress={() => setPlatformInfoModalVisible(false)}>
-                  <MaterialIcons name="close" size={24} color={colors.text} />
+                  <MaterialIcons name="close" size={24} color={theme.colors.text} />
                 </TouchableOpacity>
               </View>
 
-              <ScrollView style={styles.modalBody}>
+              <ScrollView style={dynamicStyles.modalBody}>
                 {!isEditingPlatformInfo ? (
                   <>
-                    <View style={styles.platformInfoCard}>
-                      <MaterialIcons name="info" size={40} color={colors.primary} />
-                      <Text style={styles.platformInfoText}>{platformInfo}</Text>
-                    </View>
                     <TouchableOpacity 
-                      style={[styles.actionButton, { backgroundColor: colors.primary }]}
+                      style={[dynamicStyles.actionButton, { backgroundColor: theme.colors.primary }]}
                       onPress={() => setIsEditingPlatformInfo(true)}
                     >
                       <MaterialIcons name="edit" size={20} color="#fff" />
-                      <Text style={styles.actionButtonText}>Редактировать (только админ)</Text>
+                      <Text style={dynamicStyles.actionButtonText}>Редактировать (только админ)</Text>
                     </TouchableOpacity>
                   </>
                 ) : (
                   <>
-                    <Text style={styles.sectionTitle}>Отредактируйте информацию:</Text>
+                    <Text style={[dynamicStyles.sectionTitle, { color: theme.colors.text }]}>Отредактируйте информацию:</Text>
                     <TextInput 
-                      style={styles.platformEditInput}
+                      style={[dynamicStyles.platformEditInput, { color: theme.colors.text, backgroundColor: theme.colors.cardBg, borderColor: theme.colors.border }]}
                       multiline
                       value={platformInfo}
                       onChangeText={setPlatformInfo}
                       placeholder="Введите информацию о платформе"
-                      placeholderTextColor={colors.textSecondary}
+                      placeholderTextColor={theme.colors.textSecondary}
                     />
                     <TouchableOpacity 
-                      style={[styles.actionButton, { backgroundColor: colors.success }]}
+                      style={[dynamicStyles.actionButton, { backgroundColor: theme.colors.success }]}
                       onPress={() => setIsEditingPlatformInfo(false)}
                     >
                       <MaterialIcons name="check" size={20} color="#fff" />
@@ -340,363 +708,136 @@ export default function SettingsScreen() {
 
       {/* Rules Modal */}
       <Modal visible={rulesModalVisible} animationType="slide" transparent>
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
+        <View style={[dynamicStyles.modalContainer, { backgroundColor: theme.colors.background }]}>
+          <View style={[dynamicStyles.modalContent, { backgroundColor: theme.colors.cardBg }]}>
             {/* Header */}
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Правила программы</Text>
+            <View style={dynamicStyles.modalHeader}>
+              <Text style={[dynamicStyles.modalTitle, { color: theme.colors.text }]}>Правила программы</Text>
               <TouchableOpacity onPress={() => setRulesModalVisible(false)}>
-                <MaterialIcons name="close" size={24} color={colors.text} />
+                <MaterialIcons name="close" size={24} color={theme.colors.text} />
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalBody}>
+            <ScrollView style={dynamicStyles.modalBody}>
               {/* Main Rules */}
-              <View style={styles.rulesSection}>
-                <Text style={styles.rulesSectionTitle}>📋 Основные правила</Text>
-                <View style={styles.ruleItem}>
-                  <View style={styles.ruleBullet} />
-                  <Text style={styles.ruleItemText}>Каждая покупка дает 1% кешбека на счет программы</Text>
+              <View style={dynamicStyles.rulesSection}>
+                <Text style={[dynamicStyles.rulesSectionTitle, { color: theme.colors.text }]}>📋 Основные правила</Text>
+                <View style={dynamicStyles.ruleItem}>
+                  <View style={[dynamicStyles.ruleBullet, { backgroundColor: theme.colors.primary }]} />
+                  <Text style={[dynamicStyles.ruleItemText, { color: theme.colors.text }]}>Каждая покупка дает 1% кешбека на счет программы</Text>
                 </View>
-                <View style={styles.ruleItem}>
-                  <View style={styles.ruleBullet} />
-                  <Text style={styles.ruleItemText}>Накопленные бонусы можно использовать как оплату</Text>
+                <View style={dynamicStyles.ruleItem}>
+                  <View style={dynamicStyles.ruleBullet} />
+                  <Text style={dynamicStyles.ruleItemText}>Накопленные бонусы можно использовать как оплату</Text>
                 </View>
-                <View style={styles.ruleItem}>
-                  <View style={styles.ruleBullet} />
-                  <Text style={styles.ruleItemText}>Статус участника зависит от накопленной суммы</Text>
+                <View style={dynamicStyles.ruleItem}>
+                  <View style={dynamicStyles.ruleBullet} />
+                  <Text style={dynamicStyles.ruleItemText}>Статус участника зависит от накопленной суммы</Text>
                 </View>
               </View>
 
               {/* Levels */}
-              <View style={styles.rulesSection}>
-                <Text style={styles.rulesSectionTitle}>🏅 Уровни программы</Text>
+              <View style={dynamicStyles.rulesSection}>
+                <Text style={dynamicStyles.rulesSectionTitle}>🏅 Уровни программы</Text>
                 
-                <View style={styles.levelCard}>
-                  <View style={[styles.levelIcon, { backgroundColor: '#CD7F32' }]}>
-                    <Text style={styles.levelIconText}>🥉</Text>
+                <View style={dynamicStyles.levelCard}>
+                  <View style={[dynamicStyles.levelIcon, { backgroundColor: '#CD7F32' }]}>
+                    <Text style={dynamicStyles.levelIconText}>🥉</Text>
                   </View>
-                  <View style={styles.levelInfo}>
-                    <Text style={styles.levelName}>Bronze</Text>
-                    <Text style={styles.levelRange}>0 - 10,000 ₽</Text>
-                    <Text style={styles.levelBenefit}>+0% дополнительный кешбек</Text>
-                  </View>
-                </View>
-
-                <View style={styles.levelCard}>
-                  <View style={[styles.levelIcon, { backgroundColor: '#C0C0C0' }]}>
-                    <Text style={styles.levelIconText}>🥈</Text>
-                  </View>
-                  <View style={styles.levelInfo}>
-                    <Text style={styles.levelName}>Silver</Text>
-                    <Text style={styles.levelRange}>10,000 - 50,000 ₽</Text>
-                    <Text style={styles.levelBenefit}>+0.5% дополнительный кешбек</Text>
+                  <View style={dynamicStyles.levelInfo}>
+                    <Text style={dynamicStyles.levelName}>Bronze</Text>
+                    <Text style={dynamicStyles.levelRange}>0 - 10,000 PRB</Text>
+                    <Text style={dynamicStyles.levelBenefit}>+0% дополнительный кешбек</Text>
                   </View>
                 </View>
 
-                <View style={styles.levelCard}>
-                  <View style={[styles.levelIcon, { backgroundColor: '#FFD700' }]}>
-                    <Text style={styles.levelIconText}>🥇</Text>
+                <View style={dynamicStyles.levelCard}>
+                  <View style={[dynamicStyles.levelIcon, { backgroundColor: '#C0C0C0' }]}>
+                    <Text style={dynamicStyles.levelIconText}>🥈</Text>
                   </View>
-                  <View style={styles.levelInfo}>
-                    <Text style={styles.levelName}>Gold</Text>
-                    <Text style={styles.levelRange}>50,000 - 200,000 ₽</Text>
-                    <Text style={styles.levelBenefit}>+1% дополнительный кешбек</Text>
+                  <View style={dynamicStyles.levelInfo}>
+                    <Text style={dynamicStyles.levelName}>Silver</Text>
+                    <Text style={dynamicStyles.levelRange}>10,000 - 50,000 PRB</Text>
+                    <Text style={dynamicStyles.levelBenefit}>+0.5% дополнительный кешбек</Text>
                   </View>
                 </View>
 
-                <View style={styles.levelCard}>
-                  <View style={[styles.levelIcon, { backgroundColor: '#E5D4FF' }]}>
-                    <Text style={styles.levelIconText}>👑</Text>
+                <View style={dynamicStyles.levelCard}>
+                  <View style={[dynamicStyles.levelIcon, { backgroundColor: '#FFD700' }]}>
+                    <Text style={dynamicStyles.levelIconText}>🥇</Text>
                   </View>
-                  <View style={styles.levelInfo}>
-                    <Text style={styles.levelName}>Platinum</Text>
-                    <Text style={styles.levelRange}>200,000+ ₽</Text>
-                    <Text style={styles.levelBenefit}>+2% дополнительный кешбек</Text>
+                  <View style={dynamicStyles.levelInfo}>
+                    <Text style={dynamicStyles.levelName}>Gold</Text>
+                    <Text style={dynamicStyles.levelRange}>50,000 - 200,000 PRB</Text>
+                    <Text style={dynamicStyles.levelBenefit}>+1% дополнительный кешбек</Text>
+                  </View>
+                </View>
+
+                <View style={dynamicStyles.levelCard}>
+                  <View style={[dynamicStyles.levelIcon, { backgroundColor: '#E5D4FF' }]}>
+                    <Text style={dynamicStyles.levelIconText}>👑</Text>
+                  </View>
+                  <View style={dynamicStyles.levelInfo}>
+                    <Text style={dynamicStyles.levelName}>Platinum</Text>
+                    <Text style={dynamicStyles.levelRange}>200,000+ PRB</Text>
+                    <Text style={dynamicStyles.levelBenefit}>+2% дополнительный кешбек</Text>
                   </View>
                 </View>
               </View>
 
               {/* Bonuses */}
-              <View style={styles.rulesSection}>
-                <Text style={styles.rulesSectionTitle}>🎁 Бонусные возможности</Text>
-                <View style={styles.ruleItem}>
-                  <View style={styles.ruleBullet} />
-                  <Text style={styles.ruleItemText}>Участие в эксклюзивных аукционах</Text>
+              <View style={dynamicStyles.rulesSection}>
+                <Text style={dynamicStyles.rulesSectionTitle}>🎁 Бонусные возможности</Text>
+                <View style={dynamicStyles.ruleItem}>
+                  <View style={dynamicStyles.ruleBullet} />
+                  <Text style={dynamicStyles.ruleItemText}>Участие в эксклюзивных аукционах</Text>
                 </View>
-                <View style={styles.ruleItem}>
-                  <View style={styles.ruleBullet} />
-                  <Text style={styles.ruleItemText}>Ранний доступ к новым товарам</Text>
+                <View style={dynamicStyles.ruleItem}>
+                  <View style={dynamicStyles.ruleBullet} />
+                  <Text style={dynamicStyles.ruleItemText}>Ранний доступ к новым товарам</Text>
                 </View>
-                <View style={styles.ruleItem}>
-                  <View style={styles.ruleBullet} />
-                  <Text style={styles.ruleItemText}>Специальные предложения для платиниума</Text>
+                <View style={dynamicStyles.ruleItem}>
+                  <View style={dynamicStyles.ruleBullet} />
+                  <Text style={dynamicStyles.ruleItemText}>Специальные предложения для платиниума</Text>
                 </View>
-                <View style={styles.ruleItem}>
-                  <View style={styles.ruleBullet} />
-                  <Text style={styles.ruleItemText}>День рождения - дополнительный бонус</Text>
+                <View style={dynamicStyles.ruleItem}>
+                  <View style={dynamicStyles.ruleBullet} />
+                  <Text style={dynamicStyles.ruleItemText}>День рождения - дополнительный бонус</Text>
                 </View>
               </View>
 
               {/* Conditions */}
-              <View style={styles.rulesSection}>
-                <Text style={styles.rulesSectionTitle}>⚠️ Условия</Text>
-                <View style={styles.ruleItem}>
-                  <View style={styles.ruleBullet} />
-                  <Text style={styles.ruleItemText}>Кешбек не накапливается на возвраты</Text>
+              <View style={dynamicStyles.rulesSection}>
+                <Text style={dynamicStyles.rulesSectionTitle}>⚠️ Условия</Text>
+                <View style={dynamicStyles.ruleItem}>
+                  <View style={dynamicStyles.ruleBullet} />
+                  <Text style={dynamicStyles.ruleItemText}>Кешбек не накапливается на возвраты</Text>
                 </View>
-                <View style={styles.ruleItem}>
-                  <View style={styles.ruleBullet} />
-                  <Text style={styles.ruleItemText}>Статус уменьшается при отсутствии активности 12 месяцев</Text>
+                <View style={dynamicStyles.ruleItem}>
+                  <View style={dynamicStyles.ruleBullet} />
+                  <Text style={dynamicStyles.ruleItemText}>Статус уменьшается при отсутствии активности 12 месяцев</Text>
                 </View>
-                <View style={styles.ruleItem}>
-                  <View style={styles.ruleBullet} />
-                  <Text style={styles.ruleItemText}>Бонусы не переводятся другим пользователям</Text>
+                <View style={dynamicStyles.ruleItem}>
+                  <View style={dynamicStyles.ruleBullet} />
+                  <Text style={dynamicStyles.ruleItemText}>Бонусы не переводятся другим пользователям</Text>
                 </View>
               </View>
             </ScrollView>
           </View>
         </View>
       </Modal>
-    </ScrollView>
+
+      {/* Notification Center Modal */}
+      <Modal 
+        visible={notificationCenterVisible} 
+        animationType="slide" 
+        transparent={false}
+        onRequestClose={() => setNotificationCenterVisible(false)}
+      >
+        <NotificationCenter onClose={() => setNotificationCenterVisible(false)} />
+      </Modal>
+      </Animated.ScrollView>
+    </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    backgroundColor: colors.background,
-    paddingVertical: spacing.md,
-    flexGrow: 1,
-  },
-  userCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.cardBg,
-    marginHorizontal: spacing.md,
-    marginBottom: spacing.lg,
-    padding: spacing.lg,
-    borderRadius: borderRadius.lg,
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  userAvatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: spacing.md,
-  },
-  userName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  userRole: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
-  },
-  section: {
-    marginBottom: spacing.lg,
-    backgroundColor: colors.cardBg,
-    marginHorizontal: spacing.md,
-    borderRadius: borderRadius.lg,
-    overflow: 'hidden',
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.textSecondary,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
-    textTransform: 'uppercase',
-  },
-  settingItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  settingItem_last: {
-    borderBottomWidth: 0,
-  },
-  settingLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  settingIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: borderRadius.md,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: spacing.md,
-  },
-  settingText: {
-    flex: 1,
-  },
-  settingTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  settingDesc: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  rulesCard: {
-    marginHorizontal: spacing.md,
-    marginBottom: spacing.lg,
-    backgroundColor: colors.cardBg,
-    padding: spacing.md,
-    borderRadius: borderRadius.lg,
-    borderLeftWidth: 4,
-    borderLeftColor: colors.primary,
-  },
-  rulesTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: spacing.sm,
-  },
-  rulesText: {
-    fontSize: 13,
-    lineHeight: 20,
-    color: colors.textSecondary,
-  },
-  logoutButton: {
-    flexDirection: 'row',
-    backgroundColor: colors.danger,
-    marginHorizontal: spacing.md,
-    marginBottom: spacing.lg,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    borderRadius: borderRadius.lg,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: colors.danger,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  logoutButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '700',
-    marginLeft: spacing.sm,
-  },
-  // Modal styles
-  modalContainer: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: colors.cardBg,
-    borderTopLeftRadius: borderRadius.xl,
-    borderTopRightRadius: borderRadius.xl,
-    maxHeight: '90%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  modalBody: {
-    padding: spacing.md,
-  },
-  rulesSection: {
-    marginBottom: spacing.lg,
-  },
-  rulesSectionTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: spacing.md,
-  },
-  ruleItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: spacing.md,
-    gap: spacing.md,
-  },
-  ruleBullet: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.primary,
-    marginTop: 8,
-    flexShrink: 0,
-  },
-  ruleItemText: {
-    fontSize: 13,
-    color: colors.text,
-    lineHeight: 20,
-    flex: 1,
-  },
-  levelCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.background,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-  },
-  levelIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: spacing.md,
-    flexShrink: 0,
-  },
-  levelIconText: {
-    fontSize: 24,
-  },
-  levelInfo: {
-    flex: 1,
-  },
-  levelName: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  levelRange: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  levelBenefit: {
-    fontSize: 12,
-    color: colors.primary,
-    fontWeight: '600',
-    marginTop: 4,
-  },
-});
 
