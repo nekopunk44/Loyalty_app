@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 👥 GitHub Discussions
+    url: https://github.com/nekopunk44/Loyalty_app/discussions
+    about: Вопросы, идеи и обсуждение
+  - name: 📧 Email
+    url: mailto:vladbredihin4@gmail.com
+    about: Прямое общение с разработчиком
+  - name: 📚 Документация
+    url: https://github.com/nekopunk44/Loyalty_app/blob/main/README.md
+    about: Полная документация проекта
