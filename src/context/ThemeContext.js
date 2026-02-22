@@ -10,14 +10,17 @@ export const lightTheme = {
     primaryLight: '#FFB400',   // Светлый оранжевый
     secondary: '#004E89',      // Глубокий синий
     accent: '#F7931E',         // Золотой оранжевый
-    background: '#F8F9FA',     // Очень светлый серый
+    background: '#F8F9FA',     // Очень светлый серый (slate-50)
     cardBg: '#FFFFFF',         // Белый
-    text: '#1F2937',           // Почти чёрный
-    textSecondary: '#6B7280',  // Средний серый
+    text: '#1F2937',           // Почти чёрный (gray-800)
+    textSecondary: '#6B7280',  // Средний серый (gray-500)
     success: '#10B981',        // Зелёный
     danger: '#EF4444',         // Красный
-    border: '#E5E7EB',         // Светлая граница
-    shadow: '#00000020',       // Полупрозрачная тень
+    warning: '#F59E0B',        // Оранжевый
+    border: '#E5E7EB',         // Светлая граница (gray-200)
+    shadow: '#00000015',       // Полупрозрачная тень
+    disabled: '#D1D5DB',       // Отключённые элементы (gray-300)
+    overlay: '#FFFFFF99',      // Полупрозрачный оверлей
   },
 };
 
@@ -26,21 +29,25 @@ export const darkTheme = {
   colors: {
     primary: '#FF7D50',        // Немного светлее для тёмного фона
     primaryLight: '#FFC85F',   // Ярче
-    secondary: '#4A90E2',      // Светлее синий
+    secondary: '#5B9EFF',      // Светлее синий
     accent: '#FFB347',         // Светлый оранжевый
-    background: '#0F172A',     // Очень тёмный фон
-    cardBg: '#1E293B',         // Тёмная карточка
-    text: '#F1F5F9',           // Очень светлый текст
-    textSecondary: '#CBD5E1',  // Светлый вторичный текст
-    success: '#34D399',        // Яркий зелёный
+    background: '#0F172A',     // Очень тёмный фон (slate-900)
+    cardBg: '#1E293B',         // Тёмная карточка (slate-800)
+    text: '#F1F5F9',           // Очень светлый текст (slate-100)
+    textSecondary: '#94A3B8',  // Светлый вторичный текст (slate-400)
+    success: '#4ADE80',        // Яркий зелёный
     danger: '#F87171',         // Яркий красный
-    border: '#334155',         // Тёмная граница
-    shadow: '#00000050',       // Более видимая тень в тёмном режиме
+    warning: '#FBBF24',        // Жёлтый
+    border: '#334155',         // Тёмная граница (slate-700)
+    shadow: '#00000080',       // Более видимая тень в тёмном режиме
+    disabled: '#475569',       // Отключённые элементы (slate-600)
+    overlay: '#0F172A99',      // Полупрозрачный оверлей
   },
 };
 
 export const ThemeProvider = ({ children }) => {
   const [isDark, setIsDark] = useState(false);
+  const [isThemeLoaded, setIsThemeLoaded] = useState(false);
 
   // Load theme preference
   useEffect(() => {
@@ -49,9 +56,12 @@ export const ThemeProvider = ({ children }) => {
         const saved = await AsyncStorage.getItem('@theme_mode');
         if (saved) {
           setIsDark(saved === 'dark');
+          console.log('🎨 Theme loaded:', saved);
         }
       } catch (e) {
         console.error('Failed to load theme preference', e);
+      } finally {
+        setIsThemeLoaded(true);
       }
     })();
   }, []);
@@ -70,7 +80,7 @@ export const ThemeProvider = ({ children }) => {
   const currentTheme = isDark ? darkTheme : lightTheme;
 
   return (
-    <ThemeContext.Provider value={{ isDark, toggleTheme, theme: currentTheme }}>
+    <ThemeContext.Provider value={{ isDark, toggleTheme, theme: currentTheme, isThemeLoaded }}>
       {children}
     </ThemeContext.Provider>
   );

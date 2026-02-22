@@ -32,8 +32,10 @@ const mockProperties = [
 export default function AdminStats() {
   const [activeTab, setActiveTab] = useState('overview');
   const [selectedPeriod, setSelectedPeriod] = useState('month');
+  const [periodDropdownOpen, setPeriodDropdownOpen] = useState(false);
+  const [tabDropdownOpen, setTabDropdownOpen] = useState(false);
   const { stats, getDashboardStats, resetAnalytics } = useAnalytics();
-  const { isDark } = useTheme();
+  const { theme } = useTheme();
 
   const getMetricsForPeriod = () => {
     const metrics = {
@@ -49,7 +51,7 @@ export default function AdminStats() {
     { id: 'week', label: 'Неделя', icon: 'date-range' },
     { id: 'month', label: 'Месяц', icon: 'today' },
     { id: 'quarter', label: 'Квартал', icon: 'event-note' },
-    { id: 'year', label: 'Год', icon: 'calendar-month' },
+    { id: 'year', label: 'Год', icon: 'calendar' },
   ];
 
   const tabs = [
@@ -62,6 +64,71 @@ export default function AdminStats() {
 
   const currentMetrics = getMetricsForPeriod();
 
+  // Dropdown Menu Component
+  const DropdownMenu = ({ isOpen, onToggle, items, selectedId, onSelect, theme }) => (
+    <View style={{ zIndex: 100 }}>
+      <TouchableOpacity
+        style={[
+          styles.dropdownButton,
+          { 
+            backgroundColor: theme.colors.cardBg,
+            borderColor: theme.colors.border
+          }
+        ]}
+        onPress={onToggle}
+      >
+        <Text style={[styles.dropdownButtonText, { color: theme.colors.text }]}>
+          {items.find(item => item.id === selectedId)?.label}
+        </Text>
+        <MaterialIcons 
+          name={isOpen ? 'expand-less' : 'expand-more'} 
+          size={20} 
+          color={theme.colors.text}
+        />
+      </TouchableOpacity>
+      
+      {isOpen && (
+        <View 
+          style={[
+            styles.dropdownMenu,
+            { backgroundColor: theme.colors.cardBg, borderColor: theme.colors.border },
+          ]}
+        >
+          {items.map((item, index) => (
+            <TouchableOpacity
+              key={item.id}
+              style={[
+                styles.dropdownItem,
+                selectedId === item.id && { backgroundColor: theme.colors.background },
+                index !== items.length - 1 && { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
+              ]}
+              onPress={() => {
+                onSelect(item.id);
+                onToggle();
+              }}
+            >
+              {item.icon && (
+                <MaterialIcons 
+                  name={item.icon} 
+                  size={16} 
+                  color={selectedId === item.id ? theme.colors.primary : theme.colors.text}
+                  style={{ marginRight: spacing.sm }}
+                />
+              )}
+              <Text style={[
+                styles.dropdownItemText,
+                { color: selectedId === item.id ? theme.colors.primary : theme.colors.text },
+                selectedId === item.id && { fontWeight: '600' }
+              ]}>
+                {item.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+
   const getTierColor = (status) => {
     switch (status) {
       case 'Platinum':
@@ -73,12 +140,12 @@ export default function AdminStats() {
       case 'Bronze':
         return '#CD7F32';
       default:
-        return colors.primary;
+        return theme.colors.primary;
     }
   };
 
   const renderUserItem = ({ item }) => (
-    <View style={styles.userCard}>
+    <View style={[styles.userCard, { backgroundColor: theme.colors.cardBg }]}>
       <View style={styles.userInfo}>
         <View
           style={[
@@ -89,135 +156,145 @@ export default function AdminStats() {
           <Text style={styles.avatarText}>{item.name.charAt(0)}</Text>
         </View>
         <View style={styles.userDetails}>
-          <Text style={styles.userName}>{item.name}</Text>
-          <Text style={styles.userStatus}>{item.status}</Text>
+          <Text style={[styles.userName, { color: theme.colors.text }]}>{item.name}</Text>
+          <Text style={[styles.userStatus, { color: theme.colors.textSecondary }]}>{item.status}</Text>
         </View>
       </View>
       <View style={styles.userStats}>
         <View style={styles.userStatItem}>
-          <MaterialIcons name="shopping-cart" size={16} color={colors.primary} />
-          <Text style={styles.userStatText}>{item.purchases}</Text>
+          <MaterialIcons name="shopping-cart" size={16} color={theme.colors.primary} />
+          <Text style={[styles.userStatText, { color: theme.colors.text }]}>{item.purchases}</Text>
         </View>
         <View style={styles.userStatItem}>
-          <MaterialIcons name="attach-money" size={16} color={colors.accent} />
-          <Text style={styles.userStatText}>₽ {item.spent}</Text>
+          <MaterialIcons name="attach-money" size={16} color={theme.colors.accent} />
+          <Text style={[styles.userStatText, { color: theme.colors.text }]}>PRB {item.spent}</Text>
         </View>
       </View>
     </View>
   );
 
   const renderPropertyItem = ({ item }) => (
-    <View style={styles.propertyCard}>
+    <View style={[styles.propertyCard, { backgroundColor: theme.colors.cardBg }]}>
       <View style={styles.propertyInfo}>
-        <View style={[styles.propertyIcon, { backgroundColor: colors.primary }]}>
+        <View style={[styles.propertyIcon, { backgroundColor: theme.colors.primary }]}>
           <MaterialIcons name="location-city" size={20} color="#fff" />
         </View>
         <View style={styles.propertyDetails}>
-          <Text style={styles.propertyName}>{item.name}</Text>
+          <Text style={[styles.propertyName, { color: theme.colors.text }]}>{item.name}</Text>
           <View style={styles.propertyStats}>
-            <Text style={styles.propertyStat}>👁 {item.views}</Text>
-            <Text style={styles.propertyStat}>📅 {item.bookings}</Text>
+            <Text style={[styles.propertyStat, { color: theme.colors.textSecondary }]}>👁 {item.views}</Text>
+            <Text style={[styles.propertyStat, { color: theme.colors.textSecondary }]}>📅 {item.bookings}</Text>
           </View>
         </View>
       </View>
-      <Text style={styles.propertyRevenue}>₽{(item.revenue / 1000).toFixed(0)}K</Text>
+      <Text style={[styles.propertyRevenue, { color: theme.colors.primary }]}>PRB{(item.revenue / 1000).toFixed(0)}K</Text>
     </View>
   );
 
   const renderOverviewTab = () => (
     <>
-      <View style={styles.kpiSection}>
-        <Text style={styles.sectionTitle}>Ключевые показатели</Text>
+      <View 
+        style={[
+          styles.kpiSection,
+          { backgroundColor: theme.colors.cardBg }
+        ]}
+      >
+        <Text style={[styles.sectionTitle, { color: theme.colors.text, backgroundColor: theme.colors.background }]}>Ключевые показатели</Text>
         <View style={styles.kpiGrid}>
           <View style={styles.kpiCard}>
-            <View style={[styles.kpiIcon, { backgroundColor: colors.primary }]}>
+            <View style={[styles.kpiIcon, { backgroundColor: theme.colors.primary }]}>
               <MaterialIcons name="people" size={24} color="#fff" />
             </View>
-            <Text style={styles.kpiValue}>{currentMetrics.users.toLocaleString('ru-RU')}</Text>
-            <Text style={styles.kpiLabel}>Пользователей</Text>
+            <Text style={[styles.kpiValue, { color: theme.colors.text }]}>{currentMetrics.users.toLocaleString('ru-RU')}</Text>
+            <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>Пользователей</Text>
           </View>
 
           <View style={styles.kpiCard}>
-            <View style={[styles.kpiIcon, { backgroundColor: colors.accent }]}>
+            <View style={[styles.kpiIcon, { backgroundColor: theme.colors.accent }]}>
               <MaterialIcons name="shopping-bag" size={24} color="#fff" />
             </View>
-            <Text style={styles.kpiValue}>{currentMetrics.purchases.toLocaleString('ru-RU')}</Text>
-            <Text style={styles.kpiLabel}>Бронирований</Text>
+            <Text style={[styles.kpiValue, { color: theme.colors.text }]}>{currentMetrics.purchases.toLocaleString('ru-RU')}</Text>
+            <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>Бронирований</Text>
           </View>
 
           <View style={styles.kpiCard}>
-            <View style={[styles.kpiIcon, { backgroundColor: colors.success }]}>
+            <View style={[styles.kpiIcon, { backgroundColor: theme.colors.success }]}>
               <MaterialIcons name="trending-up" size={24} color="#fff" />
             </View>
-            <Text style={styles.kpiValue}>₽{(currentMetrics.revenue / 1000).toFixed(0)}K</Text>
-            <Text style={styles.kpiLabel}>Оборот</Text>
+            <Text style={[styles.kpiValue, { color: theme.colors.text }]}>PRB{(currentMetrics.revenue / 1000).toFixed(0)}K</Text>
+            <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>Оборот</Text>
           </View>
 
           <View style={styles.kpiCard}>
-            <View style={[styles.kpiIcon, { backgroundColor: colors.secondary }]}>
+            <View style={[styles.kpiIcon, { backgroundColor: theme.colors.secondary }]}>
               <MaterialIcons name="star" size={24} color="#fff" />
             </View>
-            <Text style={styles.kpiValue}>{currentMetrics.premium}</Text>
-            <Text style={styles.kpiLabel}>Премиум</Text>
+            <Text style={[styles.kpiValue, { color: theme.colors.text }]}>{currentMetrics.premium}</Text>
+            <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>Премиум</Text>
           </View>
         </View>
       </View>
 
-      <View style={styles.indicatorsSection}>
-        <Text style={styles.sectionTitle}>Индикаторы</Text>
+      <View 
+        style={[
+          styles.indicatorsSection,
+          { backgroundColor: theme.colors.cardBg }
+        ]}
+      >
+        <Text style={[styles.sectionTitle, { color: theme.colors.text, backgroundColor: theme.colors.background }]}>Индикаторы</Text>
         <View style={styles.indicatorGrid}>
           <View style={styles.indicatorCard}>
-            <Text style={styles.indicatorLabel}>Активные</Text>
-            <Text style={styles.indicatorValue}>2,847</Text>
-            <Text style={styles.indicatorPercent}>+12.5%</Text>
+            <Text style={[styles.indicatorLabel, { color: theme.colors.textSecondary }]}>Активные</Text>
+            <Text style={[styles.indicatorValue, { color: theme.colors.text }]}>2,847</Text>
+            <Text style={[styles.indicatorPercent, { color: theme.colors.success }]}>+12.5%</Text>
           </View>
           <View style={styles.indicatorCard}>
-            <Text style={styles.indicatorLabel}>Завершённо</Text>
-            <Text style={styles.indicatorValue}>8,432</Text>
-            <Text style={styles.indicatorPercent}>+8.3%</Text>
+            <Text style={[styles.indicatorLabel, { color: theme.colors.textSecondary }]}>Завершённо</Text>
+            <Text style={[styles.indicatorValue, { color: theme.colors.text }]}>8,432</Text>
+            <Text style={[styles.indicatorPercent, { color: theme.colors.success }]}>+8.3%</Text>
           </View>
           <View style={styles.indicatorCard}>
-            <Text style={styles.indicatorLabel}>Ожидание</Text>
-            <Text style={styles.indicatorValue}>156</Text>
-            <Text style={styles.indicatorPercent}>-2.1%</Text>
+            <Text style={[styles.indicatorLabel, { color: theme.colors.textSecondary }]}>Ожидание</Text>
+            <Text style={[styles.indicatorValue, { color: theme.colors.text }]}>156</Text>
+            <Text style={[styles.indicatorPercent, { color: '#ef4444' }]}>-2.1%</Text>
           </View>
           <View style={styles.indicatorCard}>
-            <Text style={styles.indicatorLabel}>Отзывы</Text>
-            <Text style={styles.indicatorValue}>4.8</Text>
-            <Text style={styles.indicatorPercent}>+0.3</Text>
+            <Text style={[styles.indicatorLabel, { color: theme.colors.textSecondary }]}>Отзывы</Text>
+            <Text style={[styles.indicatorValue, { color: theme.colors.text }]}>4.8</Text>
+            <Text style={[styles.indicatorPercent, { color: theme.colors.primary }]}>+0.3</Text>
           </View>
         </View>
       </View>
 
       <View style={styles.conversionSection}>
-        <Text style={styles.sectionTitle}>Метрики эффективности</Text>
-        <View style={styles.conversionCard}>
+        <Text style={[styles.sectionTitle, { color: theme.colors.text, backgroundColor: theme.colors.background }]}>Метрики эффективности</Text>
+        <View style={[styles.conversionCard, { backgroundColor: theme.colors.cardBg }]}>
           <View style={styles.conversionRow}>
-            <Text style={styles.conversionLabel}>Коэффициент конверсии</Text>
-            <Text style={styles.conversionValue}>3.2%</Text>
+            <Text style={[styles.conversionLabel, { color: theme.colors.text }]}>Коэффициент конверсии</Text>
+            <Text style={[styles.conversionValue, { color: theme.colors.primary }]}>3.2%</Text>
           </View>
-          <View style={styles.conversionBar}>
+          <View style={[styles.conversionBar, { backgroundColor: theme.colors.border }]}>
             <View style={[styles.conversionFill, { width: '32%' }]} />
           </View>
         </View>
 
-        <View style={styles.conversionCard}>
+        <View style={[styles.conversionCard, { backgroundColor: theme.colors.cardBg }]}>
           <View style={styles.conversionRow}>
-            <Text style={styles.conversionLabel}>Среднее значение букинга</Text>
-            <Text style={styles.conversionValue}>₽24,620</Text>
+            <Text style={[styles.conversionLabel, { color: theme.colors.text }]}>Среднее значение букинга</Text>
+            <Text style={[styles.conversionValue, { color: theme.colors.primary }]}>PRB24,620</Text>
           </View>
-          <View style={styles.conversionBar}>
-            <View style={[styles.conversionFill, { width: '75%', backgroundColor: colors.accent }]} />
+          <View style={[styles.conversionBar, { backgroundColor: theme.colors.border }]}>
+            <View style={[styles.conversionFill, { width: '75%', backgroundColor: theme.colors.accent }]} />
           </View>
         </View>
 
-        <View style={styles.conversionCard}>
+        <View style={[styles.conversionCard, { backgroundColor: theme.colors.cardBg }]}>
           <View style={styles.conversionRow}>
-            <Text style={styles.conversionLabel}>Повтор клиентов</Text>
-            <Text style={styles.conversionValue}>28.5%</Text>
+            <Text style={[styles.conversionLabel, { color: theme.colors.text }]}>Повтор клиентов</Text>
+            <Text style={[styles.conversionValue, { color: theme.colors.primary }]}>28.5%</Text>
           </View>
-          <View style={styles.conversionBar}>
-            <View style={[styles.conversionFill, { width: '28.5%', backgroundColor: colors.secondary }]} />
+          <View style={[styles.conversionBar, { backgroundColor: theme.colors.border }]}>
+            <View style={[styles.conversionFill, { width: '28.5%', backgroundColor: theme.colors.secondary }]} />
           </View>
         </View>
       </View>
@@ -226,8 +303,8 @@ export default function AdminStats() {
 
   const renderRevenueTab = () => (
     <>
-      <View style={styles.revenueSection}>
-        <Text style={styles.sectionTitle}>Распределение дохода</Text>
+      <View style={[styles.revenueSection, { backgroundColor: theme.colors.cardBg }]}>
+        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Распределение дохода</Text>
         
         <View style={styles.revenueChart}>
           {[65, 45, 78, 55, 88, 72, 92].map((height, index) => (
@@ -237,7 +314,7 @@ export default function AdminStats() {
                   styles.bar,
                   {
                     height: (height / 100) * 180,
-                    backgroundColor: colors.primary,
+                    backgroundColor: theme.colors.primary,
                   },
                 ]}
               />
@@ -248,107 +325,112 @@ export default function AdminStats() {
           ))}
         </View>
       </View>
-
-      <View style={styles.growthSection}>
-        <Text style={styles.sectionTitle}>Рост показателей</Text>
-        <View style={styles.growthItem}>
-          <View style={styles.growthHeader}>
-            <Text style={styles.growthLabel}>Месячный оборот</Text>
-            <Text style={styles.growthValue}>₽2.1M</Text>
-          </View>
-          <View style={styles.progressBar}>
-            <View style={[styles.progressFill, { width: '75%' }]} />
-          </View>
-        </View>
-        <View style={styles.growthItem}>
-          <View style={styles.growthHeader}>
-            <Text style={styles.growthLabel}>Средняя сумма букинга</Text>
-            <Text style={styles.growthValue}>+18.2%</Text>
-          </View>
-          <View style={styles.progressBar}>
-            <View style={[styles.progressFill, { width: '18.2%' }]} />
-          </View>
-        </View>
-        <View style={styles.growthItem}>
-          <View style={styles.growthHeader}>
-            <Text style={styles.growthLabel}>Рост месячного оборота</Text>
-            <Text style={styles.growthValue}>+15.7%</Text>
-          </View>
-          <View style={styles.progressBar}>
-            <View style={[styles.progressFill, { width: '15.7%' }]} />
-          </View>
-        </View>
-      </View>
     </>
   );
 
   const renderPaymentsTab = () => (
     <>
-      <View style={styles.paymentsSection}>
-        <Text style={styles.sectionTitle}>Метод платежа</Text>
+      <View 
+        style={[
+          styles.growthSection,
+          { backgroundColor: theme.colors.cardBg }
+        ]}
+      >
+        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Рост показателей</Text>
+        <View style={styles.growthItem}>
+          <View style={styles.growthHeader}>
+            <Text style={[styles.growthLabel, { color: theme.colors.text }]}>Месячный оборот</Text>
+            <Text style={[styles.growthValue, { color: theme.colors.primary }]}>PRB2.1M</Text>
+          </View>
+          <View style={[styles.progressBar, { backgroundColor: theme.colors.border }]}>
+            <View style={[styles.progressFill, { width: '75%' }]} />
+          </View>
+        </View>
+        <View style={styles.growthItem}>
+          <View style={styles.growthHeader}>
+            <Text style={[styles.growthLabel, { color: theme.colors.text }]}>Средняя сумма букинга</Text>
+            <Text style={[styles.growthValue, { color: theme.colors.primary }]}>+18.2%</Text>
+          </View>
+          <View style={[styles.progressBar, { backgroundColor: theme.colors.border }]}>
+            <View style={[styles.progressFill, { width: '18.2%' }]} />
+          </View>
+        </View>
+        <View style={styles.growthItem}>
+          <View style={styles.growthHeader}>
+            <Text style={[styles.growthLabel, { color: theme.colors.text }]}>Рост месячного оборота</Text>
+            <Text style={[styles.growthValue, { color: theme.colors.primary }]}>+15.7%</Text>
+          </View>
+          <View style={[styles.progressBar, { backgroundColor: theme.colors.border }]}>
+            <View style={[styles.progressFill, { width: '15.7%' }]} />
+          </View>
+        </View>
+      </View>
+      
+      <View style={[styles.paymentsSection, { backgroundColor: theme.colors.cardBg }]}>
+        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Метод платежа</Text>
         
-        <View style={styles.paymentItem}>
+        <View style={[styles.paymentItem, { borderBottomColor: theme.colors.border }]}>
           <View style={styles.paymentInfo}>
-            <MaterialIcons name="credit-card" size={24} color={colors.primary} />
+            <MaterialIcons name="credit-card" size={24} color={theme.colors.primary} />
             <View style={styles.paymentDetails}>
-              <Text style={styles.paymentName}>PayPal</Text>
-              <Text style={styles.paymentCount}>2,340 транзакций</Text>
+              <Text style={[styles.paymentName, { color: theme.colors.text }]}>PayPal</Text>
+              <Text style={[styles.paymentCount, { color: theme.colors.textSecondary }]}>2,340 транзакций</Text>
             </View>
           </View>
-          <Text style={styles.paymentAmount}>₽834,500</Text>
+          <Text style={[styles.paymentAmount, { color: theme.colors.primary }]}>PRB834,500</Text>
         </View>
 
-        <View style={styles.paymentItem}>
+        <View style={[styles.paymentItem, { borderBottomColor: theme.colors.border }]}>
           <View style={styles.paymentInfo}>
-            <MaterialIcons name="card-giftcard" size={24} color={colors.accent} />
+            <MaterialIcons name="card-giftcard" size={24} color={theme.colors.accent} />
             <View style={styles.paymentDetails}>
-              <Text style={styles.paymentName}>Visa/MasterCard</Text>
-              <Text style={styles.paymentCount}>5,680 транзакций</Text>
+              <Text style={[styles.paymentName, { color: theme.colors.text }]}>Visa/MasterCard</Text>
+              <Text style={[styles.paymentCount, { color: theme.colors.textSecondary }]}>5,680 транзакций</Text>
             </View>
           </View>
-          <Text style={styles.paymentAmount}>₽1,245,600</Text>
+          <Text style={[styles.paymentAmount, { color: theme.colors.primary }]}>PRB1,245,600</Text>
         </View>
 
-        <View style={styles.paymentItem}>
+        <View style={[styles.paymentItem, { borderBottomColor: theme.colors.border }]}>
           <View style={styles.paymentInfo}>
-            <MaterialIcons name="qr-code-2" size={24} color={colors.success} />
+            <MaterialIcons name="qr-code-2" size={24} color={theme.colors.success} />
             <View style={styles.paymentDetails}>
-              <Text style={styles.paymentName}>Криптовалюта</Text>
-              <Text style={styles.paymentCount}>876 транзакций</Text>
+              <Text style={[styles.paymentName, { color: theme.colors.text }]}>Криптовалюта</Text>
+              <Text style={[styles.paymentCount, { color: theme.colors.textSecondary }]}>876 транзакций</Text>
             </View>
           </View>
-          <Text style={styles.paymentAmount}>₽76,700</Text>
+          <Text style={[styles.paymentAmount, { color: theme.colors.primary }]}>PRB76,700</Text>
         </View>
 
-        <Text style={[styles.sectionTitle, { marginTop: spacing.lg }]}>Динамика платежей</Text>
+        <Text style={[styles.sectionTitle, { marginTop: spacing.lg, color: theme.colors.text }]}>Динамика платежей</Text>
         
         <View style={styles.growthItem}>
           <View style={styles.growthHeader}>
-            <Text style={styles.growthLabel}>PayPal</Text>
-            <Text style={styles.growthValue}>38.6%</Text>
+            <Text style={[styles.growthLabel, { color: theme.colors.text }]}>PayPal</Text>
+            <Text style={[styles.growthValue, { color: theme.colors.primary }]}>38.6%</Text>
           </View>
-          <View style={styles.progressBar}>
+          <View style={[styles.progressBar, { backgroundColor: theme.colors.border }]}>
             <View style={[styles.progressFill, { width: '38.6%' }]} />
           </View>
         </View>
 
         <View style={styles.growthItem}>
           <View style={styles.growthHeader}>
-            <Text style={styles.growthLabel}>Карты</Text>
-            <Text style={styles.growthValue}>57.8%</Text>
+            <Text style={[styles.growthLabel, { color: theme.colors.text }]}>Карты</Text>
+            <Text style={[styles.growthValue, { color: theme.colors.primary }]}>57.8%</Text>
           </View>
-          <View style={styles.progressBar}>
+          <View style={[styles.progressBar, { backgroundColor: theme.colors.border }]}>
             <View style={[styles.progressFill, { width: '57.8%' }]} />
           </View>
         </View>
 
         <View style={styles.growthItem}>
           <View style={styles.growthHeader}>
-            <Text style={styles.growthLabel}>Крипто</Text>
-            <Text style={styles.growthValue}>3.6%</Text>
+            <Text style={[styles.growthLabel, { color: theme.colors.text }]}>Крипто</Text>
+            <Text style={[styles.growthValue, { color: theme.colors.primary }]}>3.6%</Text>
           </View>
-          <View style={styles.progressBar}>
-            <View style={[styles.progressFill, { width: '3.6%', backgroundColor: colors.success }]} />
+          <View style={[styles.progressBar, { backgroundColor: theme.colors.border }]}>
+            <View style={[styles.progressFill, { width: '3.6%', backgroundColor: theme.colors.success }]} />
           </View>
         </View>
       </View>
@@ -358,61 +440,61 @@ export default function AdminStats() {
   const renderUsersTab = () => (
     <>
       <View style={styles.usersSection}>
-        <Text style={styles.sectionTitle}>Распределение по уровням</Text>
+        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Распределение по уровням</Text>
         
-        <View style={styles.tierItem}>
+        <View style={[styles.tierItem, { backgroundColor: theme.colors.cardBg }]}>
           <View style={styles.tierInfo}>
             <View style={[styles.tierBadge, { backgroundColor: '#E5E4E2' }]}>
               <Text style={styles.tierText}>Pt</Text>
             </View>
             <View>
-              <Text style={styles.tierName}>Platinum</Text>
-              <Text style={styles.tierCount}>1,834 пользователей</Text>
+              <Text style={[styles.tierName, { color: theme.colors.text }]}>Platinum</Text>
+              <Text style={[styles.tierCount, { color: theme.colors.textSecondary }]}>1,834 пользователей</Text>
             </View>
           </View>
-          <Text style={styles.tierPercent}>5.6%</Text>
+          <Text style={[styles.tierPercent, { color: theme.colors.primary }]}>5.6%</Text>
         </View>
 
-        <View style={styles.tierItem}>
+        <View style={[styles.tierItem, { backgroundColor: theme.colors.cardBg }]}>
           <View style={styles.tierInfo}>
             <View style={[styles.tierBadge, { backgroundColor: '#FFD700' }]}>
               <Text style={styles.tierText}>Au</Text>
             </View>
             <View>
-              <Text style={styles.tierName}>Gold</Text>
-              <Text style={styles.tierCount}>5,120 пользователей</Text>
+              <Text style={[styles.tierName, { color: theme.colors.text }]}>Gold</Text>
+              <Text style={[styles.tierCount, { color: theme.colors.textSecondary }]}>5,120 пользователей</Text>
             </View>
           </View>
-          <Text style={styles.tierPercent}>15.8%</Text>
+          <Text style={[styles.tierPercent, { color: theme.colors.primary }]}>15.8%</Text>
         </View>
 
-        <View style={styles.tierItem}>
+        <View style={[styles.tierItem, { backgroundColor: theme.colors.cardBg }]}>
           <View style={styles.tierInfo}>
             <View style={[styles.tierBadge, { backgroundColor: '#C0C0C0' }]}>
               <Text style={styles.tierText}>Ag</Text>
             </View>
             <View>
-              <Text style={styles.tierName}>Silver</Text>
-              <Text style={styles.tierCount}>8,956 пользователей</Text>
+              <Text style={[styles.tierName, { color: theme.colors.text }]}>Silver</Text>
+              <Text style={[styles.tierCount, { color: theme.colors.textSecondary }]}>8,956 пользователей</Text>
             </View>
           </View>
-          <Text style={styles.tierPercent}>27.6%</Text>
+          <Text style={[styles.tierPercent, { color: theme.colors.primary }]}>27.6%</Text>
         </View>
 
-        <View style={styles.tierItem}>
+        <View style={[styles.tierItem, { backgroundColor: theme.colors.cardBg }]}>
           <View style={styles.tierInfo}>
             <View style={[styles.tierBadge, { backgroundColor: '#CD7F32' }]}>
               <Text style={styles.tierText}>Br</Text>
             </View>
             <View>
-              <Text style={styles.tierName}>Bronze</Text>
-              <Text style={styles.tierCount}>16,546 пользователей</Text>
+              <Text style={[styles.tierName, { color: theme.colors.text }]}>Bronze</Text>
+              <Text style={[styles.tierCount, { color: theme.colors.textSecondary }]}>16,546 пользователей</Text>
             </View>
           </View>
-          <Text style={styles.tierPercent}>51.0%</Text>
+          <Text style={[styles.tierPercent, { color: theme.colors.primary }]}>51.0%</Text>
         </View>
 
-        <Text style={[styles.sectionTitle, { marginTop: spacing.lg }]}>Топ активные пользователи</Text>
+        <Text style={[styles.sectionTitle, { marginTop: spacing.lg, color: theme.colors.text }]}>Топ активные пользователи</Text>
         <FlatList
           data={mockUsers}
           keyExtractor={(item) => item.id}
@@ -427,7 +509,7 @@ export default function AdminStats() {
   const renderPropertiesTab = () => (
     <>
       <View style={styles.propertiesSection}>
-        <Text style={styles.sectionTitle}>Лучшие объекты</Text>
+        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Лучшие объекты</Text>
         
         <FlatList
           data={mockProperties}
@@ -476,74 +558,35 @@ export default function AdminStats() {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      {/* Period Selector */}
-      <View style={styles.periodSection}>
-        <Text style={styles.sectionTitle}>Выберите период</Text>
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.periodScrollContent}
-        >
-          {periods.map((period) => (
-            <TouchableOpacity
-              key={period.id}
-              style={[
-                styles.periodButton,
-                selectedPeriod === period.id && styles.periodButtonActive,
-              ]}
-              onPress={() => setSelectedPeriod(period.id)}
-            >
-              <MaterialIcons 
-                name={period.icon} 
-                size={16} 
-                color={selectedPeriod === period.id ? '#fff' : colors.textSecondary}
-              />
-              <Text 
-                style={[
-                  styles.periodButtonText,
-                  selectedPeriod === period.id && styles.periodButtonTextActive,
-                ]}
-              >
-                {period.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
-
-      {/* Tab Navigation */}
-      <View style={styles.tabSection}>
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.tabScrollContent}
-        >
-          {tabs.map((tab) => (
-            <TouchableOpacity
-              key={tab.id}
-              style={[
-                styles.tabButton,
-                activeTab === tab.id && styles.tabButtonActive,
-              ]}
-              onPress={() => setActiveTab(tab.id)}
-            >
-              <MaterialIcons 
-                name={tab.icon} 
-                size={18} 
-                color={activeTab === tab.id ? colors.primary : colors.textSecondary}
-              />
-              <Text 
-                style={[
-                  styles.tabButtonText,
-                  activeTab === tab.id && styles.tabButtonTextActive,
-                ]}
-              >
-                {tab.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+    <ScrollView 
+      contentContainerStyle={[
+        styles.container,
+        { backgroundColor: theme.colors.background }
+      ]}
+    >
+      {/* Period and Tab Selectors */}
+      <View style={styles.filterSection}>
+        <View style={styles.filterContainer}>
+          <DropdownMenu 
+            isOpen={periodDropdownOpen}
+            onToggle={() => setPeriodDropdownOpen(!periodDropdownOpen)}
+            items={periods}
+            selectedId={selectedPeriod}
+            onSelect={setSelectedPeriod}
+            theme={theme}
+          />
+        </View>
+        
+        <View style={styles.filterContainer}>
+          <DropdownMenu 
+            isOpen={tabDropdownOpen}
+            onToggle={() => setTabDropdownOpen(!tabDropdownOpen)}
+            items={tabs}
+            selectedId={activeTab}
+            onSelect={setActiveTab}
+            theme={theme}
+          />
+        </View>
       </View>
 
       {/* Tab Content */}
@@ -551,7 +594,7 @@ export default function AdminStats() {
 
       {/* Reset Analytics Button */}
       <TouchableOpacity 
-        style={styles.resetButton}
+        style={[styles.resetButton, { backgroundColor: theme.colors.primary }]}
         onPress={handleResetAnalytics}
       >
         <MaterialIcons name="refresh" size={20} color="#fff" />
@@ -563,310 +606,406 @@ export default function AdminStats() {
 
 const styles = StyleSheet.create({
   container: {
-    paddingVertical: spacing.md,
-    backgroundColor: colors.background,
     flexGrow: 1,
-  },
-  periodSection: {
     paddingHorizontal: spacing.md,
+    paddingVertical: spacing.lg,
+  },
+
+  // Filter Section with Dropdowns
+  filterSection: {
+    marginBottom: spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    zIndex: 100,
+  },
+
+  filterContainer: {
+    flex: 1,
+    position: 'relative',
+    zIndex: 100,
+  },
+
+  filterLabel: {
+    paddingHorizontal: spacing.md,
+    fontSize: 14,
+    fontWeight: '600',
+    display: 'none',
+  },
+
+  dropdownButton: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+  },
+
+  dropdownButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+
+  dropdownMenu: {
+    borderWidth: 1,
+    borderRadius: borderRadius.md,
+    overflow: 'visible',
+    marginTop: spacing.xs,
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    zIndex: 1000,
+  },
+
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+  },
+
+  dropdownItemText: {
+    fontSize: 14,
+  },
+
+  // Period Section
+  periodSection: {
     marginBottom: spacing.lg,
   },
+
   periodScrollContent: {
-    gap: spacing.sm,
-    paddingRight: spacing.md,
+    paddingVertical: spacing.md,
   },
+
   periodButton: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderRadius: borderRadius.lg,
-    backgroundColor: colors.cardBg,
+    marginRight: spacing.md,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.background,
     borderWidth: 1,
     borderColor: colors.border,
-    gap: 6,
-    marginRight: spacing.sm,
   },
+
   periodButtonActive: {
     backgroundColor: colors.primary,
     borderColor: colors.primary,
   },
+
   periodButtonText: {
-    fontSize: 12,
-    fontWeight: '600',
+    marginLeft: spacing.sm,
     color: colors.textSecondary,
+    fontSize: 14,
+    fontWeight: '500',
   },
+
   periodButtonTextActive: {
     color: '#fff',
   },
+
+  // Tab Section
   tabSection: {
     marginBottom: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
+
   tabScrollContent: {
-    paddingHorizontal: spacing.md,
-    gap: 0,
+    paddingVertical: spacing.md,
   },
+
   tabButton: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 3,
-    borderBottomColor: 'transparent',
-    gap: 6,
+    paddingVertical: spacing.sm,
+    marginRight: spacing.md,
+    borderRadius: borderRadius.md,
   },
+
   tabButtonActive: {
+    borderBottomWidth: 3,
     borderBottomColor: colors.primary,
   },
+
   tabButtonText: {
-    fontSize: 13,
-    fontWeight: '600',
+    marginLeft: spacing.sm,
     color: colors.textSecondary,
+    fontSize: 14,
+    fontWeight: '500',
   },
+
   tabButtonTextActive: {
     color: colors.primary,
+    fontWeight: '600',
   },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: spacing.md,
-  },
+
   // KPI Section
   kpiSection: {
-    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
     marginBottom: spacing.lg,
   },
+
   kpiGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.md,
+    justifyContent: 'space-between',
   },
+
   kpiCard: {
-    flex: 1,
-    minWidth: '45%',
-    backgroundColor: colors.cardBg,
-    padding: spacing.md,
-    borderRadius: borderRadius.lg,
+    width: '48%',
     alignItems: 'center',
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 3,
-    elevation: 2,
+    paddingVertical: spacing.md,
   },
+
   kpiIcon: {
     width: 50,
     height: 50,
-    borderRadius: borderRadius.lg,
+    borderRadius: 25,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
   },
+
   kpiValue: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '700',
     color: colors.text,
+    marginBottom: spacing.xs,
   },
+
   kpiLabel: {
-    fontSize: 11,
+    fontSize: 12,
     color: colors.textSecondary,
-    marginTop: spacing.xs,
     textAlign: 'center',
   },
+
   // Indicators Section
   indicatorsSection: {
-    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
     marginBottom: spacing.lg,
   },
+
   indicatorGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.sm,
+    justifyContent: 'space-between',
   },
+
   indicatorCard: {
-    flex: 1,
-    minWidth: '48%',
-    backgroundColor: colors.cardBg,
-    padding: spacing.md,
-    borderRadius: borderRadius.lg,
-    alignItems: 'center',
+    width: '48%',
+    paddingVertical: spacing.md,
   },
+
   indicatorLabel: {
     fontSize: 12,
     color: colors.textSecondary,
     marginBottom: spacing.xs,
   },
+
   indicatorValue: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
     color: colors.text,
+    marginBottom: spacing.xs,
   },
+
   indicatorPercent: {
-    fontSize: 13,
+    fontSize: 12,
     color: colors.success,
     fontWeight: '600',
-    marginTop: spacing.xs,
   },
+
   // Conversion Section
   conversionSection: {
-    paddingHorizontal: spacing.md,
     marginBottom: spacing.lg,
   },
+
   conversionCard: {
     backgroundColor: colors.cardBg,
-    padding: spacing.md,
     borderRadius: borderRadius.lg,
+    padding: spacing.lg,
     marginBottom: spacing.md,
   },
+
   conversionRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: spacing.sm,
+    alignItems: 'center',
+    marginBottom: spacing.md,
   },
+
   conversionLabel: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 14,
     color: colors.text,
+    fontWeight: '500',
   },
+
   conversionValue: {
-    fontSize: 13,
+    fontSize: 16,
     fontWeight: '700',
     color: colors.primary,
   },
+
   conversionBar: {
-    height: 6,
+    height: 8,
     backgroundColor: colors.border,
-    borderRadius: borderRadius.md,
+    borderRadius: 4,
     overflow: 'hidden',
   },
+
   conversionFill: {
     height: '100%',
     backgroundColor: colors.primary,
   },
+
   // Revenue Section
   revenueSection: {
-    paddingHorizontal: spacing.md,
+    backgroundColor: colors.cardBg,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
     marginBottom: spacing.lg,
   },
+
   revenueChart: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
     alignItems: 'flex-end',
-    backgroundColor: colors.cardBg,
-    padding: spacing.lg,
-    borderRadius: borderRadius.lg,
-    height: 220,
+    justifyContent: 'space-around',
+    height: 240,
+    marginTop: spacing.lg,
   },
+
   barContainer: {
     alignItems: 'center',
     flex: 1,
   },
+
   bar: {
-    width: 30,
-    borderRadius: borderRadius.md,
+    width: '80%',
+    backgroundColor: colors.primary,
+    borderRadius: 4,
     marginBottom: spacing.sm,
   },
+
   dayLabel: {
-    fontSize: 11,
+    fontSize: 12,
     color: colors.textSecondary,
-    fontWeight: '600',
+    marginTop: spacing.xs,
   },
+
   // Growth Section
   growthSection: {
-    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
     marginBottom: spacing.lg,
   },
+
   growthItem: {
-    backgroundColor: colors.cardBg,
-    padding: spacing.md,
-    borderRadius: borderRadius.lg,
-    marginBottom: spacing.md,
-  },
-  growthHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: spacing.sm,
-  },
-  growthLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  growthValue: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.success,
-  },
-  progressBar: {
-    height: 8,
-    backgroundColor: colors.border,
-    borderRadius: borderRadius.md,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: colors.success,
-  },
-  // Payments Section
-  paymentsSection: {
-    paddingHorizontal: spacing.md,
     marginBottom: spacing.lg,
   },
-  paymentItem: {
-    backgroundColor: colors.cardBg,
-    padding: spacing.md,
-    borderRadius: borderRadius.lg,
+
+  growthHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: spacing.md,
   },
+
+  growthLabel: {
+    fontSize: 14,
+    color: colors.text,
+    fontWeight: '500',
+  },
+
+  growthValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+
+  progressBar: {
+    height: 8,
+    backgroundColor: colors.border,
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+
+  progressFill: {
+    height: '100%',
+    backgroundColor: colors.primary,
+  },
+
+  // Payments Section
+  paymentsSection: {
+    backgroundColor: colors.cardBg,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+  },
+
+  paymentItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+
   paymentInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
   },
+
   paymentDetails: {
     marginLeft: spacing.md,
-    flex: 1,
   },
+
   paymentName: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  paymentCount: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  paymentAmount: {
     fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: spacing.xs,
+  },
+
+  paymentCount: {
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+
+  paymentAmount: {
+    fontSize: 16,
     fontWeight: '700',
     color: colors.primary,
   },
+
   // Users Section
   usersSection: {
-    paddingHorizontal: spacing.md,
     marginBottom: spacing.lg,
   },
+
   tierItem: {
-    backgroundColor: colors.cardBg,
-    padding: spacing.md,
-    borderRadius: borderRadius.lg,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    backgroundColor: colors.cardBg,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
     marginBottom: spacing.md,
   },
+
   tierInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
   },
+
   tierBadge: {
     width: 40,
     height: 40,
@@ -875,39 +1014,47 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: spacing.md,
   },
+
   tierText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
     color: '#000',
   },
+
   tierName: {
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '600',
     color: colors.text,
+    marginBottom: spacing.xs,
   },
+
   tierCount: {
-    fontSize: 11,
+    fontSize: 12,
     color: colors.textSecondary,
-    marginTop: 2,
   },
+
   tierPercent: {
-    fontSize: 13,
+    fontSize: 16,
     fontWeight: '700',
     color: colors.primary,
   },
+
+  // User Card
   userCard: {
-    backgroundColor: colors.cardBg,
-    padding: spacing.md,
-    borderRadius: borderRadius.lg,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    backgroundColor: colors.cardBg,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
   },
+
   userInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
   },
+
   userAvatar: {
     width: 40,
     height: 40,
@@ -916,101 +1063,130 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: spacing.md,
   },
+
   avatarText: {
-    fontSize: 16,
+    color: '#000',
     fontWeight: '700',
-    color: '#fff',
+    fontSize: 14,
   },
+
   userDetails: {
     flex: 1,
   },
+
   userName: {
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '600',
     color: colors.text,
+    marginBottom: spacing.xs,
   },
+
   userStatus: {
-    fontSize: 11,
+    fontSize: 12,
     color: colors.textSecondary,
-    marginTop: 2,
   },
+
   userStats: {
     flexDirection: 'row',
-    gap: spacing.md,
+    alignItems: 'center',
   },
+
   userStatItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    marginLeft: spacing.md,
   },
+
   userStatText: {
+    marginLeft: spacing.xs,
     fontSize: 12,
-    fontWeight: '600',
     color: colors.text,
+    fontWeight: '600',
   },
+
   // Properties Section
   propertiesSection: {
-    paddingHorizontal: spacing.md,
     marginBottom: spacing.lg,
   },
+
   propertyCard: {
-    backgroundColor: colors.cardBg,
-    padding: spacing.md,
-    borderRadius: borderRadius.lg,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    backgroundColor: colors.cardBg,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
   },
+
   propertyInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
   },
+
   propertyIcon: {
     width: 45,
     height: 45,
-    borderRadius: borderRadius.lg,
+    borderRadius: borderRadius.md,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: spacing.md,
   },
+
   propertyDetails: {
     flex: 1,
   },
+
   propertyName: {
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '600',
     color: colors.text,
+    marginBottom: spacing.xs,
   },
+
   propertyStats: {
     flexDirection: 'row',
-    gap: spacing.md,
-    marginTop: spacing.xs,
   },
+
   propertyStat: {
-    fontSize: 11,
+    fontSize: 12,
     color: colors.textSecondary,
+    marginRight: spacing.lg,
   },
+
   propertyRevenue: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '700',
-    color: colors.success,
+    color: colors.primary,
   },
+
+  // Section Title
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: spacing.lg,
+    textAlign: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+  },
+
   // Reset Button
   resetButton: {
-    marginHorizontal: spacing.md,
-    marginBottom: spacing.lg,
-    backgroundColor: colors.warning,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.lg,
     flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
-    gap: spacing.sm,
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
   },
+
   resetButtonText: {
+    marginLeft: spacing.md,
     color: '#fff',
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

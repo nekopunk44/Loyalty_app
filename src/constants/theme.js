@@ -1,5 +1,22 @@
 // Theme and color constants for the app
 export const colors = {
+  // Светлая тема
+  light: {
+    background: '#F8F9FA',
+    cardBg: '#FFFFFF',
+    text: '#1F2937',
+    textSecondary: '#6B7280',
+    border: '#E5E7EB',
+  },
+  // Темная тема
+  dark: {
+    background: '#0F172A',
+    cardBg: '#1E293B',
+    text: '#F1F5F9',
+    textSecondary: '#CBD5E1',
+    border: '#334155',
+  },
+  
   // Основные цвета
   primary: '#FF6B35',        // Яркий оранжевый (основной)
   primaryLight: '#FFB400',   // Светлый оранжевый

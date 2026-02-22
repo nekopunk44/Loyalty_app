@@ -4,6 +4,8 @@
  * Эти значения ПУБЛИЧНЫЕ и безопасны для браузера
  */
 
+const DEBUG_MODE = false; // Установите в true для отладки
+
 const firebaseConfig = {
   apiKey: 'AIzaSyC3jihs0FjEeiPAZLHSusCG49C6-zH34N8',
   authDomain: 'villa-jaconda-loyalty.firebaseapp.com',
@@ -14,11 +16,13 @@ const firebaseConfig = {
   measurementId: 'G-B4GN7RJ1XF',
 };
 
-console.log('🔧 Firebase config загружен:', {
-  apiKey: firebaseConfig.apiKey?.substring(0, 10) + '...',
-  projectId: firebaseConfig.projectId,
-  authDomain: firebaseConfig.authDomain,
-});
+if (DEBUG_MODE) {
+  console.log('🔧 Firebase config загружен:', {
+    apiKey: firebaseConfig.apiKey?.substring(0, 10) + '...',
+    projectId: firebaseConfig.projectId,
+    authDomain: firebaseConfig.authDomain,
+  });
+}
 
 export default firebaseConfig;
 

@@ -43,10 +43,10 @@ export default function UserEditModal({ visible, onClose, user, theme, onUserUpd
   ];
 
   const levels = [
-    { label: 'Bronze', value: 'Bronze' },
-    { label: 'Silver', value: 'Silver' },
-    { label: 'Gold', value: 'Gold' },
-    { label: 'Platinum', value: 'Platinum' },
+    { label: 'Bronze', value: 'Bronze', icon: 'shield', color: '#CD7F32' },
+    { label: 'Silver', value: 'Silver', icon: 'grade', color: '#C0C0C0' },
+    { label: 'Gold', value: 'Gold', icon: 'star', color: '#FFD700' },
+    { label: 'Platinum', value: 'Platinum', icon: 'flare', color: '#9999FF' },
   ];
 
   const statuses = [
@@ -56,13 +56,22 @@ export default function UserEditModal({ visible, onClose, user, theme, onUserUpd
   ];
 
   const handleInputChange = (field, value) => {
+    const updates = { [field]: value };
+    
+    // Если меняем роль на администратора, очищаем membershipLevel
+    if (field === 'role' && value === 'admin') {
+      updates.membershipLevel = null;
+    }
+    
     setFormData(prev => ({
       ...prev,
-      [field]: value,
+      ...updates,
     }));
   };
 
   const handleSaveChanges = async () => {
+    console.log('💾 handleSaveChanges called');
+    
     if (!formData.displayName) {
       Alert.alert('⚠️ Ошибка', 'Введите имя пользователя');
       return;
@@ -70,6 +79,15 @@ export default function UserEditModal({ visible, onClose, user, theme, onUserUpd
 
     setLoading(true);
     try {
+      console.log('📤 Отправляю данные на сервер:', {
+        userId: user.id,
+        displayName: formData.displayName,
+        phone: formData.phone,
+        role: formData.role,
+        membershipLevel: formData.membershipLevel,
+        status: formData.status,
+      });
+
       await FirebaseService.updateUserAsAdmin(user.id, {
         displayName: formData.displayName,
         phone: formData.phone,
@@ -78,17 +96,13 @@ export default function UserEditModal({ visible, onClose, user, theme, onUserUpd
         status: formData.status,
       });
 
-      Alert.alert('✅ Успешно', 'Профиль пользователя обновлен', [
-        {
-          text: 'OK',
-          onPress: () => {
-            if (onUserUpdated) onUserUpdated({...user, ...formData});
-            onClose();
-          },
-        },
-      ]);
+      console.log('✅ Обновление успешно!');
+
+      console.log('📬 Вызываю callback onUserUpdated');
+      // Вызываем callback для закрытия окна и показа уведомления
+      if (onUserUpdated) onUserUpdated({...user, ...formData});
     } catch (error) {
-      console.error('Ошибка обновления:', error);
+      console.error('❌ Ошибка обновления:', error);
       Alert.alert('❌ Ошибка', error.message || 'Не удалось обновить профиль');
     } finally {
       setLoading(false);
@@ -122,12 +136,13 @@ export default function UserEditModal({ visible, onClose, user, theme, onUserUpd
   );
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent={false}
-      onRequestClose={onClose}
-    >
+    <>
+      <Modal
+        visible={visible}
+        animationType="slide"
+        transparent={false}
+        onRequestClose={onClose}
+      >
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         {/* Заголовок */}
         <View style={[styles.header, { backgroundColor: colors.cardBg, borderBottomColor: colors.border }]}>
@@ -198,10 +213,16 @@ export default function UserEditModal({ visible, onClose, user, theme, onUserUpd
                   style={[
                     styles.optionButton,
                     { backgroundColor: colors.cardBg, borderColor: colors.border },
-                    formData.membershipLevel === level.value && { backgroundColor: colors.success, borderColor: colors.success },
+                    formData.membershipLevel === level.value && { backgroundColor: level.color, borderColor: level.color },
                   ]}
                   onPress={() => handleInputChange('membershipLevel', level.value)}
                 >
+                  <MaterialIcons 
+                    name={level.icon} 
+                    size={18} 
+                    color={formData.membershipLevel === level.value ? '#fff' : level.color}
+                    style={styles.buttonIcon}
+                  />
                   <Text
                     style={[
                       styles.optionText,
@@ -224,14 +245,6 @@ export default function UserEditModal({ visible, onClose, user, theme, onUserUpd
               value={formData.status}
               onChange={(value) => handleInputChange('status', value)}
             />
-          </View>
-
-          {/* Информационное сообщение */}
-          <View style={[styles.infoBox, { backgroundColor: colors.primary + '15', borderColor: colors.primary }]}>
-            <MaterialIcons name="info" size={20} color={colors.primary} />
-            <Text style={[styles.infoText, { color: colors.text }]}>
-              Изменения будут сохранены в реальном времени в Firebase.
-            </Text>
           </View>
         </ScrollView>
 
@@ -262,6 +275,7 @@ export default function UserEditModal({ visible, onClose, user, theme, onUserUpd
         </View>
       </View>
     </Modal>
+    </>
   );
 }
 
@@ -346,9 +360,16 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: '45%',
     paddingVertical: spacing.md,
+    paddingHorizontal: spacing.sm,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
     alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: spacing.xs,
+  },
+  buttonIcon: {
+    marginRight: spacing.xs,
   },
   optionText: {
     fontSize: 12,

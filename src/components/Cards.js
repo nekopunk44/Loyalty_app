@@ -57,9 +57,9 @@ export const ProductCard = ({ product, onPress, onAddToCart }) => {
 
         <View style={styles.priceContainer}>
           <View>
-            <Text style={styles.price}>{product.price} ₽</Text>
+            <Text style={styles.price}>{product.price} PRB</Text>
             {product.originalPrice && (
-              <Text style={styles.originalPrice}>{product.originalPrice} ₽</Text>
+              <Text style={styles.originalPrice}>{product.originalPrice} PRB</Text>
             )}
           </View>
           <TouchableOpacity
@@ -111,23 +111,23 @@ export const EventCardAdmin = ({
 
       <View style={styles.eventContent}>
         <Text style={styles.eventTitle}>{event.title}</Text>
-        <Text style={styles.eventDescription} numberOfLines={2}>
-          {event.description}
-        </Text>
+        <Text style={styles.eventDescription} numberOfLines={2}>{event.description}</Text>
 
         <View style={styles.eventMeta}>
-          {event.prize && (
+          {event.prize ? (
             <View style={styles.metaItem}>
               <MaterialIcons name="card-giftcard" size={14} color={colors.accent} />
               <Text style={styles.metaText}>{event.prize}</Text>
             </View>
-          )}
-          {event.endDate && (
+          ) : null}
+          {event.startDate || event.endDate ? (
             <View style={styles.metaItem}>
               <MaterialIcons name="calendar-today" size={14} color={colors.primary} />
-              <Text style={styles.metaText}>{event.endDate}</Text>
+              <Text style={styles.metaText} numberOfLines={1}>
+                {event.startDate && event.endDate ? `${event.startDate} - ${event.endDate}` : (event.endDate || event.startDate)}
+              </Text>
             </View>
-          )}
+          ) : null}
         </View>
 
         {/* Статус и участники */}
@@ -146,11 +146,11 @@ export const EventCardAdmin = ({
                 : 'Завершено'}
             </Text>
           </View>
-          {event.participantsCount !== undefined && (
+          {event.participantsCount !== undefined ? (
             <Text style={styles.participantsText}>
               👥 {event.participantsCount}
             </Text>
-          )}
+          ) : null}
         </View>
       </View>
 
