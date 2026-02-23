@@ -21,7 +21,11 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-producti
 const app = express();
 const PORT = process.env.PORT || 5002;
 const NODE_ENV = process.env.NODE_ENV || 'development';
-const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://postgres:password123@localhost:5432/loyalty_app';
+const DATABASE_URL = process.env.DATABASE_URL;
+
+if (!DATABASE_URL && NODE_ENV === 'production') {
+  throw new Error('DATABASE_URL environment variable is required in production');
+}
 
 // Middleware
 app.use(cors());
