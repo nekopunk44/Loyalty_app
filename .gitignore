@@ -1,7 +1,8 @@
 # Dependencies
 node_modules/
-package-lock.json
 yarn.lock
+# Игнорируем только корневой lock (Expo), серверный нужен для CI
+/package-lock.json
 .pnp
 .pnp.js
 
