@@ -10,6 +10,11 @@ yarn.lock
 .env.local
 .env.*.local
 .env.production
+.env.staging
+server/.env
+server/.env.local
+server/.env.*.local
+server/.env.production
 
 # IDE
 .vscode/

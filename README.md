@@ -1,7 +1,7 @@
 # 🏨 Villa Jaconda Loyalty App
 
-[![React Native](https://img.shields.io/badge/React_Native-0.71.8-61dafb?logo=react)](https://reactnative.dev/)
-[![Expo](https://img.shields.io/badge/Expo-~48.0.0-000?logo=expo)](https://expo.dev/)
+[![React Native](https://img.shields.io/badge/React_Native-0.83.6-61dafb?logo=react)](https://reactnative.dev/)
+[![Expo](https://img.shields.io/badge/Expo-55-000?logo=expo)](https://expo.dev/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
 [![Status](https://img.shields.io/badge/Status-Active-success)]()
 
@@ -56,8 +56,8 @@
 ### Основные зависимости
 | Пакет | Версия | Назначение |
 |-------|--------|-----------|
-| react-native | 0.71.8 | Фреймворк для мобильных приложений |
-| expo | ~48.0.0 | Платформа для разработки |
+| react-native | 0.83.6 | Фреймворк для мобильных приложений |
+| expo | ^55.0.23 | Платформа для разработки |
 | react-navigation | 6.5.7 | Навигация между экранами |
 | async-storage | ^1.17.12 | Локальное хранилище данных |
 | vector-icons | ^9.2.0 | Иконки |
@@ -121,16 +121,16 @@ expo start
 
 Настройте ваш `.env` файл (если необходимо):
 ```env
-FIREBASE_API_KEY=your_key
-PAYPAL_CLIENT_ID=your_client_id
-STRIPE_PUBLIC_KEY=your_public_key
+EXPO_PUBLIC_API_URL=http://localhost:5002/api
+EXPO_PUBLIC_STRIPE_PUBLIC_KEY=pk_test_your_public_key
+EXPO_PUBLIC_PAYPAL_CLIENT_ID=your_paypal_client_id
 ```
 
-## 📁 Структура проекта
+## Структура проекта
 
 ```
 Loyalty_app/
-├── 📱 src/
+├── src/
 │   ├── components/              # Переиспользуемые компоненты
 │   │   ├── AnimatedCard.js       # Card с анимациями
 │   │   ├── BookingCalendar.js    # Календарь бронирований
@@ -166,14 +166,12 @@ Loyalty_app/
 │   ├── services/                # Бизнес-логика
 │   │   ├── BookingService.js     # Логика бронирований
 │   │   ├── DatabaseService.js    # БД операции
-│   │   ├── FirebaseService.js    # Firebase интеграция
 │   │   ├── LoyaltyCardService.js # Карта лояльности
 │   │   ├── PropertyService.js    # Объекты недвижимости
 │   │   └── EncryptionService.js  # Шифрование данных
 │   ├── utils/                   # Утилиты
 │   │   ├── api.js               # API запросы
 │   │   ├── apiUrl.js            # URL endpoints
-│   │   ├── apiExamples.js       # Примеры API
 │   │   ├── eventStyles.js       # Стили для событий
 │   │   └── pluralize.js         # Множественное число
 │   └── assets/                  # Изображения и ресурсы
@@ -181,7 +179,7 @@ Loyalty_app/
 │       ├── standart/            # Стандартные виллы
 │       └── zad/                 # Загородные дома
 │
-├── 🖥️ server/                   # Backend сервер
+├── server/                      # Backend сервер
 │   ├── index.js                 # Основной файл сервера
 │   ├── migrate.js               # Миграции БД
 │   ├── seed.js                  # Заполнение тестовых данных
@@ -194,12 +192,12 @@ Loyalty_app/
 │   │   └── properties.json
 │   └── package.json
 │
-├── 📖 App.js                    # Корневой компонент
+├── App.js                    # Корневой компонент
 ├── app.json                     # Конфигурация Expo
 ├── package.json                 # Dependencies
 ├── .gitignore                   # Git исключения
 │
-├── 📚 Документация
+├── Документация
 │   ├── README.md                # Этот файл
 │   ├── PAYMENT_SYSTEM.md        # Система платежей
 │   ├── PAYMENT_IMPLEMENTATION_SUMMARY.md
@@ -248,11 +246,11 @@ trackEvent('booking_created', {
 const kpis = getDashboardStats();
 ```
 
-## 📱 Интеграции
+## Интеграции
 
 ### Платежные системы
 
-#### 💳 PayPal
+#### PayPal
 ```javascript
 import { PaymentContext } from './context/PaymentContext';
 
@@ -262,7 +260,7 @@ const { processPayPalPayment } = useContext(PaymentContext);
 await processPayPalPayment(amount, bookingId, description);
 ```
 
-#### 💰 Stripe (Visa/MasterCard)
+#### Stripe (Visa/MasterCard)
 ```javascript
 await processVisaPayment(cardToken, amount, bookingId);
 ```
@@ -277,7 +275,7 @@ await processCryptoPayment(
 // Возвращает QR-код для оплаты
 ```
 
-### 🔔 Push-Уведомления
+### Push-Уведомления
 
 ```javascript
 import { NotificationContext } from './context/NotificationContext';
@@ -304,7 +302,7 @@ await scheduleNotification(
 );
 ```
 
-## 🔍 Аналитика
+## Аналитика
 
 ### Отслеживаемые события (10+)
 
@@ -357,7 +355,7 @@ const tierStats = getUserTierStats();
 // { bronze: 500, silver: 300, gold: 150, platinum: 50 }
 ```
 
-### 📊 Админ-панель статистики (5 табов)
+### Админ-панель статистики (5 табов)
 
 1. **Обзор** - KPI, индикаторы, метрики эффективности
 2. **Оборот** - График доходов, прогнозирование, линия тренда
@@ -365,44 +363,44 @@ const tierStats = getUserTierStats();
 4. **Пользователи** - Уровни (Bronze/Silver/Gold/Platinum), активные юзеры
 5. **Объекты** - Популярные виллы, доходность по объектам
 
-## 👥 Роли пользователей
+## Роли пользователей
 
-### 👤 Обычный пользователь
-- 👁️ Просмотр доступных вилл и объектов
-- 📅 Бронирование вилл с выбором дат
-- 💳 Платежи несколькими способами (PayPal, Stripe, Крипто)
-- 🔄 Просмотр истории бронирований
-- ⭐ Написание и просмотр отзывов (1-5 звёзд)
-- 🎁 Участие в программе рефералов
-- 📬 Центр уведомлений с фильтрацией
-- 🏆 Отслеживание уровня лояльности
+### Обычный пользователь
+- Просмотр доступных вилл и объектов
+- Бронирование вилл с выбором дат
+- Платежи несколькими способами (PayPal, Stripe, Крипто)
+- Просмотр истории бронирований
+- Написание и просмотр отзывов (1-5 звёзд)
+- Участие в программе рефералов
+- Центр уведомлений с фильтрацией
+- Отслеживание уровня лояльности
 
-### 🛡️ Администратор
-- 📊 **Панель управления** (Dashboard)
+### Администратор
+- **Панель управления** (Dashboard)
   - Быстрый доступ к ключевым метрикам
   - Список активных бронирований
   
-- 📅 **Управление событиями**
+- **Управление событиями**
   - Создание, редактирование, удаление событий
   
-- 📈 **Статистика** (5 специализированных табов)
+- **Статистика** (5 специализированных табов)
   - Обзор KPI и метрик
   - Анализ оборота и доходов
   - Распределение платежей
   - Демография пользователей
   - Популярность объектов
   
-- 👥 **Управление пользователями**
+- **Управление пользователями**
   - Просмотр профилей
   - Управление уровнями (Bronze/Silver/Gold/Platinum)
   - Заблокировать/разблокировать пользователей
   
-- 🏠 **Управление объектами**
+- **Управление объектами**
   - Добавление/редактирование вилл
   - Управление изображениями
   - Установка цен и доступности
 
-## 📚 Документация
+## Документация
 
 Дополнительная документация проекта:
 
@@ -413,7 +411,7 @@ const tierStats = getUserTierStats();
 | [QUICK_START_PAYMENT_SYSTEM.md](./QUICK_START_PAYMENT_SYSTEM.md) | 🚀 Быстрый старт для платежей |
 | [server/README.md](./server/README.md) | 🖥️ Документация backend сервера |
 
-## 🚀 Развертывание
+## Развертывание
 
 ### EAS (Expo Application Services)
 
@@ -445,11 +443,11 @@ npm start
 npm start -- --dev-client
 ```
 
-## 🔮 Будущие улучшения
+## Будущие улучшения
 
 - [ ] Real-time уведомления со звуком и вибрацией
 - [ ] Экспорт аналитики в PDF/CSV/Excel
-- [ ] Углублённая интеграция Firebase Realtime DB
+- [ ] Интеграция реальных платежных webhooks Stripe/PayPal
 - [ ] Персональные рекомендации на основе ML
 - [ ] Интеграция с CRM-системами (Salesforce, HubSpot)
 - [ ] API для партнёрских приложений
@@ -458,7 +456,7 @@ npm start -- --dev-client
 - [ ] Offline-mode с синхронизацией
 - [ ] Социальные сегменты и сегментирование аудитории
 
-## 🤝 Помощь и поддержка
+## Помощь и поддержка
 
 ### Проблемы и ошибки
 Если вы столкнулись с проблемой, пожалуйста:
@@ -467,8 +465,8 @@ npm start -- --dev-client
 3. [Создайте новое Issue](https://github.com/nekopunk44/Loyalty_app/issues/new)
 
 ### Вопросы и предложения
-- 💬 Обсудить идеи: [GitHub Discussions](https://github.com/nekopunk44/Loyalty_app/discussions)
-- 📧 Email: vladbredihin4@gmail.com
+- Обсудить идеи: [GitHub Discussions](https://github.com/nekopunk44/Loyalty_app/discussions)
+- Email: vladbredihin4@gmail.com
 
 ### Полезные ресурсы
 - [React Native документация](https://reactnative.dev/)

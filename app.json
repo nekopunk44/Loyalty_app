@@ -3,30 +3,50 @@
     "name": "Villa Jaconda Loyalty",
     "slug": "villa-jaconda-loyalty",
     "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "villajaconda",
+    "userInterfaceStyle": "automatic",
     "assetBundlePatterns": [
       "**/*"
     ],
+    "updates": {
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 5000
+    },
     "ios": {
-      "supportsTabletMode": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.villajaconda.loyalty",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Разрешить доступ к камере для сканирования QR-кодов"
+      }
     },
     "android": {
+      "package": "com.villajaconda.loyalty",
       "adaptiveIcon": {
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#FF6B35"
       },
-      "jsEngine": "jsc"
+      "permissions": [
+        "INTERNET",
+        "CAMERA"
+      ]
     },
-    "web": {},
+    "web": {
+      "favicon": "./src/assets/property1.png"
+    },
     "plugins": [
-      [
-        "expo-barcode-scanner",
-        {
-          "cameraPermission": "Разрешить доступ к камере для сканирования QR кодов"
-        }
-      ],
       [
         "expo-camera",
         {
-          "cameraPermission": "Разрешить доступ к камере"
+          "cameraPermission": "Разрешить доступ к камере для сканирования QR-кодов"
+        }
+      ],
+      "expo-secure-store",
+      [
+        "@sentry/react-native/expo",
+        {
+          "organization": "other-c6",
+          "project": "react-native"
         }
       ]
     ],
@@ -34,6 +54,11 @@
       "ios",
       "android",
       "web"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "villa-jaconda-loyalty"
+      }
+    }
   }
 }

@@ -49,7 +49,6 @@ export const BookingService = {
       });
 
       if (response.success) {
-        console.log(`✅ Бронирование создано, списано ${totalPrice}PRB с карты лояльности`);
         return response.booking;
       }
 
@@ -127,7 +126,6 @@ export const BookingService = {
         }
       );
       if (response.success) {
-        console.log(`✅ Платеж подтвержден для бронирования ${bookingId}`);
         return response.booking;
       }
       throw new Error(response.error || 'Failed to confirm payment');
@@ -149,7 +147,6 @@ export const BookingService = {
         }
       );
       if (response.success) {
-        console.log(`❌ Бронирование ${bookingId} отменено`);
         return response.booking;
       }
       throw new Error(response.error || 'Failed to cancel booking');

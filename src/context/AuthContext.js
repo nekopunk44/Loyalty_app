@@ -4,10 +4,16 @@ import * as DatabaseService from '../services/DatabaseService';
 import { getApiUrl } from '../utils/apiUrl';
 
 const STORAGE_KEYS = {
-  AUTH_TOKEN: '@auth_token',
-  USER: '@user',
-  USER_ID: '@user_id',
+  AUTH_TOKEN:    '@auth_token',
+  REFRESH_TOKEN: '@refresh_token',
+  USER:          '@user',
+  USER_ID:       '@user_id',
 };
+
+// Access-токен живёт 15 минут. Обновляем за 2 минуты до истечения.
+const ACCESS_TTL_MS   = 15 * 60 * 1000;
+const REFRESH_BEFORE  =  2 * 60 * 1000;
+const REFRESH_INTERVAL = ACCESS_TTL_MS - REFRESH_BEFORE; // ~13 мин
 
 const AuthContext = createContext();
 
@@ -16,48 +22,119 @@ export const AuthProvider = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [authToken, setAuthToken] = useState(null);
-  const heartbeatIntervalRef = React.useRef(null);
 
-  // Инициализация при загрузке приложения
+  const heartbeatIntervalRef = React.useRef(null);
+  const refreshIntervalRef   = React.useRef(null);
+
+  // ─── Тихое обновление access-токена ────────────────────────────────────────
+  const refreshAccessToken = async () => {
+    try {
+      const storedRefresh = await AsyncStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN);
+      if (!storedRefresh) return null;
+
+      const response = await fetch(`${getApiUrl()}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken: storedRefresh }),
+      });
+
+      if (!response.ok) {
+        // Refresh-токен истёк или отозван — выходим
+        await _clearSession();
+        return null;
+      }
+
+      const data = await response.json();
+      const { token: newAccess, refreshToken: newRefresh } = data;
+
+      await AsyncStorage.setItem(STORAGE_KEYS.AUTH_TOKEN,    newAccess);
+      await AsyncStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, newRefresh);
+      setAuthToken(newAccess);
+
+      return newAccess;
+    } catch (e) {
+      console.error('Ошибка тихого обновления токена:', e);
+      return null;
+    }
+  };
+
+  // ─── Запуск/остановка таймера обновления ───────────────────────────────────
+  const _startRefreshTimer = () => {
+    if (refreshIntervalRef.current) clearInterval(refreshIntervalRef.current);
+    refreshIntervalRef.current = setInterval(refreshAccessToken, REFRESH_INTERVAL);
+  };
+
+  const _stopRefreshTimer = () => {
+    if (refreshIntervalRef.current) {
+      clearInterval(refreshIntervalRef.current);
+      refreshIntervalRef.current = null;
+    }
+  };
+
+  // ─── Очистка локального состояния и AsyncStorage ───────────────────────────
+  const _clearSession = async () => {
+    _stopRefreshTimer();
+    if (heartbeatIntervalRef.current) {
+      clearInterval(heartbeatIntervalRef.current);
+      heartbeatIntervalRef.current = null;
+    }
+    await AsyncStorage.multiRemove([
+      STORAGE_KEYS.AUTH_TOKEN,
+      STORAGE_KEYS.REFRESH_TOKEN,
+      STORAGE_KEYS.USER,
+      STORAGE_KEYS.USER_ID,
+    ]);
+    setAuthToken(null);
+    setUser(null);
+    setError('');
+  };
+
+  // ─── Инициализация при загрузке приложения ─────────────────────────────────
   useEffect(() => {
     (async () => {
       try {
-        console.log('🔄 Инициализация AuthContext с PostgreSQL API...');
-
-        // ⚠️ Для разработки - требуем повторный вход при каждом старте
-        // Раскомментируйте код ниже, чтобы отключить сохранение сессии
-        const isDevelopment = process.env.NODE_ENV === 'development';
-        if (isDevelopment) {
-          console.log('🔐 Режим разработки - требуем повторный вход');
-          setIsLoading(false);
-          return;
-        }
-
-        // Пытаемся восстановить сессию из AsyncStorage
-        const savedToken = await AsyncStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
-        const savedUser = await AsyncStorage.getItem(STORAGE_KEYS.USER);
+        const [savedToken, savedUser] = await Promise.all([
+          AsyncStorage.getItem(STORAGE_KEYS.AUTH_TOKEN),
+          AsyncStorage.getItem(STORAGE_KEYS.USER),
+        ]);
 
         if (savedToken && savedUser) {
-          console.log('✅ Найдена сохранённая сессия');
           setAuthToken(savedToken);
           setUser(JSON.parse(savedUser));
+          // Сразу пробуем обновить токен — он мог устареть пока приложение было закрыто
+          _startRefreshTimer();
+          refreshAccessToken();
         }
       } catch (e) {
-        console.warn('⚠️ Ошибка при восстановлении сессии:', e);
+        console.error('Ошибка при восстановлении сессии:', e);
       } finally {
-        setIsLoading(false);
+        setTimeout(() => setIsLoading(false), 100);
       }
     })();
+
+    return () => {
+      _stopRefreshTimer();
+    };
   }, []);
 
-  // Регистрация
+  // ─── Сохранение токенов и запуск таймеров ──────────────────────────────────
+  const _persistSession = async (accessToken, refreshToken, userData) => {
+    await Promise.all([
+      AsyncStorage.setItem(STORAGE_KEYS.AUTH_TOKEN,    accessToken),
+      AsyncStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, refreshToken),
+      AsyncStorage.setItem(STORAGE_KEYS.USER,          JSON.stringify(userData)),
+      AsyncStorage.setItem(STORAGE_KEYS.USER_ID,       userData.id),
+    ]);
+    setAuthToken(accessToken);
+    setUser(userData);
+    _startRefreshTimer();
+  };
+
+  // ─── Регистрация ────────────────────────────────────────────────────────────
   const register = async (email, password, displayName) => {
     setError('');
     setIsLoading(true);
     try {
-      console.log('📝 Регистрация:', email);
-
-      // Отправляем запрос на сервер
       const response = await fetch(`${getApiUrl()}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -65,41 +142,27 @@ export const AuthProvider = ({ children }) => {
       });
 
       const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Ошибка регистрации');
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Ошибка регистрации');
-      }
+      const { token, refreshToken, user: userData } = data;
+      if (!token) throw new Error('Сервер не вернул токен авторизации');
 
-      // Сохраняем токен и пользователя
-      const userData = data.user;
-      const token = data.token || userData.id;
-
-      await AsyncStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, token);
-      await AsyncStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(userData));
-      await AsyncStorage.setItem(STORAGE_KEYS.USER_ID, userData.id);
-
-      setAuthToken(token);
-      setUser(userData);
-      setIsLoading(false);
-
-      console.log('✅ Регистрация успешна:', userData.id);
+      await _persistSession(token, refreshToken, userData);
       return true;
     } catch (e) {
-      console.error('❌ Ошибка регистрации:', e);
+      console.error('Ошибка регистрации:', e);
       setError(e.message || 'Ошибка при регистрации');
-      setIsLoading(false);
       return false;
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  // Вход
+  // ─── Вход ───────────────────────────────────────────────────────────────────
   const login = async (email, password) => {
     setError('');
     setIsLoading(true);
     try {
-      console.log('🔐 Вход:', email);
-
-      // Реальный вход через API
       const response = await fetch(`${getApiUrl()}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -107,145 +170,110 @@ export const AuthProvider = ({ children }) => {
       });
 
       const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Неверный email или пароль');
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Неверный email или пароль');
-      }
+      const { token, refreshToken, user: userData } = data;
+      if (!token) throw new Error('Сервер не вернул токен авторизации');
 
-      // Сохраняем токен и пользователя
-      const userData = data.user;
-      const token = data.token || userData.id;
+      await _persistSession(token, refreshToken, userData);
 
-      console.log('🔐 Saving to AsyncStorage:', { userId: userData.id, token: token.substring(0, 20) + '...' });
-      
-      await AsyncStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, token);
-      await AsyncStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(userData));
-      await AsyncStorage.setItem(STORAGE_KEYS.USER_ID, userData.id);
-
-      console.log('✅ AsyncStorage saved');
-      
-      setAuthToken(token);
-      setUser(userData);
-      setIsLoading(false);
-
-      console.log('✅ Вход успешен:', userData.id, 'роль:', userData.role);
-      
-      // Запускаем heartbeat для поддержания онлайн статуса
-      if (heartbeatIntervalRef.current) {
-        clearInterval(heartbeatIntervalRef.current);
-      }
-      // Отправляем heartbeat каждые 10 секунд
+      // Heartbeat каждые 60 секунд
+      if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
       heartbeatIntervalRef.current = setInterval(() => {
-        sendHeartbeat(userData.id);
-      }, 10000);
-      
+        sendHeartbeat(userData.id, token);
+      }, 60000);
+
       return true;
     } catch (e) {
-      console.error('❌ Ошибка входа:', e);
+      console.error('Ошибка входа:', e);
       setError(e.message || 'Ошибка при входе');
-      setIsLoading(false);
       return false;
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  // Отправить heartbeat для поддержания онлайн статуса
-  const sendHeartbeat = async (userId) => {
+  // ─── Heartbeat ──────────────────────────────────────────────────────────────
+  const sendHeartbeat = async (userId, token) => {
     try {
       await fetch(`${getApiUrl()}/auth/heartbeat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
         body: JSON.stringify({ userId }),
       });
-    } catch (e) {
-      console.warn('⚠️ Ошибка отправки heartbeat:', e);
-      // Не выводим ошибку - это фоновый процесс
+    } catch (_) {
+      // фоновый процесс, ошибки не критичны
     }
   };
 
-  // Выход
+  // ─── Выход ──────────────────────────────────────────────────────────────────
   const logout = async () => {
     try {
-      console.log('🚪 Выход...');
-
-      // Останавливаем heartbeat
-      if (heartbeatIntervalRef.current) {
-        clearInterval(heartbeatIntervalRef.current);
-        heartbeatIntervalRef.current = null;
-      }
-
-      // Отправляем logout запрос на сервер
-      if (user?.id) {
+      if (user?.id && authToken) {
         try {
           await fetch(`${getApiUrl()}/auth/logout`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${authToken}`,
+            },
             body: JSON.stringify({ userId: user.id }),
           });
-        } catch (e) {
-          console.warn('⚠️ Ошибка отправки logout запроса:', e);
+        } catch (_) {
+          // logout request failure is non-fatal
         }
       }
-
-      await AsyncStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
-      await AsyncStorage.removeItem(STORAGE_KEYS.USER);
-      await AsyncStorage.removeItem(STORAGE_KEYS.USER_ID);
-
-      setAuthToken(null);
-      setUser(null);
-      setError('');
-
-      console.log('✅ Выход успешен');
+      await _clearSession();
       return true;
     } catch (e) {
-      console.error('❌ Ошибка выхода:', e);
+      console.error('Ошибка выхода:', e);
       return false;
     }
   };
 
-  // Обновить профиль пользователя
+  // ─── Обновление профиля ─────────────────────────────────────────────────────
   const updateProfile = async (updates) => {
     try {
       if (!user) throw new Error('Пользователь не авторизован');
-
       const updatedUser = await DatabaseService.updateUser(user.id, updates);
-
       const newUser = { ...user, ...updatedUser };
       setUser(newUser);
-
       await AsyncStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(newUser));
-
-      console.log('✅ Профиль обновлён');
       return newUser;
     } catch (e) {
-      console.error('❌ Ошибка обновления профиля:', e);
+      console.error('Ошибка обновления профиля:', e);
       throw e;
     }
   };
 
-  // Забыли пароль
-  const resetPassword = async (email) => {
-    try {
-      const response = await fetch(`${getApiUrl()}/auth/reset-password`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Ошибка сброса пароля');
-      }
-
-      console.log('✅ Письмо со сбросом пароля отправлено');
-      return true;
-    } catch (e) {
-      console.error('❌ Ошибка сброса пароля:', e);
-      throw e;
-    }
+  // ─── Запрос письма со ссылкой для сброса пароля ────────────────────────────
+  const requestPasswordReset = async (email) => {
+    const response = await fetch(`${getApiUrl()}/auth/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Ошибка запроса сброса пароля');
+    return true;
   };
 
-  // Подтверждение email
+  // ─── Установка нового пароля по токену из письма ───────────────────────────
+  const setNewPassword = async (token, newPassword) => {
+    const response = await fetch(`${getApiUrl()}/auth/set-new-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, newPassword }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Ошибка смены пароля');
+    return true;
+  };
+
+  // ─── Подтверждение email ────────────────────────────────────────────────────
   const verifyEmail = async (token) => {
     try {
       const response = await fetch(`${getApiUrl()}/auth/verify-email`, {
@@ -253,17 +281,11 @@ export const AuthProvider = ({ children }) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token }),
       });
-
       const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Ошибка подтверждения email');
-      }
-
-      console.log('✅ Email подтверждён');
+      if (!response.ok) throw new Error(data.error || 'Ошибка подтверждения email');
       return true;
     } catch (e) {
-      console.error('❌ Ошибка подтверждения email:', e);
+      console.error('Ошибка подтверждения email:', e);
       throw e;
     }
   };
@@ -277,11 +299,13 @@ export const AuthProvider = ({ children }) => {
     login,
     logout,
     updateProfile,
-    resetPassword,
+    requestPasswordReset,
+    setNewPassword,
     verifyEmail,
+    refreshAccessToken,
     isAuthenticated: !!authToken,
-    isLoggedIn: !!user && !!authToken,
-    isAdmin: user?.role === 'admin',
+    isLoggedIn:      !!user && !!authToken,
+    isAdmin:         user?.role === 'admin',
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

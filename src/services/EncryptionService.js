@@ -8,7 +8,11 @@ import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Генерируем или берем из environment переменных
-const SECRET_KEY = process.env.REACT_APP_ENCRYPTION_KEY || 'villa-jaconda-secret-key-2025';
+const SECRET_KEY = process.env.EXPO_PUBLIC_ENCRYPTION_KEY;
+
+if (!SECRET_KEY) {
+  console.warn('⚠️  EXPO_PUBLIC_ENCRYPTION_KEY переменная окружения не установлена. Используйте .env файл для безопасности!');
+}
 
 /**
  * Симметричное шифрование (AES)
@@ -115,11 +119,9 @@ export const saveToSecureStore = async (key, value) => {
     if (typeof window !== 'undefined' && window.localStorage) {
       // Web окружение
       window.localStorage.setItem(`secure_${key}`, encrypted);
-      console.log(`✅ Сохранено в localStorage: ${key}`);
     } else {
       // Мобильное окружение
       await SecureStore.setItemAsync(key, encrypted);
-      console.log(`✅ Сохранено в SecureStore: ${key}`);
     }
     return true;
   } catch (error) {
@@ -137,18 +139,15 @@ export const getFromSecureStore = async (key) => {
       const encrypted = window.localStorage.getItem(`secure_${key}`);
       if (!encrypted) return null;
       const decrypted = decryptString(encrypted);
-      console.log(`✅ Получено из localStorage: ${key}`);
       return decrypted;
     } else {
       // Мобильное окружение
       if (!key || key.trim() === '') {
-        console.warn('⚠️ Попытка получить из SecureStore с пустым ключом');
         return null;
       }
       const encrypted = await SecureStore.getItemAsync(key);
       if (!encrypted) return null;
       const decrypted = decryptString(encrypted);
-      console.log(`✅ Получено из SecureStore: ${key}`);
       return decrypted;
     }
   } catch (error) {
@@ -164,11 +163,9 @@ export const deleteFromSecureStore = async (key) => {
     if (typeof window !== 'undefined' && window.localStorage) {
       // Web окружение
       window.localStorage.removeItem(`secure_${key}`);
-      console.log(`✅ Удалено из localStorage: ${key}`);
     } else {
       // Мобильное окружение
       await SecureStore.deleteItemAsync(key);
-      console.log(`✅ Удалено из SecureStore: ${key}`);
     }
     return true;
   } catch (error) {
@@ -187,7 +184,6 @@ export const saveToProtectedAsyncStorage = async (key, value) => {
   try {
     const encrypted = encryptString(typeof value === 'string' ? value : JSON.stringify(value));
     await AsyncStorage.setItem(key, encrypted);
-    console.log(`✅ Сохранено в защищённое AsyncStorage: ${key}`);
     return true;
   } catch (error) {
     console.error('❌ Ошибка сохранения в AsyncStorage:', error);
@@ -202,7 +198,6 @@ export const getFromProtectedAsyncStorage = async (key, parseJson = false) => {
     if (!encrypted) return null;
 
     const decrypted = decryptString(encrypted);
-    console.log(`✅ Получено из защищённого AsyncStorage: ${key}`);
     return parseJson ? JSON.parse(decrypted) : decrypted;
   } catch (error) {
     console.error('❌ Ошибка получения из AsyncStorage:', error);
@@ -245,7 +240,6 @@ export const savePaymentDataSecurely = async (key, paymentData) => {
     if (!encrypted) throw new Error('Encryption failed');
 
     await SecureStore.setItemAsync(key, encrypted);
-    console.log(`✅ Платёжные данные сохранены в SecureStore`);
     return true;
   } catch (error) {
     console.error('❌ Ошибка сохранения платёжных данных:', error);
@@ -260,7 +254,6 @@ export const getPaymentDataSecurely = async (key) => {
     if (!encrypted) return null;
 
     const decrypted = decryptPaymentData(encrypted);
-    console.log(`✅ Платёжные данные получены из SecureStore`);
     return decrypted;
   } catch (error) {
     console.error('❌ Ошибка получения платёжных данных:', error);

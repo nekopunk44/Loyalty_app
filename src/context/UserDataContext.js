@@ -41,7 +41,6 @@ export const UserDataProvider = ({ children }) => {
       await DatabaseService.addToBalance(user.id, amount);
       setUserBalance((prev) => prev + amount);
       
-      console.log(`✅ Добавлено ${amount} на баланс. ${description}`);
       return true;
     } catch (err) {
       console.error('❌ Ошибка добавления на баланс:', err);
@@ -61,7 +60,6 @@ export const UserDataProvider = ({ children }) => {
       await DatabaseService.deductFromBalance(user.id, amount);
       setUserBalance((prev) => prev - amount);
       
-      console.log(`✅ Снято ${amount} с баланса. ${description}`);
       return true;
     } catch (err) {
       console.error('❌ Ошибка вычитания с баланса:', err);

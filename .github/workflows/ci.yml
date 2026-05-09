@@ -2,62 +2,74 @@ name: CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop]
 
 jobs:
-  build:
+  server-tests:
+    name: Server tests (Node ${{ matrix.node-version }})
     runs-on: ubuntu-latest
 
     strategy:
       matrix:
-        node-version: [16.x, 18.x]
+        node-version: [20.x, 22.x]
 
     steps:
-    - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-    - name: Use Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v3
-      with:
-        node-version: ${{ matrix.node-version }}
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+          cache-dependency-path: server/package-lock.json
 
-    - name: Install dependencies
-      run: npm ci --legacy-peer-deps || npm install --legacy-peer-deps
+      - name: Install server dependencies
+        working-directory: server
+        run: npm ci
 
-    - name: Check code style (ESLint)
-      run: npm run lint --if-present
-      continue-on-error: true
+      - name: Check syntax
+        working-directory: server
+        run: node --check index.js
 
-    - name: Build
-      run: npm run build --if-present
-      continue-on-error: true
+      - name: Run server tests
+        working-directory: server
+        run: npm test
 
-    - name: Run tests
-      run: npm test --if-present
-      continue-on-error: true
-
-  security:
+  server-audit:
+    name: Security audit (server)
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-    - name: Run npm audit
-      run: npm audit --audit-level=moderate
-      continue-on-error: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: npm
+          cache-dependency-path: server/package-lock.json
 
-  docs:
+      - name: Install server dependencies
+        working-directory: server
+        run: npm ci
+
+      - name: npm audit (server)
+        working-directory: server
+        run: npm audit --audit-level=high
+
+  client-audit:
+    name: Security audit (client)
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-    - name: Check if docs are updated
-      run: |
-        if [ -f "README.md" ]; then
-          echo "✓ README.md exists"
-        else
-          echo "✗ README.md missing!"
-          exit 1
-        fi
-      continue-on-error: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
 
+      - name: Install client dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: npm audit (client)
+        run: npm audit --audit-level=high
+        continue-on-error: true  # RN peer-dep vulnerabilities часто вне нашего контроля

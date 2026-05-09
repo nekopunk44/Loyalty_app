@@ -7,37 +7,44 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "doctor": "npx expo-doctor",
+    "check:server": "node --check server/index.js",
+    "check": "npm run check:server && npm run doctor"
   },
   "dependencies": {
-    "@expo/webpack-config": "^18.0.1",
-    "@react-native-async-storage/async-storage": "1.17.11",
+    "@react-native-async-storage/async-storage": "2.2.0",
     "@react-navigation/bottom-tabs": "^6.5.7",
     "@react-navigation/native": "^6.1.7",
     "@react-navigation/native-stack": "^6.9.26",
-    "@stripe/stripe-react-native": "^0.23.3",
-    "axios": "^1.6.0",
+    "@sentry/react-native": "~7.11.0",
+    "@stripe/stripe-react-native": "0.63.0",
+    "axios": "^1.16.0",
     "crypto-js": "^4.1.0",
-    "expo": "~48.0.0",
-    "expo-barcode-scanner": "~12.3.2",
-    "expo-camera": "~13.2.1",
-    "expo-notifications": "^0.18.0",
-    "expo-secure-store": "~12.1.1",
-    "firebase": "^10.0.0",
-    "react": "18.2.0",
-    "react-dom": "18.2.0",
-    "react-native": "0.71.14",
-    "react-native-gesture-handler": "~2.9.0",
+    "expo": "^55.0.23",
+    "expo-camera": "~55.0.18",
+    "expo-image-picker": "~55.0.20",
+    "expo-notifications": "~55.0.22",
+    "expo-secure-store": "~55.0.13",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "react-native": "0.83.6",
+    "react-native-gesture-handler": "~2.30.0",
     "react-native-keychain": "^9.0.0",
     "react-native-qrcode-svg": "^6.2.2",
-    "react-native-reanimated": "2.14.4",
-    "react-native-safe-area-context": "4.5.0",
-    "react-native-screens": "~3.20.0",
-    "react-native-svg": "^14.0.0",
+    "react-native-reanimated": "4.2.1",
+    "react-native-safe-area-context": "~5.6.2",
+    "react-native-screens": "~4.23.0",
+    "react-native-svg": "15.15.3",
     "react-native-vector-icons": "^9.2.0",
-    "react-native-web": "~0.18.10"
+    "react-native-web": "^0.21.0",
+    "react-native-worklets": "0.7.4"
   },
   "devDependencies": {
-    "@babel/core": "^7.12.9"
+    "@babel/core": "^7.12.9",
+    "babel-plugin-transform-remove-console": "^6.9.4"
+  },
+  "overrides": {
+    "postcss": "^8.5.10"
   }
 }

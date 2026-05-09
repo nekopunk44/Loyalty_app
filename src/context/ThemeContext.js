@@ -56,7 +56,6 @@ export const ThemeProvider = ({ children }) => {
         const saved = await AsyncStorage.getItem('@theme_mode');
         if (saved) {
           setIsDark(saved === 'dark');
-          console.log('🎨 Theme loaded:', saved);
         }
       } catch (e) {
         console.error('Failed to load theme preference', e);

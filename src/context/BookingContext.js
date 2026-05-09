@@ -11,14 +11,16 @@ export const BookingProvider = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Используем userId из AuthContext (user.id)
   const userId = user?.id;
 
   // Load user bookings from API
   useEffect(() => {
-    console.log('🔄 BookingContext: useEffect - userId изменился:', userId);
+    if (user?.role === 'admin') {
+      setBookings([]);
+      setIsLoading(false);
+      return;
+    }
     if (!userId) {
-      console.log('⚠️ BookingContext: userId не установлен');
       setIsLoading(false);
       return;
     }
@@ -26,24 +28,21 @@ export const BookingProvider = ({ children }) => {
     (async () => {
       try {
         setIsLoading(true);
-        console.log('🔄 BookingContext: загружаем бронирования для userId:', userId);
         const response = await apiCall(API_ENDPOINTS.BOOKINGS.USER_BOOKINGS(userId));
-        console.log('✅ BookingContext: получены бронирования:', response);
         if (response.success) {
           setBookings(response.bookings || []);
           setError(null);
         } else {
-          console.log('❌ BookingContext: ошибка в ответе:', response.error);
           setError(response.error || 'Failed to load bookings');
         }
       } catch (e) {
-        console.error('❌ BookingContext: ошибка загрузки бронирований:', e);
+        console.error('BookingContext: ошибка загрузки бронирований:', e);
         setError(e.message);
       } finally {
         setIsLoading(false);
       }
     })();
-  }, [userId]);
+  }, [userId, user?.role]);
 
   // Create booking via API
   const addBooking = async (booking) => {
@@ -88,15 +87,26 @@ export const BookingProvider = ({ children }) => {
     }
   };
 
-  // Update booking rating and review (keep in local storage for now)
+  // Update booking rating and review via API
   const updateBookingReview = async (bookingId, rating, review) => {
     try {
+      const booking = bookings.find(b => b.id === bookingId);
+      if (booking) {
+        await apiCall(API_ENDPOINTS.REVIEWS.CREATE, {
+          method: 'POST',
+          body: JSON.stringify({
+            propertyId: booking.propertyId,
+            userId,
+            rating,
+            text: review,
+          }),
+        });
+      }
+
       const updated = bookings.map(b =>
         b.id === bookingId ? { ...b, rating, review, status: 'completed' } : b
       );
       setBookings(updated);
-      // Save reviews to local storage
-      await AsyncStorage.setItem('@bookingReviews', JSON.stringify(updated));
       setError(null);
     } catch (e) {
       console.error('Failed to update booking review', e);
@@ -108,11 +118,16 @@ export const BookingProvider = ({ children }) => {
   const cancelBooking = async (bookingId) => {
     try {
       setIsLoading(true);
-      // For now, just remove from local state
-      // In future, could add DELETE endpoint to API
-      const updated = bookings.filter(b => b.id !== bookingId);
-      setBookings(updated);
+      const response = await apiCall(API_ENDPOINTS.BOOKINGS.CANCEL(bookingId), {
+        method: 'POST',
+        body: JSON.stringify({ userId }),
+      });
+      if (!response.success) {
+        throw new Error(response.error || 'Не удалось отменить бронирование');
+      }
+      setBookings(prev => prev.filter(b => b.id !== bookingId));
       setError(null);
+      return response;
     } catch (e) {
       console.error('Failed to cancel booking', e);
       setError(e.message);
@@ -140,25 +155,18 @@ export const BookingProvider = ({ children }) => {
 
   // Обновить список бронирований (refresh)
   const refreshBookings = useCallback(async () => {
-    console.log('🔄 refreshBookings вызвана, userId:', userId);
-    if (!userId) {
-      console.log('⚠️ refreshBookings: userId не установлен');
-      return;
-    }
+    if (!userId) return;
     try {
       setIsLoading(true);
-      console.log('🔄 refreshBookings: загружаем с сервера для userId:', userId);
       const response = await apiCall(API_ENDPOINTS.BOOKINGS.USER_BOOKINGS(userId));
-      console.log('✅ refreshBookings: получены бронирования:', response);
       if (response.success) {
         setBookings(response.bookings || []);
         setError(null);
       } else {
-        console.log('❌ refreshBookings: ошибка в ответе:', response.error);
         setError(response.error || 'Failed to load bookings');
       }
     } catch (e) {
-      console.error('❌ refreshBookings: ошибка:', e);
+      console.error('refreshBookings: ошибка:', e);
       setError(e.message);
     } finally {
       setIsLoading(false);
