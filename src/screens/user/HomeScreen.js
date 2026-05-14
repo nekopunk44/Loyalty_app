@@ -1,15 +1,16 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  FlatList, Modal, Image, Alert, RefreshControl, Animated, Platform,
+  FlatList, Modal, Image, RefreshControl,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-import { spacing, borderRadius } from '../../constants/theme';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
-import { FadeInCard, ScaleInCard, SlideInLeftCard } from '../../components/ui/AnimatedCard';
+import { FadeInCard, ScaleInCard } from '../../components/ui/AnimatedCard';
 import PropertyCarousel from '../../components/ui/PropertyCarousel';
+import VillaBackdrop from '../../components/ui/VillaBackdrop';
+import { SkeletonBlock } from '../../components/ui/Skeleton';
 import { apiCall } from '../../utils/api';
 import { getApiUrl } from '../../utils/apiUrl';
 
@@ -21,6 +22,25 @@ const ORANGE = '#FF6B35';
 const LEVEL_COLORS = { platinum: '#B366FF', gold: '#F59E0B', silver: '#A9A9A9', bronze: '#CD7F32' };
 const LEVEL_NEXT   = { bronze: 'Silver', silver: 'Gold', gold: 'Platinum', platinum: null };
 const LEVEL_PTS    = { bronze: 500, silver: 2000, gold: 5000, platinum: null };
+
+const HOME_THEME = {
+  light: {
+    screenBg: '#E9EFE8',
+    heroBg: '#EFE1D0',
+    greeting: 'rgba(6,59,92,0.58)',
+    name: NAVY,
+    avatarBg: 'rgba(255,248,239,0.74)',
+    cardBg: '#FFF8EE',
+  },
+  dark: {
+    screenBg: '#07111F',
+    heroBg: '#07111F',
+    greeting: 'rgba(255,255,255,0.52)',
+    name: '#FFFFFF',
+    avatarBg: 'rgba(255,255,255,0.08)',
+    cardBg: '#1E293B',
+  },
+};
 
 const LEVEL_PERKS = {
   bronze: [
@@ -52,66 +72,16 @@ const EVENT_CATEGORY_COLORS = {
 
 const getLevelColor = (level) => LEVEL_COLORS[(level || 'bronze').toLowerCase()] || LEVEL_COLORS.bronze;
 
-const useNative = Platform.OS !== 'web';
-
 export default function HomeScreen({ navigation }) {
   const { theme, isDark } = useTheme();
   const colors = theme.colors;
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin: _isAdmin } = useAuth();
 
   const [selectedPhoto, setSelectedPhoto] = useState(null);
   const [bookingCount, setBookingCount]   = useState(0);
   const [refreshing, setRefreshing]       = useState(false);
   const [upcomingEvents, setUpcomingEvents] = useState([]);
-
-  // Ambient glow stars
-  const GLOW_CFG = useMemo(() => [
-    { x: '6%',  y: 22,  dot: 3, halo: 18, dur: 3200, delay: 0,    peak: 0.95, color: '#F59E0B', dx:  8, dy: -10 },
-    { x: '20%', y: 90,  dot: 2, halo: 14, dur: 4600, delay: 800,  peak: 0.8,  color: '#14B8A6', dx: -6, dy:   8 },
-    { x: '34%', y: 38,  dot: 4, halo: 22, dur: 3600, delay: 1400, peak: 0.9,  color: '#fff',    dx: 10, dy:   6 },
-    { x: '50%', y: 108, dot: 2, halo: 12, dur: 5100, delay: 400,  peak: 0.75, color: '#B366FF', dx: -8, dy: -12 },
-    { x: '63%', y: 52,  dot: 3, halo: 18, dur: 4000, delay: 1200, peak: 0.9,  color: '#F59E0B', dx: 11, dy:   7 },
-    { x: '76%', y: 18,  dot: 2, halo: 14, dur: 3500, delay: 2000, peak: 0.8,  color: '#14B8A6', dx: -9, dy:  16 },
-    { x: '88%', y: 80,  dot: 3, halo: 16, dur: 4800, delay: 600,  peak: 0.85, color: '#fff',    dx:  6, dy: -8  },
-    { x: '44%', y: 14,  dot: 2, halo: 12, dur: 3900, delay: 2200, peak: 0.7,  color: '#B366FF', dx:-11, dy:   9 },
-    { x: '14%', y: 118, dot: 3, halo: 16, dur: 4300, delay: 1700, peak: 0.85, color: '#F59E0B', dx:  7, dy: -9  },
-    { x: '72%', y: 130, dot: 2, halo: 12, dur: 3700, delay: 1000, peak: 0.75, color: '#14B8A6', dx: -5, dy:  11 },
-    { x: '58%', y: 70,  dot: 4, halo: 22, dur: 5400, delay: 2800, peak: 0.9,  color: '#fff',    dx:  9, dy:  -7 },
-    { x: '28%', y: 55,  dot: 2, halo: 12, dur: 4100, delay: 350,  peak: 0.8,  color: '#B366FF', dx: -7, dy:  13 },
-  ], []);
-
-  const glowAnims = useRef(
-    GLOW_CFG.map(() => ({
-      op: new Animated.Value(0),
-      tx: new Animated.Value(0),
-      ty: new Animated.Value(0),
-    }))
-  ).current;
-
-  useEffect(() => {
-    GLOW_CFG.forEach((cfg, i) => {
-      const { op, tx, ty } = glowAnims[i];
-      // Pulse opacity in loop
-      const pulseOp = Animated.loop(Animated.sequence([
-        Animated.delay(cfg.delay),
-        Animated.timing(op, { toValue: cfg.peak, duration: cfg.dur * 0.45, useNativeDriver: useNative }),
-        Animated.timing(op, { toValue: cfg.peak * 0.25, duration: cfg.dur * 0.35, useNativeDriver: useNative }),
-        Animated.timing(op, { toValue: cfg.peak, duration: cfg.dur * 0.20, useNativeDriver: useNative }),
-      ]));
-      // Slow drift back and forth
-      const driftX = Animated.loop(Animated.sequence([
-        Animated.timing(tx, { toValue:  cfg.dx, duration: cfg.dur * 1.2, useNativeDriver: useNative }),
-        Animated.timing(tx, { toValue: -cfg.dx * 0.5, duration: cfg.dur, useNativeDriver: useNative }),
-      ]));
-      const driftY = Animated.loop(Animated.sequence([
-        Animated.timing(ty, { toValue:  cfg.dy, duration: cfg.dur * 0.9, useNativeDriver: useNative }),
-        Animated.timing(ty, { toValue: -cfg.dy * 0.6, duration: cfg.dur * 1.1, useNativeDriver: useNative }),
-      ]));
-      pulseOp.start();
-      driftX.start();
-      driftY.start();
-    });
-  }, []);
+  const [isDataLoading, setIsDataLoading]  = useState(true);
 
   useEffect(() => { loadData(); }, [user?.id]);
   useFocusEffect(React.useCallback(() => { loadData(); }, [user?.id]));
@@ -140,7 +110,9 @@ export default function HomeScreen({ navigation }) {
   };
 
   const loadData = async () => {
+    setIsDataLoading(true);
     await Promise.all([loadBookingCount(), loadEvents()]);
+    setIsDataLoading(false);
   };
 
   const onRefresh = useCallback(async () => {
@@ -151,6 +123,7 @@ export default function HomeScreen({ navigation }) {
 
   const levelKey   = (user?.membershipLevel || 'Bronze').toLowerCase();
   const levelColor = getLevelColor(levelKey);
+  const homePalette = isDark ? HOME_THEME.dark : HOME_THEME.light;
   const nextLevel  = LEVEL_NEXT[levelKey];
   const ptsForNext = LEVEL_PTS[levelKey];
   const pts        = user?.loyaltyPoints || 0;
@@ -163,14 +136,6 @@ export default function HomeScreen({ navigation }) {
   ];
 
 
-  const amenities = [
-    { id: '1', title: 'Комната',   icon: 'hotel',      image: 'https://picsum.photos/300/200?random=4',  price: '3 500 PRB/ночь' },
-    { id: '2', title: 'Бассейн',   icon: 'pool',       image: 'https://picsum.photos/300/200?random=5',  price: 'Включён' },
-    { id: '3', title: 'Ресторан',  icon: 'restaurant', image: 'https://picsum.photos/300/200?random=6',  price: '1 200 PRB' },
-    { id: '4', title: 'Спа',       icon: 'spa',        image: 'https://picsum.photos/300/200?random=7',  price: 'от 2 000 PRB' },
-    { id: '5', title: 'Парк',      icon: 'park',       image: 'https://picsum.photos/300/200?random=8',  price: 'Свободно' },
-  ];
-
   const properties = [
     { id: '1', name: 'Стандарт',         price: '150 PRB/ночь', image: require('../../assets/property1.png') },
     { id: '2', name: 'Люкс апартаменты', price: '250 PRB/ночь', image: require('../../assets/property2.png') },
@@ -182,49 +147,20 @@ export default function HomeScreen({ navigation }) {
 
   return (
     <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.scrollContent}
+      style={[styles.container, { backgroundColor: homePalette.screenBg }]}
+      contentContainerStyle={[styles.scrollContent, { backgroundColor: homePalette.screenBg }]}
       showsVerticalScrollIndicator={false}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[ORANGE]} tintColor={ORANGE} />}
     >
       {/* ── PREMIUM HERO ── */}
-      <View style={styles.hero}>
-        {/* Static soft depth halos */}
-        <View style={styles.depthHalo1} />
-        <View style={styles.depthHalo2} />
-
-        {/* Ambient glow stars */}
-        {GLOW_CFG.map((cfg, i) => (
-          <Animated.View
-            key={i}
-            pointerEvents="none"
-            style={{
-              position: 'absolute',
-              top: cfg.y,
-              left: cfg.x,
-              opacity: glowAnims[i].op,
-              transform: [{ translateX: glowAnims[i].tx }, { translateY: glowAnims[i].ty }],
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            {/* Outer halo */}
-            <View style={{ position: 'absolute', width: cfg.halo, height: cfg.halo, borderRadius: cfg.halo, backgroundColor: cfg.color, opacity: 0.18 }} />
-            {/* Mid halo */}
-            <View style={{ position: 'absolute', width: cfg.halo * 0.55, height: cfg.halo * 0.55, borderRadius: cfg.halo, backgroundColor: cfg.color, opacity: 0.35 }} />
-            {/* Bright core */}
-            <View style={{ width: cfg.dot, height: cfg.dot, borderRadius: cfg.dot, backgroundColor: cfg.color }} />
-          </Animated.View>
-        ))}
-
-        {/* VJ monogram */}
-        <Text style={styles.heroMonogram}>VJ</Text>
+      <View style={[styles.hero, { backgroundColor: homePalette.heroBg }]}>
+        <VillaBackdrop isDark={isDark} headerBlendColor={homePalette.heroBg} />
 
         {/* Content */}
         <View style={styles.heroContent}>
           <View style={styles.heroTextBlock}>
-            <Text style={styles.heroGreeting}>Добро пожаловать</Text>
-            <Text style={styles.heroName}>{displayName}!</Text>
+            <Text style={[styles.heroGreeting, { color: homePalette.greeting }]}>Добро пожаловать</Text>
+            <Text style={[styles.heroName, { color: homePalette.name }]}>{displayName}!</Text>
             <View style={[styles.heroBadge, { borderColor: `${levelColor}70`, backgroundColor: `${levelColor}20` }]}>
               <MaterialIcons name="emoji-events" size={13} color={levelColor} />
               <Text style={[styles.heroBadgeText, { color: levelColor }]}>
@@ -232,7 +168,7 @@ export default function HomeScreen({ navigation }) {
               </Text>
             </View>
           </View>
-          <View style={[styles.heroAvatar, { backgroundColor: `${levelColor}30`, borderColor: levelColor }]}>
+          <View style={[styles.heroAvatar, { backgroundColor: homePalette.avatarBg, borderColor: levelColor }]}>
             <Text style={[styles.heroAvatarText, { color: levelColor }]}>
               {displayName.charAt(0).toUpperCase()}
             </Text>
@@ -242,7 +178,7 @@ export default function HomeScreen({ navigation }) {
 
       {/* ── LOYALTY CARD (overlaps hero) ── */}
       <ScaleInCard delay={80}>
-        <View style={[styles.loyaltyCard, { backgroundColor: colors.cardBg }]}>
+        <View style={[styles.loyaltyCard, { backgroundColor: homePalette.cardBg }]}>
           <Text style={[styles.loyaltyTitle, { color: colors.text }]}>Ваш статус лояльности</Text>
 
           <View style={styles.statsRow}>
@@ -304,7 +240,7 @@ export default function HomeScreen({ navigation }) {
           keyExtractor={(_, i) => String(i)}
           contentContainerStyle={styles.perksRow}
           renderItem={({ item }) => (
-            <View style={[styles.perkCard, { backgroundColor: colors.cardBg, borderColor: `${item.color}30` }]}>
+            <View style={[styles.perkCard, { backgroundColor: homePalette.cardBg, borderColor: `${item.color}30` }]}>
               <View style={[styles.perkIconBox, { backgroundColor: `${item.color}18` }]}>
                 <MaterialIcons name={item.icon} size={24} color={item.color} />
               </View>
@@ -316,7 +252,18 @@ export default function HomeScreen({ navigation }) {
       </FadeInCard>
 
       {/* ── БЛИЖАЙШИЕ СОБЫТИЯ ── */}
-      {upcomingEvents.length > 0 && (
+      {isDataLoading && (
+        <FadeInCard delay={380}>
+          <View style={styles.sectionHeader}>
+            <SkeletonBlock width={160} height={18} borderRadius={6} />
+          </View>
+          <View style={{ flexDirection: 'row', gap: 12, paddingHorizontal: 16 }}>
+            <SkeletonBlock width={180} height={110} borderRadius={12} />
+            <SkeletonBlock width={180} height={110} borderRadius={12} />
+          </View>
+        </FadeInCard>
+      )}
+      {!isDataLoading && upcomingEvents.length > 0 && (
         <FadeInCard delay={380}>
           <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Ближайшие события</Text>
@@ -334,7 +281,7 @@ export default function HomeScreen({ navigation }) {
               const catColor = EVENT_CATEGORY_COLORS[item.category] || EVENT_CATEGORY_COLORS.other;
               return (
                 <TouchableOpacity
-                  style={[styles.eventCard, { backgroundColor: colors.cardBg, borderLeftColor: catColor }]}
+                  style={[styles.eventCard, { backgroundColor: homePalette.cardBg, borderLeftColor: catColor }]}
                   onPress={() => navigation.navigate('Events')}
                   activeOpacity={0.82}
                 >
@@ -405,25 +352,11 @@ const styles = StyleSheet.create({
 
   // ── Premium Hero ──
   hero: {
-    backgroundColor: '#060C1A',
     paddingTop: 24,
     paddingBottom: 52,
     paddingHorizontal: 20,
     overflow: 'hidden',
     minHeight: 170,
-  },
-  depthHalo1: {
-    position: 'absolute', width: 260, height: 260, borderRadius: 130,
-    backgroundColor: '#F59E0B08', top: -80, right: -60,
-  },
-  depthHalo2: {
-    position: 'absolute', width: 200, height: 200, borderRadius: 100,
-    backgroundColor: '#7B2FF70A', bottom: -60, left: -40,
-  },
-  heroMonogram: {
-    position: 'absolute', bottom: 8, right: 16,
-    fontSize: 72, fontWeight: '900', color: 'rgba(255,255,255,0.04)',
-    letterSpacing: 4,
   },
   heroContent: {
     flexDirection: 'row',
@@ -433,7 +366,6 @@ const styles = StyleSheet.create({
   heroTextBlock: { flex: 1 },
   heroGreeting: {
     fontSize: 12,
-    color: 'rgba(255,255,255,0.5)',
     fontWeight: '600',
     letterSpacing: 0.8,
     marginBottom: 4,
@@ -442,9 +374,8 @@ const styles = StyleSheet.create({
   heroName: {
     fontSize: 28,
     fontWeight: '900',
-    color: '#fff',
     marginBottom: 12,
-    letterSpacing: -0.5,
+    letterSpacing: 0,
   },
   heroBadge: {
     flexDirection: 'row',

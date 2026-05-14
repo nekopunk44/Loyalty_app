@@ -8,132 +8,65 @@ import {
   Alert,
   FlatList,
   Modal,
-  TextInput,
   Image,
   Platform,
+  Dimensions,
   ActivityIndicator,
   Animated,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
-import { colors, spacing, borderRadius } from '../../constants/theme';
+import { spacing, borderRadius } from '../../constants/theme';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useBookings } from '../../context/BookingContext';
 import LoyaltyCardService from '../../services/LoyaltyCardService';
-import { FadeInCard } from '../../components/ui/AnimatedCard';
-import HorizontalScrollView from '../../components/ui/HorizontalScrollView';
+import { SkeletonBookingRow } from '../../components/ui/Skeleton';
 import { BookingCalendar } from '../../components/booking/BookingCalendar';
+import PropertyCard from '../../components/booking/PropertyCard';
+import BookingCard from '../../components/booking/BookingCard';
+import CancelConfirmModal from '../../components/booking/CancelConfirmModal';
 import { apiPost, apiGet, apiCall, API_ENDPOINTS } from '../../utils/api';
 import { getApiUrl } from '../../utils/apiUrl';
+import { properties as mockProperties } from '../../constants/properties';
 
 const NAVY  = '#063B5C';
 const TEAL  = '#14B8A6';
 const AMBER = '#F59E0B';
 const CORAL = '#FF6B35';
 const EMERALD  = '#065F46';
-const EMERALD2 = '#047857';
+const _EMERALD2 = '#047857';
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const PROPERTY_CARD_HORIZONTAL_MARGIN = 16;
+const GALLERY_PHOTO_WIDTH = Math.min(SCREEN_WIDTH - PROPERTY_CARD_HORIZONTAL_MARGIN * 2, 430);
+const GALLERY_PHOTO_HEIGHT = 214;
+const BOOKING_SHEET_HEIGHT = Math.round(SCREEN_HEIGHT * 0.75);
 
-const mockProperties = [
-  {
-    id: '2',
-    name: 'Стандрат',
-    description: 'Студия с терассой и бассейном',
-    price: '150PRB/ночь',
-    priceNumber: 150,
-    rooms: 2,
-    guests: 10,
-    amenities: ['WiFi', 'Кондиционер', 'TV', 'Бассейн', 'Сауна (с доплатой)', 'Мангал', 'Парковочное место'],
-    image: 'https://picsum.photos/300/200?random=2',
-    photos: [
-      require('../../assets/standart/st1.png'),
-      require('../../assets/standart/st2.png'),
-      require('../../assets/standart/st3.png'),
-      require('../../assets/standart/st4.png'),
-      require('../../assets/standart/st5.png'),
-      require('../../assets/standart/st6.png'),
-      require('../../assets/standart/st7.png'),
-      require('../../assets/standart/st8.png'),
-      require('../../assets/standart/st1.png'),
-    ],
-  },
-  {
-    id: '1',
-    name: 'Люкс апартамент',
-    description: 'Полный комфорт, с видом на природу',
-    price: '200PRB/ночь',
-    priceNumber: 200,
-    rooms: 10,
-    guests: 20,
-    amenities: ['WiFi', 'Кондиционер', 'TV', 'Кухня', 'Бассейн', 'Сауна (с доплатой)', 'Мангал', 'Парковочное место', 'Караоке', 'Большой зал'],
-    image: 'https://picsum.photos/300/200?random=1',
-    photos: [
-      require('../../assets/luks/st1.png'),
-      require('../../assets/luks/st2.png'),
-      require('../../assets/luks/st3.png'),
-      require('../../assets/luks/st4.png'),
-      require('../../assets/luks/st5.png'),
-      require('../../assets/luks/st6.png'),
-      require('../../assets/luks/st7.png'),
-      require('../../assets/luks/st8.png'),
-      require('../../assets/luks/st9.png'),
-      require('../../assets/luks/st10.png'),
-      require('../../assets/luks/st1.png'),
-    ],
-  },
-  {
-    id: '3',
-    name: 'Задний двор',
-    description: 'Открытая местность с бассейном и беседкой',
-    price: '100PRB/день',
-    priceNumber: 100,
-    rooms: null,
-    guests: 15,
-    amenities: ['WiFi', 'Бассейн', 'Мангал', 'Парковочное место', 'Караоке', 'Холодильник', 'Беседка', 'Шезлонги', 'Зонты'],
-    image: 'https://picsum.photos/300/200?random=3',
-    photos: [
-      require('../../assets/zad/zd1.png'),
-      require('../../assets/zad/zd2.png'),
-      require('../../assets/zad/zd3.png'),
-      require('../../assets/zad/zd4.png'),
-      require('../../assets/zad/zd5.png'),
-      require('../../assets/zad/zd1.png'),
-      require('../../assets/zad/zd2.png'),
-      require('../../assets/zad/zd3.png'),
-    ],
-  },
-  {
-    id: '4',
-    name: 'Вся территория',
-    description: 'Полный комплекс со всеми удобствами',
-    price: '500PRB/ночь',
-    priceNumber: 500,
-    rooms: 10,
-    guests: 30,
-    amenities: ['WiFi', 'Кондиционер', 'TV', 'Кухня', 'Бассейн', 'Сауна (с доплатой)', 'Мангал', 'Парковочное место', 'Караоке', 'Большой зал', 'Беседка', 'Шезлонги', 'Зонты', 'Холодильник'],
-    image: 'https://picsum.photos/300/200?random=4',
-    photos: [
-      require('../../assets/luks/st1.png'),
-      require('../../assets/luks/st2.png'),
-      require('../../assets/luks/st3.png'),
-      require('../../assets/luks/st4.png'),
-      require('../../assets/luks/st5.png'),
-      require('../../assets/luks/st6.png'),
-      require('../../assets/luks/st7.png'),
-      require('../../assets/luks/st8.png'),
-      require('../../assets/luks/st9.png'),
-      require('../../assets/luks/st10.png'),
-      require('../../assets/zad/zd1.png'),
-      require('../../assets/zad/zd2.png'),
-      require('../../assets/zad/zd3.png'),
-      require('../../assets/zad/zd4.png'),
-      require('../../assets/zad/zd5.png'),
-    ],
-  },
-];
 
 // Вспомогательная функция для получения названия свойства по ID
+const getPhotoSource = (photo) => (typeof photo === 'string' ? { uri: photo } : photo);
+
+let bookingPhotosPreloadPromise = null;
+
+export const preloadBookingImages = () => {
+  if (bookingPhotosPreloadPromise) return bookingPhotosPreloadPromise;
+
+  const uniqueUris = new Set();
+
+  mockProperties.forEach((property) => {
+    (property.photos || []).forEach((photo) => {
+      const resolved = Image.resolveAssetSource(getPhotoSource(photo));
+      if (resolved?.uri) uniqueUris.add(resolved.uri);
+    });
+  });
+
+  bookingPhotosPreloadPromise = Promise.all(
+    Array.from(uniqueUris).map((uri) => Image.prefetch(uri).catch(() => false))
+  );
+
+  return bookingPhotosPreloadPromise;
+};
+
 const getPropertyName = (propertyId) => {
   const property = mockProperties.find(p => p.id === propertyId?.toString());
   return property?.name || `Номер ${propertyId}`;
@@ -168,6 +101,10 @@ export default function BookingScreen({ navigation }) {
   const diamond1Scale = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
+    preloadBookingImages();
+  }, []);
+
+  useEffect(() => {
     Animated.parallel([
       Animated.timing(heroAnim,    { toValue: 1, duration: 500, useNativeDriver: useNative }),
       Animated.timing(contentAnim, { toValue: 1, duration: 600, delay: 200, useNativeDriver: useNative }),
@@ -187,7 +124,7 @@ export default function BookingScreen({ navigation }) {
 
   const styles = useMemo(() => StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    content: { paddingBottom: spacing.xl },
+    content: { paddingBottom: 132 },
     // Hero
     hero: { backgroundColor: EMERALD, paddingTop: 22, paddingBottom: 28, paddingHorizontal: 20, overflow: 'hidden' },
     heroSub: { fontSize: 13, color: 'rgba(255,255,255,0.65)', fontWeight: '500', marginBottom: 0 },
@@ -200,33 +137,35 @@ export default function BookingScreen({ navigation }) {
     hDiamond3: { position: 'absolute', width: 60,  height: 60,  backgroundColor: 'rgba(255,255,255,0.07)', top: 20, right: 80 },
     hArc: { position: 'absolute', width: 240, height: 240, borderRadius: 120, borderWidth: 1, borderColor: `${TEAL}28`, top: -100, left: -60 },
     // Filters
-    filterRow: { flexDirection: 'row', marginHorizontal: 16, marginTop: 18, marginBottom: 6, gap: 8 },
+    filterRow: { flexDirection: 'row', marginHorizontal: 16, marginTop: 18, marginBottom: 18, gap: 8 },
     filterPill: { flex: 1, paddingVertical: 9, borderRadius: 20, alignItems: 'center', borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.cardBg },
     filterPillActive: { borderColor: CORAL, backgroundColor: `${CORAL}12` },
     filterPillText: { fontSize: 12, fontWeight: '700', color: colors.textSecondary },
     filterPillTextActive: { color: CORAL },
     sectionTitle: { fontSize: 15, fontWeight: '800', color: colors.text, marginHorizontal: 16, marginBottom: 12, marginTop: 4 },
     // Property cards
-    propertyCard: { backgroundColor: colors.cardBg, borderRadius: 16, marginHorizontal: 16, marginBottom: 14, elevation: 3, shadowColor: NAVY, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.1, shadowRadius: 6, overflow: 'hidden' },
-    propAccent: { height: 4, backgroundColor: CORAL },
-    propBody: { padding: 14 },
-    photoGalleryContainer: { position: 'relative', height: 200, marginBottom: spacing.md, borderRadius: borderRadius.lg, overflow: Platform.OS === 'web' ? 'visible' : 'hidden' },
-    photoGalleryContent: { paddingHorizontal: spacing.sm, gap: spacing.sm, alignItems: 'center', justifyContent: 'center' },
-    galleryPhoto: { width: 380, height: 180, borderRadius: borderRadius.md, backgroundColor: colors.border },
-    photoCountBadge: { position: 'absolute', top: spacing.sm, right: spacing.sm, backgroundColor: 'rgba(0,0,0,0.7)', paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderRadius: borderRadius.lg, flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-    photoCountText: { color: '#fff', fontSize: 12, fontWeight: '600' },
-    propertyHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 },
-    propertyName: { fontSize: 16, fontWeight: '800', color: colors.text },
-    propertyDescription: { fontSize: 12, color: colors.textSecondary, marginTop: 3 },
-    propertyPrice: { fontSize: 14, fontWeight: '800', color: CORAL, backgroundColor: `${CORAL}12`, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-    propertyFeatures: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.md },
-    featureItem: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: `${TEAL}12`, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+    propertyCard: { backgroundColor: colors.cardBg, borderRadius: 20, marginHorizontal: PROPERTY_CARD_HORIZONTAL_MARGIN, marginBottom: 18, elevation: 5, shadowColor: NAVY, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.12, shadowRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: colors.border },
+    propAccent: { height: 3, backgroundColor: TEAL },
+    propBody: { padding: 16 },
+    photoGalleryContainer: { position: 'relative', height: GALLERY_PHOTO_HEIGHT, marginBottom: 0, backgroundColor: colors.border, overflow: Platform.OS === 'web' ? 'visible' : 'hidden' },
+    photoGalleryContent: { paddingHorizontal: 0, gap: 0, alignItems: 'center', justifyContent: 'center' },
+    galleryPhoto: { width: GALLERY_PHOTO_WIDTH, height: GALLERY_PHOTO_HEIGHT, backgroundColor: colors.border },
+    propertyHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
+    propertyName: { fontSize: 19, fontWeight: '900', color: colors.text, letterSpacing: 0 },
+    propertyDescription: { fontSize: 13, color: colors.textSecondary, marginTop: 5, lineHeight: 18 },
+    propertyPrice: { fontSize: 15, fontWeight: '900', color: CORAL, backgroundColor: `${CORAL}10`, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 12, overflow: 'hidden' },
+    propertyFeatures: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 },
+    featureItem: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: `${TEAL}12`, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 12 },
     featureText: { fontSize: 11, color: TEAL, fontWeight: '700' },
-    amenitiesContainer: { height: 40, marginBottom: spacing.md, overflow: Platform.OS === 'web' ? 'visible' : 'hidden' },
-    amenitiesContent: { paddingHorizontal: spacing.sm, gap: spacing.sm, alignItems: 'center', justifyContent: 'flex-start' },
-    amenityBadge: { backgroundColor: `${NAVY}10`, paddingHorizontal: spacing.sm, paddingVertical: 4, borderRadius: borderRadius.md, borderWidth: 1, borderColor: `${NAVY}18` },
-    amenityText: { fontSize: 11, color: NAVY, fontWeight: '600' },
-    selectButton: { backgroundColor: CORAL, paddingVertical: 13, borderRadius: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: spacing.sm, shadowColor: CORAL, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 4 },
+    amenitiesScroller: { marginBottom: 16, maxHeight: 42 },
+    amenitiesGrid: { flexDirection: 'row', gap: 8, paddingRight: 8 },
+    amenitiesContainer: { height: 42, marginBottom: 16, overflow: Platform.OS === 'web' ? 'visible' : 'hidden' },
+    amenitiesContent: { paddingHorizontal: 0, gap: 8, alignItems: 'center', justifyContent: 'flex-start' },
+    amenityBadge: { backgroundColor: colors.background, paddingHorizontal: 11, paddingVertical: 7, borderRadius: 12, borderWidth: 1, borderColor: colors.border },
+    amenityText: { fontSize: 12, color: NAVY, fontWeight: '700' },
+    amenityMoreBadge: { backgroundColor: `${TEAL}12`, borderColor: `${TEAL}24` },
+    amenityMoreText: { color: TEAL },
+    selectButton: { backgroundColor: NAVY, paddingVertical: 14, borderRadius: 14, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: spacing.sm, shadowColor: NAVY, shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.22, shadowRadius: 9, elevation: 5 },
     selectButtonText: { color: '#fff', fontSize: 14, fontWeight: '800' },
     bookingCard: { backgroundColor: colors.cardBg, borderRadius: 14, overflow: 'hidden', elevation: 2, shadowColor: NAVY, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 5 },
     bookingAccent: { height: 3 },
@@ -254,36 +193,56 @@ export default function BookingScreen({ navigation }) {
     emptyIcon: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
     emptyStateText: { fontSize: 15, fontWeight: '800', color: colors.text, marginBottom: 6, textAlign: 'center' },
     emptyStateSubtext: { fontSize: 13, color: colors.textSecondary, textAlign: 'center', lineHeight: 19 },
-    modalContainer: { flex: 1, backgroundColor: colors.background },
-    modalContent: { flex: 1 },
-    modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.md, paddingTop: spacing.md, paddingBottom: spacing.md, backgroundColor: colors.cardBg, borderBottomWidth: 1, borderBottomColor: colors.border },
-    modalTitle: { fontSize: 16, fontWeight: '700', color: colors.text },
-    modalBody: { flex: 1, padding: spacing.md },
-    propertyInfoCard: { backgroundColor: colors.cardBg, borderRadius: borderRadius.lg, padding: spacing.md, marginBottom: spacing.lg },
-    infoTitle: { fontSize: 14, fontWeight: '700', color: colors.text, marginBottom: spacing.sm },
-    infoDesc: { fontSize: 12, color: colors.textSecondary, marginBottom: spacing.md },
-    infoRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-    infoText: { fontSize: 12, color: colors.text },
-    inputLabel: { fontSize: 15, fontWeight: '600', color: colors.text, marginBottom: spacing.sm },
-    input: { backgroundColor: colors.cardBg, borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.lg, paddingHorizontal: spacing.md, paddingVertical: spacing.md, fontSize: 13, color: colors.text, marginBottom: spacing.lg },
-    priceCalculation: { backgroundColor: colors.primary + '10', borderRadius: borderRadius.lg, padding: spacing.md, marginBottom: spacing.lg },
+    modalContainer: { flex: 1, backgroundColor: 'rgba(6, 18, 30, 0.42)', justifyContent: 'flex-end' },
+    modalContent: { height: BOOKING_SHEET_HEIGHT, width: '100%', alignSelf: 'stretch', backgroundColor: colors.background, borderTopLeftRadius: 30, borderTopRightRadius: 30, overflow: 'hidden', shadowColor: NAVY, shadowOffset: { width: 0, height: -10 }, shadowOpacity: 0.18, shadowRadius: 24, elevation: 18 },
+    modalHandle: { width: 46, height: 5, borderRadius: 3, backgroundColor: colors.border, alignSelf: 'center', marginTop: 10, marginBottom: 4 },
+    modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 14, backgroundColor: colors.background },
+    modalTitle: { fontSize: 20, fontWeight: '900', color: colors.text },
+    modalCloseBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.cardBg, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border },
+    modalBody: { flex: 1, paddingHorizontal: 20 },
+    modalBodyContent: { paddingBottom: 24 },
+    propertyInfoCard: { backgroundColor: NAVY, borderRadius: 24, padding: 18, marginBottom: 18, overflow: 'hidden', shadowColor: NAVY, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.18, shadowRadius: 18, elevation: 7 },
+    infoAccentBar: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 5, backgroundColor: TEAL },
+    infoCornerLine: { position: 'absolute', right: -24, top: 34, width: 120, height: 2, backgroundColor: 'rgba(255,255,255,0.16)', transform: [{ rotate: '35deg' }] },
+    infoHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 14 },
+    infoTitleBlock: { flex: 1 },
+    infoTitle: { fontSize: 20, fontWeight: '900', color: '#fff', marginBottom: 6 },
+    infoDesc: { fontSize: 13, color: 'rgba(255,255,255,0.74)', lineHeight: 18 },
+    infoPriceBadge: { backgroundColor: '#fff', borderRadius: 14, paddingHorizontal: 10, paddingVertical: 8 },
+    infoPriceText: { fontSize: 12, color: CORAL, fontWeight: '900' },
+    infoRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, backgroundColor: 'rgba(255,255,255,0.10)', alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 7, borderRadius: 12 },
+    infoText: { fontSize: 12, color: '#fff', fontWeight: '700' },
+    formSectionTitle: { fontSize: 13, fontWeight: '900', color: colors.textSecondary, marginBottom: 10, textTransform: 'uppercase' },
+    dateGrid: { flexDirection: 'row', gap: 10, marginBottom: 16 },
+    dateField: { flex: 1 },
+    inputLabel: { fontSize: 13, fontWeight: '800', color: colors.text, marginBottom: 8 },
+    input: { backgroundColor: colors.cardBg, borderWidth: 1, borderColor: colors.border, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 14, fontSize: 14, color: colors.text, marginBottom: 16 },
+    guestCard: { backgroundColor: colors.cardBg, borderWidth: 1, borderColor: colors.border, borderRadius: 18, padding: 14, marginBottom: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    guestWarning: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: `${CORAL}10`, borderWidth: 1, borderColor: `${CORAL}28`, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10, marginTop: -6, marginBottom: 18 },
+    guestWarningText: { flex: 1, fontSize: 12, lineHeight: 17, color: CORAL, fontWeight: '800' },
+    guestValue: { minWidth: 40, textAlign: 'center', fontSize: 18, fontWeight: '900', color: colors.text },
+    guestStepper: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    priceCalculation: { backgroundColor: colors.cardBg, borderRadius: 20, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: colors.border },
     priceRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.sm },
     priceLabel: { fontSize: 12, color: colors.textSecondary },
-    priceValue: { fontSize: 12, fontWeight: '600', color: colors.text },
-    confirmButton: { backgroundColor: colors.success, paddingVertical: spacing.md, borderRadius: borderRadius.lg, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.lg },
-    confirmButtonText: { color: '#fff', fontSize: 14, fontWeight: '600' },
-    dateButton: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, justifyContent: 'flex-start', gap: spacing.md },
+    priceValue: { fontSize: 13, fontWeight: '800', color: colors.text },
+    confirmButton: { backgroundColor: NAVY, paddingVertical: 16, borderRadius: 18, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.lg, shadowColor: NAVY, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.22, shadowRadius: 14, elevation: 7 },
+    confirmButtonText: { color: '#fff', fontSize: 15, fontWeight: '900' },
+    dateButton: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, justifyContent: 'flex-start', gap: 10, minHeight: 58 },
     dateButtonDisabled: { opacity: 0.5 },
     dateButtonText: { fontSize: 14, color: colors.text },
-    serviceCard: {},
-    quantityButton: { width: 40, height: 40, borderRadius: borderRadius.md, justifyContent: 'center', alignItems: 'center' },
-    checkbox: { width: 24, height: 24, borderRadius: borderRadius.sm, borderWidth: 2, justifyContent: 'center', alignItems: 'center' },
+    serviceCard: { backgroundColor: colors.cardBg, borderWidth: 1, borderColor: colors.border, padding: 16, borderRadius: 18, marginBottom: 12 },
+    serviceCardActive: { borderColor: `${TEAL}70`, backgroundColor: `${TEAL}10` },
+    quantityButton: { width: 40, height: 40, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
+    checkbox: { width: 28, height: 28, borderRadius: 10, borderWidth: 2, justifyContent: 'center', alignItems: 'center' },
   }), [colors]);
 
   const [bookings, setBookings] = useState([]);
+  const [isBookingsLoading, setIsBookingsLoading] = useState(true);
   const [selectedProperty, setSelectedProperty] = useState(null);
   const [bookingModalVisible, setBookingModalVisible] = useState(false);
   const [calendarVisible, setCalendarVisible] = useState(false);
+  const [calendarSelectionMode, setCalendarSelectionMode] = useState('checkIn');
   const [bookedDates, setBookedDates] = useState([]);
   const [bookingLoading, setBookingLoading] = useState(false);
   const [activeFilter, setActiveFilter] = useState('available'); // 'available', 'my', 'history'
@@ -298,11 +257,12 @@ export default function BookingScreen({ navigation }) {
   });
   const [cancelConfirmVisible, setCancelConfirmVisible] = useState(false);
   const [cancelBookingId, setCancelBookingId] = useState(null);
+  const bookingSheetAnim = useRef(new Animated.Value(1)).current;
 
   // Кэш для занятых дат (чтобы не делать повторные запросы)
   const bookedDatesCache = React.useRef(new Map());
   // Отслеживаем время последнего запроса для rate limiting
-  const lastRequestTime = React.useRef(0);
+  const _lastRequestTime = React.useRef(0);
   // Отслеживаем текущий загружаемый propertyId
   const currentLoadingPropertyId = React.useRef(null);
 
@@ -355,6 +315,7 @@ export default function BookingScreen({ navigation }) {
 
   // Форматируем бронирования при изменении contextBookings
   React.useEffect(() => {
+    setIsBookingsLoading(false);
     if (contextBookings && contextBookings.length > 0) {
       const formattedBookings = contextBookings.map((booking) => {
         const saunaHours = parseInt(booking.saunaHours) || 0;
@@ -383,6 +344,8 @@ export default function BookingScreen({ navigation }) {
   }, [contextBookings]);
 
   const handleSelectProperty = (property) => {
+    bookingSheetAnim.stopAnimation();
+    bookingSheetAnim.setValue(1);
     setSelectedProperty(property);
     
     // Автоматически выбираем кухонный сервиз для Silver и выше
@@ -395,21 +358,36 @@ export default function BookingScreen({ navigation }) {
     }
     
     setBookingModalVisible(true);
+    Animated.timing(bookingSheetAnim, {
+      toValue: 0,
+      duration: 320,
+      useNativeDriver: useNative,
+    }).start(({ finished }) => {
+      if (finished) {
+        loadBookedDates(property.id);
+      }
+    });
     // Загрузить занятые даты для этого объекта (но с кэшем)
-    loadBookedDates(property.id);
   };
 
   const closeBookingModal = () => {
-    setBookingModalVisible(false);
     setCalendarVisible(false);
-    setSelectedProperty(null);
-    setBookingData({
-      checkIn: '',
-      checkOut: '',
-      guests: 0,
-      notes: '',
-      saunaHours: 0,
-      kitchenware: false,
+    bookingSheetAnim.stopAnimation();
+    Animated.timing(bookingSheetAnim, {
+      toValue: 1,
+      duration: 220,
+      useNativeDriver: useNative,
+    }).start(() => {
+      setBookingModalVisible(false);
+      setSelectedProperty(null);
+      setBookingData({
+        checkIn: '',
+        checkOut: '',
+        guests: 0,
+        notes: '',
+        saunaHours: 0,
+        kitchenware: false,
+      });
     });
   };
 
@@ -424,7 +402,7 @@ export default function BookingScreen({ navigation }) {
     try {
       currentLoadingPropertyId.current = propertyId;
       const relatedIds = getRelatedProperties(propertyId);
-      let allUnavailableDates = [];
+      const allUnavailableDates = [];
 
       for (let index = 0; index < relatedIds.length; index++) {
         const relatedPropertyId = relatedIds[index];
@@ -675,198 +653,15 @@ export default function BookingScreen({ navigation }) {
     }
   };
 
-  const renderProperty = ({ item, index }) => {
-    return (
-      <FadeInCard delay={150 + index * 80}>
-        <View style={styles.propertyCard}>
-          <View style={styles.propAccent} />
-          <View style={styles.propBody}>
-          <View style={styles.propertyHeader}>
-            <View style={{ flex: 1, marginRight: 10 }}>
-              <Text style={styles.propertyName}>{item.name}</Text>
-              <Text style={styles.propertyDescription}>{item.description}</Text>
-            </View>
-            <Text style={styles.propertyPrice} numberOfLines={1}>{item.price}</Text>
-          </View>
+  const renderProperty = ({ item }) => (
+    <PropertyCard item={item} onSelect={handleSelectProperty} />
+  );
 
-          <View style={styles.propertyFeatures}>
-            {item.rooms && (
-              <View style={styles.featureItem}>
-                <MaterialIcons name="meeting-room" size={14} color={TEAL} />
-                <Text style={styles.featureText}>{item.rooms} комн.</Text>
-              </View>
-            )}
-            <View style={styles.featureItem}>
-              <MaterialIcons name="people" size={14} color={TEAL} />
-              <Text style={styles.featureText}>до {item.guests} гостей</Text>
-            </View>
-          </View>
+  const renderBooking = ({ item, index }) => (
+    <BookingCard item={item} index={index} onCancel={handleCancelBooking} />
+  );
 
-          <View style={styles.amenitiesContainer}>
-            <HorizontalScrollView
-              contentContainerStyle={styles.amenitiesContent}
-              showNavButtons={Platform.OS === 'web'}
-              navButtonColor={theme.colors.primary}
-              navButtonSize={16}
-            >
-              {item.amenities.map((amenity, index) => (
-                <View key={index} style={styles.amenityBadge}>
-                  <Text style={styles.amenityText}>{amenity}</Text>
-                </View>
-              ))}
-            </HorizontalScrollView>
-          </View>
 
-          {/* Галерея фотографий перед кнопкой */}
-          {item.photos && item.photos.length > 0 && (
-            <View style={styles.photoGalleryContainer}>
-              <HorizontalScrollView
-                contentContainerStyle={styles.photoGalleryContent}
-                showNavButtons={Platform.OS === 'web'}
-                navButtonColor={theme.colors.primary}
-                navButtonSize={20}
-                forceShowButtons={true}
-                itemWidth={380}
-                itemGap={spacing.sm}
-              >
-                {item.photos.map((photo, photoIndex) => {
-                  const source = typeof photo === 'string' ? { uri: photo } : photo;
-                  return (
-                    <Image
-                      key={photoIndex}
-                      source={source}
-                      style={styles.galleryPhoto}
-                    />
-                  );
-                })}
-              </HorizontalScrollView>
-              <View style={styles.photoCountBadge}>
-                <MaterialIcons name="image" size={14} color="#fff" />
-              </View>
-            </View>
-          )}
-
-          <TouchableOpacity style={styles.selectButton} onPress={() => handleSelectProperty(item)}>
-            <MaterialIcons name="date-range" size={18} color="#fff" />
-            <Text style={styles.selectButtonText}>Выбрать даты</Text>
-          </TouchableOpacity>
-          </View>
-        </View>
-      </FadeInCard>
-    );
-  };
-
-  const getStatusInfo = (status) => {
-    switch(status) {
-      case 'pending':   return { text: 'Ожидает оплаты', color: '#FEF3C7', textColor: '#B45309' };
-      case 'confirmed':
-      case 'paid':      return { text: 'Активный',       color: '#D1FAE5', textColor: '#065F46' };
-      case 'completed': return { text: 'Завершено',       color: '#E5E7EB', textColor: '#374151' };
-      case 'cancelled': return { text: 'Отменено',        color: '#FEE2E2', textColor: '#B91C1C' };
-      default:          return { text: 'Неизвестно',      color: '#F3F4F6', textColor: '#6B7280' };
-    }
-  };
-
-  const renderActiveBooking = ({ item, index }) => {
-    const statusInfo = getStatusInfo(item.status);
-
-    return (
-      <FadeInCard delay={50 + index * 30}>
-        <View style={styles.activeBookingCard}>
-          <View style={styles.activeBookingLeft}>
-            <Text style={styles.activeBookingProperty} numberOfLines={1}>
-              {item.property}
-            </Text>
-            <Text style={styles.activeBookingDates}>
-              {item.checkIn} — {item.checkOut}
-            </Text>
-            <Text style={styles.activeBookingPrice}>
-              {item.total.toLocaleString('ru-RU')} PRB
-            </Text>
-          </View>
-          <View style={[styles.activeBookingStatus, { backgroundColor: statusInfo.color }]}>
-            <Text style={[styles.activeBookingStatusText, { color: statusInfo.textColor }]}>
-              {statusInfo.text}
-            </Text>
-          </View>
-        </View>
-      </FadeInCard>
-    );
-  };
-
-  const renderBooking = ({ item, index }) => {
-    const statusInfo = getStatusInfo(item.status);
-
-    return (
-      <FadeInCard delay={100 + index * 50}>
-        <View style={styles.bookingCard}>
-          <View style={[styles.bookingAccent, { backgroundColor: statusInfo.textColor }]} />
-          <View style={styles.bookingBody}>
-          <View style={styles.bookingHeader}>
-            <View style={{ flex: 1, marginRight: 8 }}>
-              <Text style={styles.bookingProperty}>{item.property}</Text>
-              <Text style={styles.bookingDate}>{item.date}</Text>
-            </View>
-            <View style={[styles.statusBadge, { backgroundColor: statusInfo.color }]}>
-              <Text style={[styles.statusText, { color: statusInfo.textColor }]}>
-                {statusInfo.text}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.bookingDetails}>
-            <View style={styles.detailRow}>
-              <MaterialIcons name="calendar-today" size={16} color={colors.textSecondary} />
-              <Text style={styles.detailText}>
-                {item.checkIn} — {item.checkOut}
-              </Text>
-            </View>
-            <View style={styles.detailRow}>
-              <MaterialIcons name="people" size={16} color={colors.textSecondary} />
-              <Text style={styles.detailText}>{item.guests} гостей • {item.nights} ночей</Text>
-            </View>
-            <View style={styles.detailRow}>
-              <MaterialIcons name="payments" size={16} color={colors.primary} />
-              <Text style={[styles.detailText, { fontWeight: '700', color: colors.primary }]}>
-                {item.total.toLocaleString('ru-RU')}PRB
-              </Text>
-            </View>
-
-            {item.saunaHours > 0 && (
-              <View style={styles.detailRow}>
-                <MaterialCommunityIcons name="spa" size={16} color={colors.textSecondary} />
-                <Text style={styles.detailText}>Парилка: {item.saunaHours} ч.</Text>
-              </View>
-            )}
-
-            {item.kitchenware && (
-              <View style={styles.detailRow}>
-                <MaterialIcons name="kitchen" size={16} color={colors.textSecondary} />
-                <Text style={styles.detailText}>Кухонный сервиз</Text>
-              </View>
-            )}
-          </View>
-
-          {(item.status === 'pending' || item.status === 'confirmed') && (
-            <TouchableOpacity
-              style={styles.cancelButton}
-              onPress={() => {
-                handleCancelBooking(item.id);
-              }}
-              activeOpacity={0.7}
-              pointerEvents="auto"
-            >
-              <MaterialIcons name="delete-outline" size={18} color="#EF4444" />
-              <Text style={styles.cancelButtonText}>Отменить бронирование</Text>
-            </TouchableOpacity>
-          )}
-          </View>
-        </View>
-      </FadeInCard>
-    );
-  };
-
-  const activeCount = bookings.filter(b => b.status === 'pending' || b.status === 'confirmed' || b.status === 'paid').length;
 
   return (
     <View style={styles.container}>
@@ -895,7 +690,6 @@ export default function BookingScreen({ navigation }) {
         {/* ========== AVAILABLE PROPERTIES ========== */}
         {activeFilter === 'available' && (
           <Animated.View style={{ opacity: contentAnim }}>
-            <Text style={styles.sectionTitle}>Доступные объекты</Text>
             <FlatList
               data={mockProperties}
               renderItem={renderProperty}
@@ -909,7 +703,13 @@ export default function BookingScreen({ navigation }) {
         {/* ========== MY BOOKINGS ========== */}
         {activeFilter === 'my' && (
           <Animated.View style={{ opacity: contentAnim }}>
-            {bookings.filter(b => b.status === 'pending' || b.status === 'confirmed' || b.status === 'paid').length > 0 ? (
+            {isBookingsLoading ? (
+              <View style={{ paddingHorizontal: 16, gap: 12 }}>
+                <SkeletonBookingRow />
+                <SkeletonBookingRow />
+                <SkeletonBookingRow />
+              </View>
+            ) : bookings.filter(b => b.status === 'pending' || b.status === 'confirmed' || b.status === 'paid').length > 0 ? (
               <>
                 <Text style={styles.sectionTitle}>Активные бронирования</Text>
                 <FlatList
@@ -963,99 +763,150 @@ export default function BookingScreen({ navigation }) {
       {/* Модаль бронирования */}
       {selectedProperty && (
         <>
-        <Modal visible={bookingModalVisible} animationType="slide" transparent>
+        <Modal visible={bookingModalVisible} animationType="none" transparent statusBarTranslucent>
           <View style={styles.modalContainer}>
-            <View style={styles.modalContent}>
+            <Animated.View
+              style={[
+                styles.modalContent,
+                {
+                  transform: [{
+                    translateY: bookingSheetAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, BOOKING_SHEET_HEIGHT + 40],
+                    }),
+                  }],
+                },
+              ]}
+            >
+              <View style={styles.modalHandle} />
               <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Забронировать {selectedProperty.name}</Text>
+                <Text style={styles.modalTitle}>{'\u0411\u0440\u043e\u043d\u0438\u0440\u043e\u0432\u0430\u043d\u0438\u0435'}</Text>
                 <TouchableOpacity
+                  style={styles.modalCloseBtn}
                   onPress={() => {
                     closeBookingModal();
                   }}
                 >
-                  <MaterialIcons name="close" size={24} color={colors.text} />
+                  <MaterialIcons name="close" size={22} color={colors.text} />
                 </TouchableOpacity>
               </View>
 
-              <ScrollView style={styles.modalBody}>
-                {/* Информация объекта */}
+              <ScrollView style={styles.modalBody} contentContainerStyle={styles.modalBodyContent}>
                 <View style={styles.propertyInfoCard}>
-                  <Text style={styles.infoTitle}>{selectedProperty.name}</Text>
-                  <Text style={styles.infoDesc}>{selectedProperty.description}</Text>
+                  <View style={styles.infoAccentBar} />
+                  <View style={styles.infoCornerLine} />
+                  <View style={styles.infoHeader}>
+                    <View style={styles.infoTitleBlock}>
+                      <Text style={styles.infoTitle}>{selectedProperty.name}</Text>
+                      <Text style={styles.infoDesc}>{selectedProperty.description}</Text>
+                    </View>
+                    <View style={styles.infoPriceBadge}>
+                      <Text style={styles.infoPriceText}>{selectedProperty.price}</Text>
+                    </View>
+                  </View>
                   <View style={styles.infoRow}>
                     {selectedProperty.rooms && (
-                      <MaterialIcons name="meeting-room" size={16} color={colors.primary} />
+                      <MaterialIcons name="meeting-room" size={16} color="#fff" />
                     )}
                     <Text style={styles.infoText}>
-                      {selectedProperty.rooms ? `${selectedProperty.rooms} комнаты • ` : ''}до {selectedProperty.guests} гостей
+                      {selectedProperty.rooms ? `${selectedProperty.rooms} ` : ''}
+                      {selectedProperty.rooms ? '\u043a\u043e\u043c\u043d. \u2022 ' : ''}
+                      {'\u0434\u043e'} {selectedProperty.guests} {'\u0433\u043e\u0441\u0442\u0435\u0439'}
                     </Text>
                   </View>
                 </View>
 
-                {/* Форма бронирования */}
-                <Text style={styles.inputLabel}>Дата заезда</Text>
-                <TouchableOpacity
-                  style={[styles.input, styles.dateButton]}
-                  onPress={() => {
-                    setCalendarVisible(true);
-                  }}
-                >
-                  <MaterialIcons name="calendar-today" size={20} color={colors.primary} />
-                  <Text
-                    style={[
-                      styles.dateButtonText,
-                      !bookingData.checkIn && { color: colors.textSecondary },
-                    ]}
-                  >
-                    {bookingData.checkIn || 'ДД.MM.ГГГГ'}
-                  </Text>
-                </TouchableOpacity>
+                <Text style={styles.formSectionTitle}>{'\u0414\u0430\u0442\u044b \u0438 \u0433\u043e\u0441\u0442\u0438'}</Text>
+                <View style={styles.dateGrid}>
+                  <View style={styles.dateField}>
+                    <Text style={styles.inputLabel}>{'\u0417\u0430\u0435\u0437\u0434'}</Text>
+                    <TouchableOpacity
+                      style={[styles.input, styles.dateButton]}
+                      onPress={() => {
+                        setCalendarSelectionMode('checkIn');
+                        setCalendarVisible(true);
+                      }}
+                    >
+                      <MaterialIcons name="calendar-today" size={20} color={colors.primary} />
+                      <Text
+                        style={[
+                          styles.dateButtonText,
+                          !bookingData.checkIn && { color: colors.textSecondary },
+                        ]}
+                      >
+                        {bookingData.checkIn || '\u0414\u0414.\u041c\u041c.\u0413\u0413\u0413\u0413'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
 
-                <Text style={styles.inputLabel}>Дата выезда</Text>
-                <TouchableOpacity
-                  style={[
-                    styles.input,
-                    styles.dateButton,
-                    !bookingData.checkIn && styles.dateButtonDisabled,
-                  ]}
-                  onPress={() => bookingData.checkIn && setCalendarVisible(true)}
-                  disabled={!bookingData.checkIn}
-                >
-                  <MaterialIcons
-                    name="calendar-today"
-                    size={20}
-                    color={bookingData.checkIn ? colors.primary : colors.textSecondary}
-                  />
-                  <Text
-                    style={[
-                      styles.dateButtonText,
-                      !bookingData.checkOut && { color: colors.textSecondary },
-                    ]}
-                  >
-                    {bookingData.checkOut || 'ДД.MM.ГГГГ'}
-                  </Text>
-                </TouchableOpacity>
+                  <View style={styles.dateField}>
+                    <Text style={styles.inputLabel}>{'\u0412\u044b\u0435\u0437\u0434'}</Text>
+                    <TouchableOpacity
+                      style={[
+                        styles.input,
+                        styles.dateButton,
+                        !bookingData.checkIn && styles.dateButtonDisabled,
+                      ]}
+                      onPress={() => {
+                        if (!bookingData.checkIn) return;
+                        setCalendarSelectionMode('checkOut');
+                        setCalendarVisible(true);
+                      }}
+                      disabled={!bookingData.checkIn}
+                    >
+                      <MaterialIcons
+                        name="event-available"
+                        size={20}
+                        color={bookingData.checkIn ? colors.primary : colors.textSecondary}
+                      />
+                      <Text
+                        style={[
+                          styles.dateButtonText,
+                          !bookingData.checkOut && { color: colors.textSecondary },
+                        ]}
+                      >
+                        {bookingData.checkOut || '\u0414\u0414.\u041c\u041c.\u0413\u0413\u0413\u0413'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+                <View style={styles.guestCard}>
+                  <View>
+                    <Text style={styles.inputLabel}>{'\u0413\u043e\u0441\u0442\u0438'}</Text>
+                  </View>
+                  <View style={styles.guestStepper}>
+                    <TouchableOpacity
+                      style={[styles.quantityButton, { backgroundColor: colors.primary + '18' }]}
+                      onPress={() => setBookingData({ ...bookingData, guests: Math.max(0, (parseInt(bookingData.guests) || 0) - 1) })}
+                    >
+                      <MaterialIcons name="remove" size={18} color={colors.primary} />
+                    </TouchableOpacity>
+                    <Text style={styles.guestValue}>{parseInt(bookingData.guests) || 0}</Text>
+                    <TouchableOpacity
+                      style={[styles.quantityButton, { backgroundColor: colors.primary }]}
+                      onPress={() => setBookingData({ ...bookingData, guests: (parseInt(bookingData.guests) || 0) + 1 })}
+                    >
+                      <MaterialIcons name="add" size={18} color="#fff" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
 
-                <Text style={styles.inputLabel}>Количество гостей</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Введите количество"
-                  placeholderTextColor={colors.textSecondary}
-                  value={bookingData.guests?.toString() || ''}
-                  onChangeText={(text) => {
-                    const numGuests = parseInt(text) || 0;
-                    setBookingData({ ...bookingData, guests: numGuests });
-                  }}
-                  keyboardType="number-pad"
-                />
+                {getExtraGuestsFee() > 0 && (
+                  <View style={styles.guestWarning}>
+                    <MaterialIcons name="info-outline" size={18} color={CORAL} />
+                    <Text style={styles.guestWarningText}>
+                      {'\u0417\u0430'} {Math.max(0, (parseInt(bookingData.guests) || 0) - selectedProperty.guests)} {'\u0434\u043e\u043f. \u0433\u043e\u0441\u0442\u0435\u0439 \u0431\u0443\u0434\u0435\u0442 \u0434\u043e\u043f\u043b\u0430\u0442\u0430'} +{getExtraGuestsFee().toLocaleString('ru-RU')}PRB
+                    </Text>
+                  </View>
+                )}
 
                 {/* ========== ДОПОЛНИТЕЛЬНЫЕ УСЛУГИ ========== */}
-                <Text style={[styles.inputLabel, { marginTop: spacing.sm, marginBottom: spacing.md, fontSize: 15, textAlign: 'center' }]}>
-                  Дополнительные услуги
+                <Text style={styles.formSectionTitle}>
+                  {'\u0414\u043e\u043f. \u0443\u0441\u043b\u0443\u0433\u0438'}
                 </Text>
 
                 {/* Парилка - Checkbox */}
-                <View style={[styles.serviceCard, { backgroundColor: colors.cardBg, borderWidth: 1, borderColor: colors.border, padding: spacing.md, borderRadius: borderRadius.md, marginBottom: spacing.md }]}>
+                <View style={[styles.serviceCard, parseInt(bookingData.saunaHours) > 0 && styles.serviceCardActive]}>
                   <TouchableOpacity
                     onPress={() => setBookingData({ ...bookingData, saunaHours: bookingData.saunaHours > 0 ? 0 : 1 })}
                     style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
@@ -1122,7 +973,7 @@ export default function BookingScreen({ navigation }) {
                 </View>
 
                 {/* Кухонный сервиз */}
-                <View style={[styles.serviceCard, { backgroundColor: colors.cardBg, borderWidth: 1, borderColor: colors.border, padding: spacing.md, borderRadius: borderRadius.md, marginBottom: spacing.lg }]}>
+                <View style={[styles.serviceCard, bookingData.kitchenware && styles.serviceCardActive, { marginBottom: spacing.lg }]}>
                   <TouchableOpacity
                     onPress={() => {
                       const membershipLevel = user?.membershipLevel || 'Bronze';
@@ -1267,7 +1118,7 @@ export default function BookingScreen({ navigation }) {
                   )}
                 </TouchableOpacity>
               </ScrollView>
-            </View>
+            </Animated.View>
           </View>
         </Modal>
 
@@ -1279,185 +1130,19 @@ export default function BookingScreen({ navigation }) {
           onDateSelect={handleDateSelect}
           bookedDates={bookedDates}
           visible={calendarVisible}
+          selectionMode={calendarSelectionMode}
           onClose={() => setCalendarVisible(false)}
         />
         </>
       )}
 
-      {/* ДИАЛОГ ПОДТВЕРЖДЕНИЯ ОТМЕНЫ */}
-      <Modal visible={cancelConfirmVisible} transparent={true} animationType="fade">
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end', alignItems: 'center' }}>
-          <View style={{ 
-            backgroundColor: colors.cardBg, 
-            borderTopLeftRadius: 20,
-            borderTopRightRadius: 20,
-            padding: spacing.lg, 
-            width: '100%',
-            maxHeight: '85%',
-            paddingTop: spacing.xl
-          }}>
-            {/* Индикатор свайпа вверх */}
-            <View style={{ alignItems: 'center', marginBottom: spacing.lg }}>
-              <View style={{ width: 40, height: 4, backgroundColor: colors.border, borderRadius: 2 }} />
-            </View>
-            
-            <Text style={{ fontSize: 20, fontWeight: '700', color: colors.text, marginBottom: spacing.lg, textAlign: 'center' }}>
-              Отменить бронирование?
-            </Text>
-            
-            {cancelBookingId && bookings.find(b => String(b.id) === String(cancelBookingId)) && (() => {
-              const currentBooking = bookings.find(b => String(b.id) === String(cancelBookingId));
-              const [dayIn, monthIn, yearIn] = currentBooking.checkIn.split('.');
-              const checkInDate = new Date(yearIn, monthIn - 1, dayIn);
-              const today = new Date();
-              today.setHours(0, 0, 0, 0);
-              checkInDate.setHours(0, 0, 0, 0);
-              const daysUntilCheckIn = Math.floor((checkInDate - today) / (1000 * 60 * 60 * 24));
-              const canCancel = daysUntilCheckIn >= 2;
-              
-              return (
-                <View style={{ marginBottom: spacing.xl }}>
-                  {/* Карточка информации о бронировании */}
-                  <View style={{ 
-                    backgroundColor: `${colors.primary}10`,
-                    borderLeftWidth: 4,
-                    borderLeftColor: colors.primary,
-                    padding: spacing.md, 
-                    borderRadius: borderRadius.md,
-                    marginBottom: spacing.lg
-                  }}>
-                    <View style={{ marginBottom: spacing.md }}>
-                      <Text style={{ fontSize: 11, color: colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                        Номер
-                      </Text>
-                      <Text style={{ fontSize: 16, color: colors.text, fontWeight: '700', marginTop: spacing.xs }}>
-                        {currentBooking.property}
-                      </Text>
-                    </View>
-                    
-                    <View style={{ marginBottom: spacing.md }}>
-                      <Text style={{ fontSize: 11, color: colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                        Дата проживания
-                      </Text>
-                      <Text style={{ fontSize: 14, color: colors.text, fontWeight: '600', marginTop: spacing.xs }}>
-                        {currentBooking.date}
-                      </Text>
-                    </View>
-                    
-                    <View>
-                      <Text style={{ fontSize: 11, color: colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                        Сумма платежа
-                      </Text>
-                      <Text style={{ fontSize: 20, color: colors.primary, fontWeight: '700', marginTop: spacing.xs }}>
-                        {currentBooking.total} PRB
-                      </Text>
-                    </View>
-                  </View>
-                  
-                  {/* Статус отмены */}
-                  {canCancel ? (
-                    <View style={{ 
-                      backgroundColor: '#E8F5E9', 
-                      borderLeftWidth: 4,
-                      borderLeftColor: '#4CAF50',
-                      padding: spacing.md, 
-                      borderRadius: borderRadius.md, 
-                      marginBottom: spacing.lg
-                    }}>
-                      <Text style={{ fontSize: 13, color: '#2E7D32', fontWeight: '700', marginBottom: spacing.sm }}>
-                        Отмена доступна
-                      </Text>
-                      <Text style={{ fontSize: 12, color: '#2E7D32', lineHeight: 18 }}>
-                        При отмене будет произведен возврат с вычетом кэшбека в соответствии с вашим уровнем лояльности.
-                      </Text>
-                      <Text style={{ fontSize: 11, color: '#2E7D32', marginTop: spacing.sm, fontWeight: '600' }}>
-                        Дней до заезда: {daysUntilCheckIn}
-                      </Text>
-                    </View>
-                  ) : (
-                    <View style={{ 
-                      backgroundColor: '#FFEBEE', 
-                      borderLeftWidth: 4,
-                      borderLeftColor: '#D32F2F',
-                      padding: spacing.md, 
-                      borderRadius: borderRadius.md, 
-                      marginBottom: spacing.lg
-                    }}>
-                      <Text style={{ fontSize: 13, color: '#C62828', fontWeight: '600', marginBottom: spacing.sm }}>
-                        Отмена недоступна
-                      </Text>
-                      <Text style={{ fontSize: 12, color: '#C62828', lineHeight: 18 }}>
-                        Отмена возможна только минимум за 3 дня до заезда.
-                      </Text>
-                      <Text style={{ fontSize: 11, color: '#C62828', marginTop: spacing.sm, fontWeight: '600' }}>
-                        {daysUntilCheckIn <= 0 
-                          ? `Заезд был ${Math.abs(daysUntilCheckIn)} дн. назад` 
-                          : `До заезда осталось ${daysUntilCheckIn} дн.`}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              );
-            })()}
-            
-            {/* Кнопки */}
-            <View style={{ flexDirection: 'row', gap: spacing.md }}>
-              <TouchableOpacity 
-                style={{ 
-                  flex: 1, 
-                  paddingVertical: spacing.lg, 
-                  backgroundColor: colors.background,
-                  borderWidth: 2,
-                  borderColor: colors.border,
-                  borderRadius: borderRadius.lg, 
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-                onPress={() => {
-                  setCancelConfirmVisible(false);
-                }}
-              >
-                <Text style={{ color: colors.text, fontWeight: '700', fontSize: 14 }}>Закрыть</Text>
-              </TouchableOpacity>
-              
-              {cancelBookingId && bookings.find(b => String(b.id) === String(cancelBookingId)) && (() => {
-                const currentBooking = bookings.find(b => String(b.id) === String(cancelBookingId));
-                const [dayIn, monthIn, yearIn] = currentBooking.checkIn.split('.');
-                const checkInDate = new Date(yearIn, monthIn - 1, dayIn);
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                checkInDate.setHours(0, 0, 0, 0);
-                const daysUntilCheckIn = Math.floor((checkInDate - today) / (1000 * 60 * 60 * 24));
-                const canCancel = daysUntilCheckIn >= 2;
-                
-                return (
-                  <TouchableOpacity 
-                    disabled={!canCancel}
-                    style={{ 
-                      flex: 1, 
-                      paddingVertical: spacing.lg, 
-                      backgroundColor: canCancel ? '#D32F2F' : '#BDBDBD', 
-                      borderRadius: borderRadius.lg, 
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      shadowColor: canCancel ? '#D32F2F' : 'transparent',
-                      shadowOffset: { width: 0, height: 4 },
-                      shadowOpacity: canCancel ? 0.3 : 0,
-                      shadowRadius: 8,
-                      elevation: canCancel ? 5 : 0
-                    }}
-                    onPress={handleConfirmCancel}
-                  >
-                    <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13, textAlign: 'center', lineHeight: 18 }}>
-                      {canCancel ? 'Отменить\nбронирование' : 'Отмена\nнедоступна'}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })()}
-            </View>
-          </View>
-        </View>
-      </Modal>
+      <CancelConfirmModal
+        visible={cancelConfirmVisible}
+        cancelBookingId={cancelBookingId}
+        bookings={bookings}
+        onClose={() => setCancelConfirmVisible(false)}
+        onConfirm={handleConfirmCancel}
+      />
     </View>
   );
 }
