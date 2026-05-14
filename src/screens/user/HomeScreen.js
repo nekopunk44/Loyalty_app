@@ -79,6 +79,7 @@ export default function HomeScreen({ navigation }) {
 
   const [selectedPhoto, setSelectedPhoto] = useState(null);
   const [bookingCount, setBookingCount]   = useState(0);
+  const [recentBookings, setRecentBookings] = useState([]);
   const [refreshing, setRefreshing]       = useState(false);
   const [upcomingEvents, setUpcomingEvents] = useState([]);
   const [isDataLoading, setIsDataLoading]  = useState(true);
@@ -92,6 +93,10 @@ export default function HomeScreen({ navigation }) {
       const data = await apiCall(`${getApiUrl()}/bookings/user/${user.id}`);
       if (data.success && Array.isArray(data.bookings)) {
         setBookingCount(data.bookings.filter(b => b.status === 'completed').length);
+        const active = data.bookings
+          .filter(b => b.status === 'confirmed' || b.status === 'paid' || b.status === 'pending')
+          .slice(0, 2);
+        setRecentBookings(active.length > 0 ? active : data.bookings.slice(0, 2));
       }
     } catch { setBookingCount(0); }
   };
@@ -316,6 +321,51 @@ export default function HomeScreen({ navigation }) {
               );
             }}
           />
+        </FadeInCard>
+      )}
+
+      {/* ── ПОСЛЕДНИЕ БРОНИРОВАНИЯ ── */}
+      {recentBookings.length > 0 && (
+        <FadeInCard delay={460}>
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Последние бронирования</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Booking')}>
+              <Text style={[styles.seeAll, { color: TEAL }]}>Все →</Text>
+            </TouchableOpacity>
+          </View>
+          {recentBookings.map((b) => {
+            const STATUS = {
+              confirmed: { label: 'Активный',       bg: '#D1FAE5', text: '#065F46' },
+              paid:      { label: 'Активный',       bg: '#D1FAE5', text: '#065F46' },
+              pending:   { label: 'Ожидает',        bg: '#FEF3C7', text: '#B45309' },
+              completed: { label: 'Завершено',      bg: '#E5E7EB', text: '#374151' },
+              cancelled: { label: 'Отменено',       bg: '#FEE2E2', text: '#B91C1C' },
+            };
+            const s = STATUS[b.status] || { label: b.status, bg: '#F3F4F6', text: '#6B7280' };
+            const propName = b.property || b.propertyId || 'Объект';
+            const dateStr  = b.checkIn && b.checkOut ? `${b.checkIn} — ${b.checkOut}` : b.checkIn || '';
+            return (
+              <TouchableOpacity
+                key={b.id}
+                style={[styles.recentBookingCard, { backgroundColor: homePalette.cardBg }]}
+                onPress={() => navigation.navigate('Booking')}
+                activeOpacity={0.82}
+              >
+                <View style={[styles.recentBookingAccent, { backgroundColor: s.text }]} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.recentBookingProperty, { color: colors.text }]} numberOfLines={1}>
+                    {propName}
+                  </Text>
+                  {!!dateStr && (
+                    <Text style={[styles.recentBookingDate, { color: colors.textSecondary }]}>{dateStr}</Text>
+                  )}
+                </View>
+                <View style={[styles.recentBookingBadge, { backgroundColor: s.bg }]}>
+                  <Text style={[styles.recentBookingBadgeText, { color: s.text }]}>{s.label}</Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
         </FadeInCard>
       )}
 
@@ -557,6 +607,12 @@ const styles = StyleSheet.create({
 
   // ── Events ──
   eventsRow: { paddingHorizontal: 16, gap: 10, paddingBottom: 4 },
+  recentBookingCard:      { flexDirection: 'row', alignItems: 'center', marginHorizontal: 16, marginBottom: 8, borderRadius: 14, overflow: 'hidden', paddingVertical: 12, paddingRight: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 4, elevation: 2 },
+  recentBookingAccent:    { width: 4, alignSelf: 'stretch', marginRight: 12 },
+  recentBookingProperty:  { fontSize: 14, fontWeight: '700', marginBottom: 2 },
+  recentBookingDate:      { fontSize: 12 },
+  recentBookingBadge:     { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, marginLeft: 10 },
+  recentBookingBadgeText: { fontSize: 11, fontWeight: '700' },
   eventCard: {
     width: 200, borderRadius: 16, padding: 14, borderLeftWidth: 4,
     shadowColor: '#000', shadowOffset: { width: 0, height: 3 },
