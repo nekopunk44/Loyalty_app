@@ -1,7 +1,6 @@
 import 'react-native-gesture-handler';
 import * as Sentry from '@sentry/react-native';
 
-// eslint-disable-next-line import/first
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { useFocusEffect } from '@react-navigation/native';

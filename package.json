@@ -48,10 +48,12 @@
   },
   "devDependencies": {
     "@babel/core": "^7.12.9",
+    "@babel/eslint-parser": "^7.28.6",
     "@expo/config-plugins": "^55.0.8",
     "babel-plugin-transform-remove-console": "^6.9.4",
     "eslint": "^8.57.1",
     "eslint-config-expo": "^8.0.1",
+    "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^4.6.2"
   },
   "overrides": {
