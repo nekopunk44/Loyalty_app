@@ -251,7 +251,6 @@ export default function NotificationCenter({ onClose }) {
   const notificationTypes = [
     { id: 'payment', label: 'Платежи', icon: 'payment' },
     { id: 'booking', label: 'Бронирование', icon: 'event' },
-    { id: 'referral', label: 'Рефералы', icon: 'group' },
     { id: 'review', label: 'Отзывы', icon: 'star' },
   ];
 
@@ -261,9 +260,6 @@ export default function NotificationCenter({ onClose }) {
     }
     if (filterType === 'booking') {
       return ['newBooking', 'bookingConfirmed', 'bookingCompleted', 'bookingCancelled', 'bookingPending', 'new_booking', 'admin_event'].includes(n.type);
-    }
-    if (filterType === 'referral') {
-      return ['referralNotification', 'referralBonus', 'friendJoined'].includes(n.type);
     }
     if (filterType === 'review') {
       return ['reviewNotification', 'newReview', 'reviewReply'].includes(n.type);
@@ -294,11 +290,6 @@ export default function NotificationCenter({ onClose }) {
         return 'cancel';
       case 'cashbackReceived':
         return 'card-giftcard';
-      // Рефералы
-      case 'referralNotification':
-      case 'referralBonus':
-      case 'friendJoined':
-        return 'people';
       // Отзывы
       case 'reviewNotification':
       case 'newReview':
@@ -331,11 +322,6 @@ export default function NotificationCenter({ onClose }) {
         return colors.success;
       case 'bookingCancelled':
         return '#ff6b6b';
-      // Рефералы - акцент
-      case 'referralNotification':
-      case 'referralBonus':
-      case 'friendJoined':
-        return colors.accent;
       // Отзывы - вторичный цвет
       case 'reviewNotification':
       case 'newReview':
@@ -374,13 +360,6 @@ export default function NotificationCenter({ onClose }) {
         return 'Баланс пополнен';
       case 'user_balance_replenishment':
         return 'Пополнение баланса пользователем';
-      // Рефералы
-      case 'referralNotification':
-        return 'Бонус реферала';
-      case 'referralBonus':
-        return 'Вы получили бонус';
-      case 'friendJoined':
-        return 'Друг присоединился';
       // Отзывы
       case 'reviewNotification':
         return 'Новый отзыв';

@@ -9,7 +9,6 @@ import { EventProvider } from '../context/EventContext';
 import { NotificationProvider } from '../context/NotificationContext';
 import { AnalyticsProvider } from '../context/AnalyticsContext';
 import { BookingProvider } from '../context/BookingContext';
-import { ReferralProvider } from '../context/ReferralContext';
 import { PaymentProvider } from '../context/PaymentContext';
 
 export default function AppProviders({ children }) {
@@ -24,11 +23,9 @@ export default function AppProviders({ children }) {
                 <NotificationProvider>
                   <AnalyticsProvider>
                     <BookingProvider>
-                      <ReferralProvider>
-                        <PaymentProvider>
-                          {children}
-                        </PaymentProvider>
-                      </ReferralProvider>
+                      <PaymentProvider>
+                        {children}
+                      </PaymentProvider>
                     </BookingProvider>
                   </AnalyticsProvider>
                 </NotificationProvider>
