@@ -74,6 +74,10 @@ const User = sequelize.define('User', {
     type: DataTypes.DATE,
     allowNull: true,
   },
+  pushToken: {
+    type: DataTypes.STRING(512),
+    allowNull: true,
+  },
 }, {
   timestamps: false,
   tableName: 'users',

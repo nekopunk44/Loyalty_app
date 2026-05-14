@@ -137,6 +137,14 @@ export const NotificationProvider = ({ children }) => {
           const token = await Notifications.getExpoPushTokenAsync();
           setExpoPushToken(token.data);
           await AsyncStorage.setItem('@expo_push_token', token.data);
+          // Регистрируем токен на сервере
+          try {
+            await apiCall(`${getApiUrl()}/notifications/${user.id}/push-token`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
+              body: JSON.stringify({ pushToken: token.data }),
+            });
+          } catch (_) { /* push token registration is optional */ }
         }
       } catch (permissionError) {
         // Push permission is optional
