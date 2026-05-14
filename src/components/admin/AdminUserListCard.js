@@ -17,6 +17,7 @@ export const AdminUserListCard = ({
   onPress,
   onEdit,
   onDelete,
+  onQuickBalance,
   theme,
 }) => {
   const getLevelColor = (level, role) => {
@@ -160,11 +161,29 @@ export const AdminUserListCard = ({
                 {user.status === 'online' ? 'Online' : 'Offline'}
               </Text>
             </View>
+
+            {/* Balance */}
+            {user.balance != null && (
+              <View style={[styles.balanceBadge, { borderColor: levelColor }]}>
+                <Text style={[styles.balanceText, { color: levelColor }]}>
+                  {Number(user.balance).toFixed(0)} PRB
+                </Text>
+              </View>
+            )}
           </View>
         </View>
 
         {/* Right - Actions */}
         <View style={styles.actions}>
+          {onQuickBalance && (
+            <TouchableOpacity
+              style={[styles.quickBalanceButton, { backgroundColor: levelColor }]}
+              onPress={onQuickBalance}
+              activeOpacity={0.8}
+            >
+              <MaterialIcons name="add" size={16} color="#fff" />
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
             style={styles.editButton}
             onPress={onEdit}
@@ -313,6 +332,24 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     color: '#fff',
+  },
+  balanceBadge: {
+    borderWidth: 1,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  balanceText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  quickBalanceButton: {
+    width: 36,
+    height: 36,
+    borderRadius: borderRadius.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 2,
   },
   actions: {
     flexDirection: 'row',

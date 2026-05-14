@@ -301,6 +301,38 @@ export default function AdminEvents() {
     setDeleteModalVisible(true);
   };
 
+  const handleToggleStatus = async (event) => {
+    const nextStatus = event.status === 'completed' ? 'active' : 'completed';
+    try {
+      await updateEvent(event.id, { ...event, status: nextStatus });
+      showNotification(`"${event.title}" → ${nextStatus === 'active' ? 'Активно' : 'Завершено'}`, 'success');
+    } catch (e) {
+      Alert.alert('Ошибка', 'Не удалось изменить статус');
+    }
+  };
+
+  const handleDuplicateEvent = async (event) => {
+    try {
+      const copy = {
+        title: `${event.title} (копия)`,
+        description: event.description,
+        prize: event.prize,
+        startDate: event.startDate,
+        endDate: event.endDate,
+        status: 'upcoming',
+        allowedUsers: event.allowedUsers,
+        eventType: event.eventType,
+        color: event.color,
+        participants: 0,
+        participantIds: [],
+      };
+      await addEvent(copy);
+      showNotification(`Событие "${event.title}" продублировано`, 'success');
+    } catch (e) {
+      Alert.alert('Ошибка', 'Не удалось дублировать событие');
+    }
+  };
+
   const handleDateSelect = (date) => {
     setFormData({ ...formData, endDate: date });
   };
@@ -493,6 +525,16 @@ export default function AdminEvents() {
                       )}
                       
                       <View style={styles.eventActions}>
+                        <TouchableOpacity onPress={() => handleToggleStatus(event)} style={styles.quickActionBtn}>
+                          <MaterialIcons
+                            name={event.status === 'completed' ? 'play-arrow' : 'check'}
+                            size={18}
+                            color={event.status === 'completed' ? theme.colors.primary : theme.colors.success}
+                          />
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => handleDuplicateEvent(event)} style={styles.quickActionBtn}>
+                          <MaterialIcons name="content-copy" size={18} color={theme.colors.textSecondary} />
+                        </TouchableOpacity>
                         <TouchableOpacity onPress={() => handleOpenModal(event)}>
                           <MaterialIcons name="edit" size={20} color={theme.colors.primary} />
                         </TouchableOpacity>
@@ -916,7 +958,11 @@ const styles = StyleSheet.create({
   },
   eventActions: {
     flexDirection: 'row',
-    gap: spacing.md,
+    gap: spacing.sm,
+    alignItems: 'center',
+  },
+  quickActionBtn: {
+    padding: 2,
   },
   eventContent: {
     marginBottom: spacing.md,
