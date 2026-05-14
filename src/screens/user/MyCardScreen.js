@@ -2,8 +2,9 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Modal, Alert, Animated, TextInput, ActivityIndicator,
-  RefreshControl, Platform,
+  RefreshControl, Platform, Dimensions,
 } from 'react-native';
+import Svg, { Rect, Text as SvgText, Line } from 'react-native-svg';
 import { useFocusEffect } from '@react-navigation/native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -109,6 +110,7 @@ export default function ProfileScreen({ navigation }) {
   const [topUpAmount, setTopUpAmount]   = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [stats, setStats] = useState({ bookings: 0, nights: 0, totalSpent: 0, nextLevel: 200000 });
+  const [monthlySpending, setMonthlySpending] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
   const [qrVisible, setQrVisible]   = useState(false);
 
@@ -182,13 +184,29 @@ export default function ProfileScreen({ navigation }) {
       if (data.success && Array.isArray(data.bookings)) {
         const done = data.bookings.filter(b => b.status === 'completed');
         let nights = 0, spent = 0;
+        const monthMap = {};
         done.forEach(b => {
           const [di, mi, yi] = b.checkInDate.split('.');
           const [do_, mo, yo] = b.checkOutDate.split('.');
           nights += Math.ceil((new Date(yo, mo - 1, do_) - new Date(yi, mi - 1, di)) / 86400000);
-          spent += parseFloat(b.totalPrice) || 0;
+          const amount = parseFloat(b.totalPrice) || 0;
+          spent += amount;
+          const key = `${yi}-${mi}`;
+          monthMap[key] = (monthMap[key] || 0) + amount;
         });
         setStats({ bookings: done.length, nights, totalSpent: spent, nextLevel: 200000 });
+
+        // Build last-6-months series
+        const now = new Date();
+        const months = [];
+        for (let i = 5; i >= 0; i--) {
+          const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+          const y = String(d.getFullYear());
+          const m = String(d.getMonth() + 1).padStart(2, '0');
+          const label = d.toLocaleString('ru-RU', { month: 'short' });
+          months.push({ label, value: monthMap[`${y}-${m}`] || 0 });
+        }
+        setMonthlySpending(months);
       }
     } catch { /* keep defaults */ }
   };
@@ -418,6 +436,14 @@ export default function ProfileScreen({ navigation }) {
           ))}
         </Animated.View>
 
+        {/* ── SPENDING CHART ── */}
+        {monthlySpending.length > 0 && monthlySpending.some(m => m.value > 0) && (
+          <Animated.View style={[S.chartCard, { backgroundColor: colors.cardBg }, animStyle(statsAnim)]}>
+            <Text style={[S.chartTitle, { color: colors.text }]}>Траты по месяцам</Text>
+            <SpendingChart data={monthlySpending} accentColor={levelColor} textColor={colors.textSecondary} />
+          </Animated.View>
+        )}
+
         {/* ── LEVEL PROGRESS ── */}
         {!isAdmin && (
           <Animated.View style={[S.levelCard, { backgroundColor: colors.cardBg }, animStyle(levelAnim)]}>
@@ -630,6 +656,40 @@ export default function ProfileScreen({ navigation }) {
   );
 }
 
+const SCREEN_W = Dimensions.get('window').width - 64;
+
+function SpendingChart({ data, accentColor, textColor }) {
+  const chartH = 120;
+  const barW = Math.floor((SCREEN_W - 16) / data.length) - 6;
+  const maxVal = Math.max(...data.map(d => d.value), 1);
+
+  return (
+    <Svg width={SCREEN_W} height={chartH + 30}>
+      {/* Baseline */}
+      <Line x1={0} y1={chartH} x2={SCREEN_W} y2={chartH} stroke={textColor} strokeWidth={0.5} opacity={0.3} />
+
+      {data.map((item, i) => {
+        const barH = Math.max(4, (item.value / maxVal) * chartH);
+        const x = i * ((SCREEN_W - 16) / data.length) + 3;
+        const y = chartH - barH;
+        return (
+          <React.Fragment key={item.label}>
+            <Rect x={x} y={y} width={barW} height={barH} fill={accentColor} rx={3} opacity={item.value > 0 ? 0.85 : 0.15} />
+            <SvgText x={x + barW / 2} y={chartH + 16} textAnchor="middle" fontSize={10} fill={textColor}>
+              {item.label}
+            </SvgText>
+            {item.value > 0 && (
+              <SvgText x={x + barW / 2} y={y - 4} textAnchor="middle" fontSize={9} fill={accentColor}>
+                {item.value >= 1000 ? `${(item.value / 1000).toFixed(0)}K` : item.value}
+              </SvgText>
+            )}
+          </React.Fragment>
+        );
+      })}
+    </Svg>
+  );
+}
+
 const S = StyleSheet.create({
   scroll: { padding: 16, paddingBottom: 92 },
 
@@ -801,6 +861,8 @@ const S = StyleSheet.create({
 
   // Stats
   statsCard: { flexDirection: 'row', borderRadius: 18, marginBottom: 14, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 6, elevation: 3 },
+  chartCard: { borderRadius: 18, marginBottom: 14, padding: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 6, elevation: 3 },
+  chartTitle: { fontSize: 14, fontWeight: '700', marginBottom: 12 },
   statBox: { flex: 1, alignItems: 'center', paddingVertical: 18 },
   statIconCircle: { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
   statValue: { fontSize: 22, fontWeight: '900', marginBottom: 2 },
