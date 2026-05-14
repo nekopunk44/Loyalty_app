@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
+import { AppState } from 'react-native';
 import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from './AuthContext';
@@ -31,10 +32,12 @@ export const NotificationProvider = ({ children }) => {
   const responseListener = useRef();
   const sseRef = useRef(null);
   const sseReconnectTimer = useRef(null);
+  const sseParamsRef = useRef({ userId: null, token: null });
 
   // SSE-соединение для получения уведомлений в реальном времени
   const connectSSE = useCallback((userId, token) => {
     if (!userId || !token) return;
+    sseParamsRef.current = { userId, token };
 
     // XMLHttpRequest доступен нативно в React Native
     const xhr = new XMLHttpRequest();
@@ -80,6 +83,24 @@ export const NotificationProvider = ({ children }) => {
     xhr.send();
   }, []);
 
+  // Переподключение SSE при возврате приложения в foreground
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        const { userId, token } = sseParamsRef.current;
+        if (!userId || !token) return;
+        // Прерываем старое (возможно мёртвое) соединение и открываем новое
+        if (sseRef.current) {
+          sseRef.current.abort();
+          sseRef.current = null;
+        }
+        clearTimeout(sseReconnectTimer.current);
+        connectSSE(userId, token);
+      }
+    });
+    return () => sub.remove();
+  }, [connectSSE]);
+
   // Инициализация уведомлений
   useEffect(() => {
     setupNotifications();
@@ -91,6 +112,7 @@ export const NotificationProvider = ({ children }) => {
         sseRef.current = null;
       }
       clearTimeout(sseReconnectTimer.current);
+      sseParamsRef.current = { userId: null, token: null };
 
       if (Notifications && notificationListener.current) {
         Notifications.removeNotificationSubscription(notificationListener.current);
