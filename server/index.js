@@ -270,9 +270,23 @@ const connectDB = async () => {
 
     // sync() без опций создаёт отсутствующие таблицы, но НЕ изменяет существующие.
     // alter:true опасен — может удалить колонки если они есть в БД, но нет в модели.
-    // Изменения схемы выполняются через явные SQL-миграции (migrations/).
+    // Изменения схемы выполняются через явные SQL-миграции ниже (идемпотентны).
     await sequelize.sync();
     logger.info('Таблицы синхронизированы');
+
+    // Идемпотентные миграции — безопасно запускать при каждом старте.
+    // ADD COLUMN IF NOT EXISTS не упадёт если колонка уже есть.
+    await sequelize.query(`
+      ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS "adminLevel"            INTEGER     DEFAULT NULL,
+        ADD COLUMN IF NOT EXISTS "emailVerified"         BOOLEAN     DEFAULT false,
+        ADD COLUMN IF NOT EXISTS "resetPasswordToken"    VARCHAR(128),
+        ADD COLUMN IF NOT EXISTS "resetPasswordExpires"  TIMESTAMPTZ,
+        ADD COLUMN IF NOT EXISTS "refreshToken"          VARCHAR(512),
+        ADD COLUMN IF NOT EXISTS "refreshTokenExpires"   TIMESTAMPTZ,
+        ADD COLUMN IF NOT EXISTS "pushToken"             VARCHAR(512);
+    `);
+    logger.info('Миграции схемы применены');
 
     // Seed только при первом запуске на пустой БД — не при каждом рестарте.
     const userCount = await User.count();
