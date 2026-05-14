@@ -27,6 +27,7 @@ const {
   verifyToken, verifyAdmin, canAccessBooking, requireOwnerOrAdmin,
 } = require('../middleware/auth');
 const { validate, schemas } = require('../validation');
+const { CASHBACK_RATES, DEFAULT_CASHBACK_RATE } = require('../config/loyalty');
 
 const isDev = () => (process.env.NODE_ENV || 'development') === 'development';
 
@@ -42,13 +43,6 @@ const relatedProperties = {
 const invalidateBookedDatesCache = async (propertyId) => {
   const ids = relatedProperties[String(propertyId)] || [String(propertyId)];
   await Promise.all(ids.map(id => cache.del(`booked-dates:${id}`)));
-};
-
-const CASHBACK_RATES = {
-  Bronze:   0.10,
-  Silver:   0.20,
-  Gold:     0.30,
-  Platinum: 0.40,
 };
 
 const BOOKING_ATTRIBUTES = [
@@ -145,7 +139,13 @@ module.exports = function createBookingsRouter({ isDbConnected }) {
       const checkIn  = new Date(yearIn,  monthIn  - 1, dayIn);
       const checkOut = new Date(yearOut, monthOut - 1, dayOut);
 
-      if (isNaN(checkIn.getTime()) || isNaN(checkOut.getTime())) {
+      // new Date() молча оборачивает невалидные даты (напр. 31.02 → 03.03)
+      // поэтому проверяем что дни/месяцы не изменились после конструирования
+      const dateInvalid =
+        isNaN(checkIn.getTime()) || isNaN(checkOut.getTime()) ||
+        checkIn.getDate()  !== Number(dayIn)   || checkIn.getMonth()  !== Number(monthIn)  - 1 ||
+        checkOut.getDate() !== Number(dayOut)  || checkOut.getMonth() !== Number(monthOut) - 1;
+      if (dateInvalid) {
         return res.status(400).json({ success: false, error: 'Неверный формат даты. Используйте ДД.MM.YYYY' });
       }
       if (checkOut <= checkIn) {
@@ -419,7 +419,7 @@ module.exports = function createBookingsRouter({ isDbConnected }) {
 
       // Рассчитываем кэшбек внутри транзакции
       const membershipLevel = user?.membershipLevel || 'Bronze';
-      const cashbackRate    = CASHBACK_RATES[membershipLevel] || 0.10;
+      const cashbackRate    = CASHBACK_RATES[membershipLevel] ?? DEFAULT_CASHBACK_RATE;
       const cashbackAmount  = parseFloat((bookingPrice * cashbackRate).toFixed(2));
 
       const balanceBefore      = parseFloat(currentBalance.toFixed(2));
@@ -592,7 +592,7 @@ module.exports = function createBookingsRouter({ isDbConnected }) {
         const user            = await User.findOne({ where: { userId: booking.userId }, transaction: txn });
         const bookingPrice    = parseFloat(booking.totalPrice);
         const membershipLevel = user?.membershipLevel || 'Bronze';
-        const cashbackRate    = CASHBACK_RATES[membershipLevel] || 0.10;
+        const cashbackRate    = CASHBACK_RATES[membershipLevel] ?? DEFAULT_CASHBACK_RATE;
 
         cashbackDeducted = parseFloat((bookingPrice * cashbackRate).toFixed(2));
         refundAmount     = parseFloat((bookingPrice - cashbackDeducted).toFixed(2));
@@ -690,7 +690,9 @@ module.exports = function createBookingsRouter({ isDbConnected }) {
    * POST /:bookingId/pay-from-card — оплатить бронирование с карты лояльности (SELECT FOR UPDATE).
    */
   router.post('/:bookingId/pay-from-card', verifyToken, async (req, res) => {
-    const t = await sequelize.transaction();
+    const t = await sequelize.transaction({
+      isolationLevel: Sequelize.Transaction.ISOLATION_LEVELS.SERIALIZABLE,
+    });
     try {
       const { bookingId } = req.params;
       const userId = req.userId;

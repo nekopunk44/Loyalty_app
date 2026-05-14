@@ -193,9 +193,12 @@ module.exports = function createUsersRouter({ isDbConnected }) {
         return res.status(404).json({ success: false, error: 'Пользователь не найден' });
       }
 
-      const allowedFields = ['displayName', 'avatar', 'phone', 'address', 'role', 'membershipLevel'];
-      const updateData = {};
+      // role и membershipLevel изменяет только администратор
+      const isAdmin = req.role === 'admin';
+      const allowedFields = ['displayName', 'avatar', 'phone', 'address'];
+      if (isAdmin) allowedFields.push('role', 'membershipLevel');
 
+      const updateData = {};
       for (const field of allowedFields) {
         const v = req.body[field];
         if (v === undefined || v === null || v === '') continue;

@@ -7,6 +7,7 @@ on:
     branches: [main, develop]
 
 jobs:
+  # ── 1. Серверные тесты + покрытие ──────────────────────────────────────────
   server-tests:
     name: Server tests (Node ${{ matrix.node-version }})
     runs-on: ubuntu-latest
@@ -33,13 +34,42 @@ jobs:
         working-directory: server
         run: node --check index.js
 
-      - name: Run server tests
+      - name: Run tests with coverage
         working-directory: server
-        run: npm test
+        run: npm test -- --coverage
 
+      - name: Upload coverage report
+        if: matrix.node-version == '22.x'
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-coverage
+          path: server/coverage/lcov.info
+          retention-days: 7
+
+  # ── 2. ESLint клиент ────────────────────────────────────────────────────────
+  client-lint:
+    name: ESLint (client)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: npm
+
+      - name: Install client dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Run ESLint (0 errors, max 50 warnings)
+        run: npm run lint -- --max-warnings 50
+
+  # ── 3. Аудит безопасности — сервер ─────────────────────────────────────────
   server-audit:
     name: Security audit (server)
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
@@ -57,9 +87,11 @@ jobs:
         working-directory: server
         run: npm audit --audit-level=high
 
+  # ── 4. Аудит безопасности — клиент ─────────────────────────────────────────
   client-audit:
     name: Security audit (client)
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
@@ -73,4 +105,5 @@ jobs:
 
       - name: npm audit (client)
         run: npm audit --audit-level=high
-        continue-on-error: true  # RN peer-dep vulnerabilities часто вне нашего контроля
+        # RN peer-dep vulnerabilities часто вне нашего контроля
+        continue-on-error: true

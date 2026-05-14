@@ -73,88 +73,14 @@ module.exports = function createAuthRouter({
   const router = express.Router();
 
   /**
-   * POST /register — регистрация нового пользователя.
-   * Создаёт User + сразу LoyaltyCard.
+   * POST /register — самостоятельная регистрация отключена.
+   * Пользователей добавляет только администратор через /register-admin.
    */
-  router.post('/register', authLimiter, authSlowDown, validate(schemas.register), async (req, res) => {
-    try {
-      const { email, password, displayName, firstName, lastName } = req.body;
-
-      if (!email || !password) {
-        return res.status(400).json({ success: false, error: 'Email и пароль обязательны' });
-      }
-      if (!validateEmail(email)) {
-        return res.status(400).json({ success: false, error: 'Неверный формат email' });
-      }
-      if (!validatePassword(password)) {
-        return res.status(400).json({
-          success: false,
-          error: 'Пароль должен содержать минимум 8 символов, включать цифру и заглавную букву',
-        });
-      }
-      if (!isDbConnected()) {
-        return res.status(503).json({ success: false, error: 'База данных не подключена' });
-      }
-
-      const existingUser = await User.findOne({ where: { email } });
-      if (existingUser) {
-        return res.status(400).json({ success: false, error: 'Email уже зарегистрирован' });
-      }
-
-      const passwordHash = await bcryptjs.hash(password, 10);
-      const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-      // displayName — прямое поле; запасной вариант — firstName + lastName; затем email-префикс
-      const resolvedName =
-        displayName ||
-        [firstName, lastName].filter(Boolean).join(' ') ||
-        email.split('@')[0];
-
-      const newUser = await User.create({
-        userId,
-        email,
-        passwordHash,
-        displayName: resolvedName,
-        role: 'user',
-        membershipLevel: 'Bronze',
-        loyaltyPoints: 0,
-      });
-
-      await LoyaltyCard.create({
-        userId: newUser.userId,
-        balance: 0,
-        cashbackRate: 5,
-        totalSpent: 0,
-        totalEarned: 0,
-        membershipLevel: 'Bronze',
-      });
-
-      const { accessToken, refreshToken } = await issueTokens(newUser);
-
-      logger.info('Новый пользователь зарегистрирован', { email });
-
-      return res.status(201).json({
-        success: true,
-        token: accessToken,
-        refreshToken,
-        user: {
-          id: newUser.userId,
-          email: newUser.email,
-          displayName: newUser.displayName,
-          role: newUser.role,
-          membershipLevel: newUser.membershipLevel,
-          loyaltyPoints: newUser.loyaltyPoints,
-        },
-        message: 'Пользователь успешно зарегистрирован',
-      });
-    } catch (error) {
-      logger.error('register error', { error: error.message });
-      return res.status(500).json({
-        success: false,
-        error: 'Ошибка при регистрации',
-        details: isDev() ? error.message : undefined,
-      });
-    }
+  router.post('/register', (req, res) => {
+    return res.status(403).json({
+      success: false,
+      error: 'Самостоятельная регистрация недоступна. Обратитесь к администратору.',
+    });
   });
 
   /**
@@ -185,7 +111,7 @@ module.exports = function createAuthRouter({
       }
 
       const passwordHash = await bcryptjs.hash(password, 10);
-      const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const userId = `user_${Date.now()}_${crypto.randomBytes(5).toString('hex')}`;
 
       const newUser = await User.create({
         userId,
