@@ -25,37 +25,47 @@ export const AuthProvider = ({ children }) => {
 
   const heartbeatIntervalRef = React.useRef(null);
   const refreshIntervalRef   = React.useRef(null);
+  // Гарантирует, что одновременно выполняется не более одного refresh-запроса
+  const refreshPromiseRef    = React.useRef(null);
 
   // ─── Тихое обновление access-токена ────────────────────────────────────────
-  const refreshAccessToken = async () => {
-    try {
-      const storedRefresh = await AsyncStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN);
-      if (!storedRefresh) return null;
+  const refreshAccessToken = () => {
+    if (refreshPromiseRef.current) return refreshPromiseRef.current;
 
-      const response = await fetch(`${getApiUrl()}/auth/refresh`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken: storedRefresh }),
-      });
+    refreshPromiseRef.current = (async () => {
+      try {
+        const storedRefresh = await AsyncStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN);
+        if (!storedRefresh) return null;
 
-      if (!response.ok) {
-        // Refresh-токен истёк или отозван — выходим
-        await _clearSession();
+        const response = await fetch(`${getApiUrl()}/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken: storedRefresh }),
+        });
+
+        if (!response.ok) {
+          // Refresh-токен истёк или отозван — выходим
+          await _clearSession();
+          return null;
+        }
+
+        const data = await response.json();
+        const { token: newAccess, refreshToken: newRefresh } = data;
+
+        await AsyncStorage.setItem(STORAGE_KEYS.AUTH_TOKEN,    newAccess);
+        await AsyncStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, newRefresh);
+        setAuthToken(newAccess);
+
+        return newAccess;
+      } catch (e) {
+        console.error('Ошибка тихого обновления токена:', e);
         return null;
+      } finally {
+        refreshPromiseRef.current = null;
       }
+    })();
 
-      const data = await response.json();
-      const { token: newAccess, refreshToken: newRefresh } = data;
-
-      await AsyncStorage.setItem(STORAGE_KEYS.AUTH_TOKEN,    newAccess);
-      await AsyncStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, newRefresh);
-      setAuthToken(newAccess);
-
-      return newAccess;
-    } catch (e) {
-      console.error('Ошибка тихого обновления токена:', e);
-      return null;
-    }
+    return refreshPromiseRef.current;
   };
 
   // ─── Запуск/остановка таймера обновления ───────────────────────────────────
@@ -161,7 +171,6 @@ export const AuthProvider = ({ children }) => {
   // ─── Вход ───────────────────────────────────────────────────────────────────
   const login = async (email, password) => {
     setError('');
-    setIsLoading(true);
     try {
       const response = await fetch(`${getApiUrl()}/auth/login`, {
         method: 'POST',
@@ -183,11 +192,12 @@ export const AuthProvider = ({ children }) => {
         sendHeartbeat(userData.id, token);
       }, 60000);
 
-      return true;
+      return { success: true };
     } catch (e) {
       console.error('Ошибка входа:', e);
-      setError(e.message || 'Ошибка при входе');
-      return false;
+      const msg = e.message || 'Ошибка при входе';
+      setError(msg);
+      return { success: false, error: msg };
     } finally {
       setIsLoading(false);
     }

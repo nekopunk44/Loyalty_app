@@ -1,33 +1,31 @@
-import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ScrollView, Modal, Alert, Animated, Platform, RefreshControl } from 'react-native';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ScrollView, Modal, Animated, Platform, RefreshControl } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-import { spacing, borderRadius, colors as themeColors } from '../../constants/theme';
+import { spacing, borderRadius } from '../../constants/theme';
 import { useTheme } from '../../context/ThemeContext';
-import { FadeInCard, SlideInLeftCard, FadeOutCard } from '../../components/ui/AnimatedCard';
-
-const NAVY  = '#063B5C';
-const TEAL  = '#14B8A6';
-const AMBER = '#F59E0B';
+import { SlideInLeftCard, FadeOutCard } from '../../components/ui/AnimatedCard';
 import { useEvents } from '../../context/EventContext';
 import { useAuth } from '../../context/AuthContext';
-import { getEventStyleByType } from '../../utils/eventStyles';
-import { joinEvent } from '../../services/DatabaseService';
 
 import { getApiUrl } from '../../utils/apiUrl';
 import { apiCall } from '../../utils/api';
 
+const NAVY  = '#063B5C';
+const TEAL  = '#14B8A6';
+const AMBER = '#F59E0B';
+
 export default function EventsScreen() {
   const { theme } = useTheme();
   const colors = theme.colors;
-  const { events, isLoading, refreshEvents, updateEvent } = useEvents(); // ← Получаем события из EventContext
+  const { events, isLoading: _isLoading, refreshEvents, updateEvent } = useEvents(); // ← Получаем события из EventContext
   const { user } = useAuth(); // ← Получаем данные пользователя
   
   const [filter, setFilter] = useState('all');
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [eventDetailModalVisible, setEventDetailModalVisible] = useState(false);
   const [removingEventIds, setRemovingEventIds] = useState(new Set()); // Отслеживаем удаляемые события
-  const [successModalVisible, setSuccessModalVisible] = useState(false); // Модальное окно успеха
+  const [successModalVisible, _setSuccessModalVisible] = useState(false); // Модальное окно успеха
   const successFadeAnim = useRef(new Animated.Value(0)).current; // Анимация успеха
   const [refreshing, setRefreshing] = useState(false);
   
@@ -160,7 +158,7 @@ export default function EventsScreen() {
     { id: 'upcoming', label: 'Скоро', icon: 'schedule' },
   ];
 
-  const mockEvents = [
+  const _mockEvents = [
     {
       id: '1',
       title: 'Аукцион: Картина',
@@ -473,77 +471,137 @@ export default function EventsScreen() {
   emptyStateSubtext: { fontSize: 13, color: colors.textSecondary, textAlign: 'center', lineHeight: 19 },
   modalContainer: {
     flex: 1,
-    backgroundColor: colors.background,
+    justifyContent: 'flex-end',
+  },
+  modalScrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(6, 18, 30, 0.46)',
   },
   modalContent: {
-    flex: 1,
+    height: '82%',
+    backgroundColor: colors.background,
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    overflow: 'hidden',
+    shadowColor: NAVY,
+    shadowOffset: { width: 0, height: -10 },
+    shadowOpacity: 0.18,
+    shadowRadius: 22,
+    elevation: 16,
+  },
+  sheetHandle: {
+    width: 46,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: colors.border,
+    alignSelf: 'center',
+    marginTop: 10,
+    marginBottom: 4,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.md,
-    backgroundColor: colors.cardBg,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    paddingHorizontal: 22,
+    paddingTop: 8,
+    paddingBottom: 14,
+  },
+  modalTitleBlock: {
+    flex: 1,
+    paddingRight: 14,
+  },
+  modalEyebrow: {
+    fontSize: 11,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+    marginBottom: 4,
   },
   modalTitle: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 23,
+    fontWeight: '900',
     color: colors.text,
-    flex: 1,
-    textAlign: 'center',
+  },
+  modalCloseButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: colors.cardBg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   modalBody: {
     flex: 1,
-    padding: spacing.md,
+  },
+  modalBodyContent: {
+    paddingHorizontal: 22,
+    paddingBottom: 24,
+  },
+  eventHeroCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    borderRadius: 22,
+    padding: 16,
+    backgroundColor: colors.cardBg,
+    borderWidth: 1,
+    marginBottom: 14,
   },
   eventIconLarge: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+    width: 58,
+    height: 58,
+    borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
-    alignSelf: 'center',
-    marginBottom: spacing.lg,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
+  },
+  eventHeroText: {
+    flex: 1,
+  },
+  eventHeroTitle: {
+    fontSize: 17,
+    fontWeight: '900',
+    color: colors.text,
+    marginBottom: 4,
+  },
+  eventHeroSub: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: colors.textSecondary,
   },
   eventDetailsSection: {
     backgroundColor: colors.cardBg,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.md,
+    borderRadius: 22,
+    padding: 18,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   sectionTitle: {
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 13,
+    fontWeight: '900',
     color: colors.text,
-    marginBottom: spacing.md,
+    marginBottom: 12,
+    textTransform: 'uppercase',
   },
   sectionText: {
     fontSize: 13,
     color: colors.textSecondary,
-    lineHeight: 20,
+    lineHeight: 21,
   },
   infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
-    marginBottom: spacing.md,
+    gap: 12,
+    marginBottom: 13,
   },
   infoBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.lg,
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 16,
   },
   infoBadgeText: {
     fontSize: 12,
@@ -555,18 +613,19 @@ export default function EventsScreen() {
     flex: 1,
   },
   joinButton: {
-    paddingVertical: spacing.lg,
-    borderRadius: borderRadius.lg,
+    paddingVertical: 16,
+    borderRadius: 18,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: spacing.md,
-    marginBottom: spacing.lg,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
+    gap: 10,
+    marginTop: 2,
+    marginBottom: 8,
+    elevation: 6,
+    shadowColor: NAVY,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 14,
   },
   joinButtonText: {
     color: '#fff',
@@ -707,21 +766,50 @@ export default function EventsScreen() {
 
       {/* Модаль деталей события */}
       {selectedEvent && (
-        <Modal visible={eventDetailModalVisible} animationType="slide" transparent>
+        <Modal
+          visible={eventDetailModalVisible}
+          animationType="slide"
+          transparent
+          onRequestClose={() => setEventDetailModalVisible(false)}
+        >
           <View style={styles.modalContainer}>
+            <TouchableOpacity
+              style={styles.modalScrim}
+              activeOpacity={1}
+              onPress={() => setEventDetailModalVisible(false)}
+            />
             <View style={styles.modalContent}>
+              <View style={styles.sheetHandle} />
               <View style={styles.modalHeader}>
-                <TouchableOpacity onPress={() => setEventDetailModalVisible(false)}>
-                  <MaterialIcons name="close" size={24} color={colors.text} />
+                <View style={styles.modalTitleBlock}>
+                  <Text style={[styles.modalEyebrow, { color: selectedEvent.color }]}>
+                    {selectedEvent.status}
+                  </Text>
+                  <Text style={styles.modalTitle} numberOfLines={2}>{selectedEvent.title}</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.modalCloseButton}
+                  onPress={() => setEventDetailModalVisible(false)}
+                  activeOpacity={0.82}
+                >
+                  <MaterialIcons name="close" size={22} color={NAVY} />
                 </TouchableOpacity>
-                <Text style={styles.modalTitle}>{selectedEvent.title}</Text>
-                <View style={{ width: 24 }} />
               </View>
 
-              <ScrollView style={styles.modalBody}>
+              <ScrollView
+                style={styles.modalBody}
+                contentContainerStyle={styles.modalBodyContent}
+                showsVerticalScrollIndicator={false}
+              >
                 {/* Иконка события */}
-                <View style={[styles.eventIconLarge, { backgroundColor: selectedEvent.color }]}>
-                  <MaterialIcons name={selectedEvent.icon} size={64} color="#fff" />
+                <View style={[styles.eventHeroCard, { borderColor: selectedEvent.color + '33' }]}>
+                  <View style={[styles.eventIconLarge, { backgroundColor: selectedEvent.color + '18' }]}>
+                    <MaterialIcons name={selectedEvent.icon} size={34} color={selectedEvent.color} />
+                  </View>
+                  <View style={styles.eventHeroText}>
+                    <Text style={styles.eventHeroTitle} numberOfLines={2}>{selectedEvent.title}</Text>
+                    <Text style={styles.eventHeroSub} numberOfLines={2}>{selectedEvent.description}</Text>
+                  </View>
                 </View>
 
                 {/* Описание */}
@@ -776,17 +864,6 @@ export default function EventsScreen() {
                       </Text>
                     </View>
                   )}
-                </View>
-
-                {/* Условия участия */}
-                <View style={styles.eventDetailsSection}>
-                  <Text style={styles.sectionTitle}>Как участвовать</Text>
-                  <Text style={styles.sectionText}>
-                    1. Нажмите кнопку "Участвовать"{'\n'}
-                    2. Выполняйте условия события{'\n'}
-                    3. Получите награду при победе{'\n'}
-                    4. Используйте бонусы в следующий раз
-                  </Text>
                 </View>
 
                 {/* Кнопка участия */}
@@ -851,4 +928,3 @@ export default function EventsScreen() {
     </View>
   );
 }
-

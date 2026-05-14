@@ -67,11 +67,14 @@ export const ThemeProvider = ({ children }) => {
 
   // Save theme preference
   const toggleTheme = async () => {
+    const nextIsDark = !isDark;
+    const newMode = nextIsDark ? 'dark' : 'light';
+    setIsDark(nextIsDark);
+
     try {
-      const newMode = !isDark ? 'dark' : 'light';
       await AsyncStorage.setItem('@theme_mode', newMode);
-      setIsDark(!isDark);
     } catch (e) {
+      setIsDark(isDark);
       console.error('Failed to save theme preference', e);
     }
   };

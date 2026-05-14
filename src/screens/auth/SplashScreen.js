@@ -1,12 +1,55 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, Animated, StyleSheet } from 'react-native';
-import { colors, spacing } from '../../constants/theme';
+import Svg, { Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
+import { spacing } from '../../constants/theme';
+import { useTheme } from '../../context/ThemeContext';
+import VJMonogram from '../../components/auth/VJMonogram';
 
 const NAVY = '#063B5C';
 const TEAL = '#14B8A6';
 const AMBER = '#F59E0B';
 
+const SPLASH_THEME = {
+  light: {
+    rootBg: '#F4F1EA',
+    gradient: ['#69C8BA', '#FFD0AE', '#FFB261'],
+    brandText: NAVY,
+    secondaryText: '#6B7280',
+    line: 'rgba(20,184,166,0.62)',
+    logoColor: NAVY,
+    badgeBorder: '#F4F1EA',
+    dot: NAVY,
+  },
+  dark: {
+    rootBg: '#0B1426',
+    gradient: ['#071827', '#065B66', '#102E4A'],
+    brandText: '#FFFFFF',
+    secondaryText: '#B6C2D2',
+    line: 'rgba(245,158,11,0.72)',
+    logoColor: '#FFFFFF',
+    badgeBorder: '#0B1426',
+    dot: '#FFFFFF',
+  },
+};
+
+function SplashGradientBackdrop({ palette, id }) {
+  return (
+    <Svg width="100%" height="100%" style={StyleSheet.absoluteFill} pointerEvents="none">
+      <Defs>
+        <LinearGradient id={`splashBase${id}`} x1="0" y1="0" x2="1" y2="1">
+          <Stop offset="0" stopColor={palette.gradient[0]} />
+          <Stop offset="0.58" stopColor={palette.gradient[1]} />
+          <Stop offset="1" stopColor={palette.gradient[2]} />
+        </LinearGradient>
+      </Defs>
+      <Rect x="0" y="0" width="100%" height="100%" fill={`url(#splashBase${id})`} />
+    </Svg>
+  );
+}
+
 export default function SplashScreen({ navigation }) {
+  const { isDark } = useTheme();
+  const palette = isDark ? SPLASH_THEME.dark : SPLASH_THEME.light;
   const logoScale = useRef(new Animated.Value(0.3)).current;
   const logoOpacity = useRef(new Animated.Value(0)).current;
   const ringScale = useRef(new Animated.Value(1.4)).current;
@@ -17,12 +60,27 @@ export default function SplashScreen({ navigation }) {
   const dot1Scale = useRef(new Animated.Value(0.6)).current;
   const dot2Scale = useRef(new Animated.Value(0.6)).current;
   const dot3Scale = useRef(new Animated.Value(0.6)).current;
-  const accentWidth = useRef(new Animated.Value(0)).current;
   const badgeScale = useRef(new Animated.Value(0)).current;
   const containerOpacity = useRef(new Animated.Value(1)).current;
+  const gradientShift = useRef(new Animated.Value(0)).current;
+  const themeAnim = useRef(new Animated.Value(isDark ? 1 : 0)).current;
 
   // Web doesn't support useNativeDriver for some properties
   const useNative = typeof window === 'undefined';
+
+  const lightGradientOpacity = themeAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 0],
+  });
+  const darkGradientOpacity = themeAnim;
+  const gradientX = gradientShift.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-28, 28],
+  });
+  const gradientY = gradientShift.interpolate({
+    inputRange: [0, 1],
+    outputRange: [18, -18],
+  });
 
   useEffect(() => {
     // 1. Logo springs in
@@ -49,14 +107,6 @@ export default function SplashScreen({ navigation }) {
       ]),
       Animated.timing(ringOpacity, { toValue: 0, duration: 400, useNativeDriver: useNative }),
     ]).start();
-
-    // 3. Accent line expands
-    Animated.timing(accentWidth, {
-      toValue: 1,
-      duration: 500,
-      delay: 350,
-      useNativeDriver: false,
-    }).start();
 
     // 4. Badge pops in
     Animated.spring(badgeScale, {
@@ -107,6 +157,13 @@ export default function SplashScreen({ navigation }) {
       bounceDot(dot3Scale, 360);
     });
 
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(gradientShift, { toValue: 1, duration: 9000, useNativeDriver: true }),
+        Animated.timing(gradientShift, { toValue: 0, duration: 9000, useNativeDriver: true }),
+      ])
+    ).start();
+
     const timer = setTimeout(() => {
       Animated.timing(containerOpacity, {
         toValue: 0,
@@ -124,18 +181,34 @@ export default function SplashScreen({ navigation }) {
     return () => clearTimeout(timer);
   }, [navigation]);
 
-  const accentLineWidth = accentWidth.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 44],
-  });
+  useEffect(() => {
+    Animated.timing(themeAnim, {
+      toValue: isDark ? 1 : 0,
+      duration: 320,
+      useNativeDriver: true,
+    }).start();
+  }, [isDark, themeAnim]);
 
   return (
-    <Animated.View style={[styles.container, { opacity: containerOpacity }]}>
-      {/* Decorative background shapes */}
-      <View style={styles.bgArcTop} />
-      <View style={styles.bgCircleTopRight} />
-      <View style={styles.bgCircleBottomLeft} />
-      <View style={styles.bgDiamondCenter} />
+    <Animated.View style={[styles.container, { backgroundColor: palette.rootBg, opacity: containerOpacity }]}>
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.gradientPlane,
+          { opacity: lightGradientOpacity, transform: [{ translateX: gradientX }, { translateY: gradientY }] },
+        ]}
+      >
+        <SplashGradientBackdrop palette={SPLASH_THEME.light} id="Light" />
+      </Animated.View>
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.gradientPlane,
+          { opacity: darkGradientOpacity, transform: [{ translateX: gradientX }, { translateY: gradientY }] },
+        ]}
+      >
+        <SplashGradientBackdrop palette={SPLASH_THEME.dark} id="Dark" />
+      </Animated.View>
 
       {/* Logo block */}
       <View style={styles.logoSection}>
@@ -150,16 +223,17 @@ export default function SplashScreen({ navigation }) {
           styles.logoWrap,
           { opacity: logoOpacity, transform: [{ scale: logoScale }] },
         ]}>
-          <View style={styles.logoOuter}>
-            <View style={styles.logoInner}>
-              <Text style={styles.logoMonogram}>VJ</Text>
-              <Animated.View style={[styles.logoAccentLine, { width: accentLineWidth }]} />
-            </View>
-          </View>
+          <VJMonogram
+            size={128}
+            mainColor={palette.logoColor}
+            accentColor={AMBER}
+            startDelay={120}
+            fast
+          />
 
           {/* Amber badge */}
           <Animated.View style={[
-            styles.logoBadge,
+            [styles.logoBadge, { borderColor: palette.badgeBorder }],
             { transform: [{ scale: badgeScale }] },
           ]}>
             <View style={styles.logoBadgeDot} />
@@ -172,19 +246,19 @@ export default function SplashScreen({ navigation }) {
         styles.textBlock,
         { opacity: textOpacity, transform: [{ translateY: textY }] },
       ]}>
-        <Text style={styles.appName}>Villa Jaconda</Text>
+        <Text style={[styles.appName, { color: palette.brandText }]}>Villa Jaconda</Text>
         <View style={styles.subtitleRow}>
-          <View style={styles.subtitleLine} />
-          <Text style={styles.appSubtitle}>Программа лояльности</Text>
-          <View style={styles.subtitleLine} />
+          <View style={[styles.subtitleLine, { backgroundColor: palette.line }]} />
+          <Text style={[styles.appSubtitle, { color: palette.secondaryText }]}>Программа лояльности</Text>
+          <View style={[styles.subtitleLine, { backgroundColor: palette.line }]} />
         </View>
       </Animated.View>
 
       {/* Animated loading dots */}
       <Animated.View style={[styles.loadingWrap, { opacity: loadingOpacity }]}>
-        <Animated.View style={[styles.dot, { transform: [{ scale: dot1Scale }] }]} />
+        <Animated.View style={[styles.dot, { backgroundColor: palette.dot, transform: [{ scale: dot1Scale }] }]} />
         <Animated.View style={[styles.dot, styles.dotMid, { transform: [{ scale: dot2Scale }] }]} />
-        <Animated.View style={[styles.dot, { transform: [{ scale: dot3Scale }] }]} />
+        <Animated.View style={[styles.dot, { backgroundColor: palette.dot, transform: [{ scale: dot3Scale }] }]} />
       </Animated.View>
     </Animated.View>
   );
@@ -193,48 +267,16 @@ export default function SplashScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
   },
-
-  // Background decorations
-  bgArcTop: {
+  gradientPlane: {
     position: 'absolute',
-    top: -120,
-    left: -60,
-    width: 320,
-    height: 320,
-    borderRadius: 160,
-    backgroundColor: `${NAVY}08`,
-  },
-  bgCircleTopRight: {
-    position: 'absolute',
-    top: -30,
-    right: -80,
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    backgroundColor: `${colors.primary}10`,
-  },
-  bgCircleBottomLeft: {
-    position: 'absolute',
-    bottom: 60,
-    left: -60,
-    width: 180,
-    height: 180,
-    borderRadius: 90,
-    backgroundColor: `${TEAL}0C`,
-  },
-  bgDiamondCenter: {
-    position: 'absolute',
-    bottom: -80,
-    right: -40,
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    backgroundColor: `${AMBER}08`,
+    top: '-12%',
+    left: '-12%',
+    width: '124%',
+    height: '124%',
   },
 
   // Logo
@@ -247,45 +289,12 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: 130,
     height: 130,
-    borderRadius: 30,
+    borderRadius: 65,
     borderWidth: 2,
     borderColor: TEAL,
   },
   logoWrap: {
     position: 'relative',
-  },
-  logoOuter: {
-    width: 110,
-    height: 110,
-    borderRadius: 26,
-    borderWidth: 2,
-    borderColor: `${TEAL}60`,
-    padding: 6,
-    backgroundColor: 'transparent',
-  },
-  logoInner: {
-    flex: 1,
-    borderRadius: 20,
-    backgroundColor: NAVY,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: NAVY,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    elevation: 12,
-  },
-  logoMonogram: {
-    fontSize: 36,
-    fontWeight: '900',
-    color: '#fff',
-    letterSpacing: 4,
-  },
-  logoAccentLine: {
-    height: 3,
-    backgroundColor: AMBER,
-    borderRadius: 2,
-    marginTop: 6,
   },
   logoBadge: {
     position: 'absolute',
@@ -337,7 +346,7 @@ const styles = StyleSheet.create({
   },
   appSubtitle: {
     fontSize: 14,
-    color: colors.textSecondary,
+    color: '#6B7280',
     fontWeight: '500',
     letterSpacing: 0.3,
   },

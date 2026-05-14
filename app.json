@@ -23,6 +23,7 @@
     },
     "android": {
       "package": "com.villajaconda.loyalty",
+      "softwareKeyboardLayoutMode": "pan",
       "adaptiveIcon": {
         "backgroundColor": "#FF6B35"
       },

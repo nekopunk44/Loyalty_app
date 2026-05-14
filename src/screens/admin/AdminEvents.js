@@ -8,19 +8,16 @@ import {
   TextInput,
   Modal,
   Alert,
-  Dimensions,
   Animated,
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { colors, spacing, borderRadius } from '../../constants/theme';
-import { lightTheme, darkTheme } from '../../context/ThemeContext';
-import { EventCardAdmin } from '../../components/ui/Cards';
 import { FadeInCard, ScaleInCard } from '../../components/ui/AnimatedCard';
 import { EventDatePicker } from '../../components/ui/EventDatePicker';
 import { useEvents } from '../../context/EventContext';
 import { useTheme } from '../../context/ThemeContext';
 import { useNotification } from '../../context/NotificationContext';
-import { getEventStyleByType, getAllEventTypes, calculateEventStatus } from '../../utils/eventStyles';
+import { getAllEventTypes, calculateEventStatus } from '../../utils/eventStyles';
 
 
 export default function AdminEvents() {
@@ -176,7 +173,7 @@ export default function AdminEvents() {
       const eventType = event.eventType || 'auction';
       
       // Находим иконку и цвет для этого типа события
-      const eventTypeInfo = eventTypes.find(t => t.value === eventType);
+      const _eventTypeInfo = eventTypes.find(t => t.value === eventType);
       
       setEditingEvent(event);
       setFormData({
@@ -438,7 +435,7 @@ export default function AdminEvents() {
                   {events.filter((e) => e.status === 'Активный' || e.status === 'active').length}
                 </Text>
               </View>
-              <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Активные</Text>
+              <Text style={[styles.statBoxLabel, { color: theme.colors.textSecondary }]}>Активные</Text>
             </View>
             <View style={[styles.statBox, { backgroundColor: theme.colors.background }]}>
               <View style={{ alignItems: 'center' }}>
@@ -447,7 +444,7 @@ export default function AdminEvents() {
                   {events.reduce((sum, e) => sum + (e.participants || e.participantsCount || 0), 0)}
                 </Text>
               </View>
-              <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Участников</Text>
+              <Text style={[styles.statBoxLabel, { color: theme.colors.textSecondary }]}>Участников</Text>
             </View>
           </View>
         </ScaleInCard>
@@ -865,7 +862,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.primary,
   },
-  statLabel: {
+  statBoxLabel: {
     fontSize: 12,
     color: colors.textSecondary,
     marginTop: spacing.xs,

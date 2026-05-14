@@ -90,11 +90,11 @@ const initialMockEvents = [
 export function EventProvider({ children }) {
   const [events, setEvents] = useState(initialMockEvents);
   const [isLoading, setIsLoading] = useState(true);
-  const [apiInitialized, setApiInitialized] = useState(false);
-  const [pendingEventIds, setPendingEventIds] = useState(new Set());
+  const [_apiInitialized, setApiInitialized] = useState(false);
+  const [_pendingEventIds, setPendingEventIds] = useState(new Set());
 
   const normalizeEvent = useCallback((event) => {
-    let eventType = event.eventType || 'cashback';
+    const eventType = event.eventType || 'cashback';
     const prize = event.prize && typeof event.prize === 'string' ? event.prize.trim() : (event.prize || '');
     const startDate = formatDateToDDMMYYYY(event.startDate) || '';
     const endDate = formatDateToDDMMYYYY(event.endDate) || '';
@@ -291,7 +291,7 @@ export function EventProvider({ children }) {
             return newPending;
           });
         })
-        .catch((error) => {
+        .catch((_error) => {
           // Событие остаётся локальным с префиксом local_
         });
 

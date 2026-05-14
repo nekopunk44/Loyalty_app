@@ -13,7 +13,6 @@ import {
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { colors, spacing, borderRadius } from '../../constants/theme';
-import { lightTheme, darkTheme } from '../../context/ThemeContext';
 import { FadeInCard, ScaleInCard } from '../../components/ui/AnimatedCard';
 import { AdminUserListCard } from '../../components/admin/AdminUserListCard';
 import { UserLevelCard } from '../../components/admin/UserLevelCard';
@@ -30,7 +29,7 @@ const API_BASE_URL = getApiUrl();
 
 const mockUsers = [];
 
-export default function AdminUsers({ navigation }) {
+export default function AdminUsers({ navigation: _navigation }) {
   const { theme, isDark } = useTheme();
   const { user: currentUser } = useAuth();
   const { notifyUserAdded, notifyUserDeleted, notifyUserUpdated } = useNotification();

@@ -10,11 +10,9 @@ import {
   Alert,
   Modal,
   Animated,
-  Linking,
   Platform,
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { spacing, borderRadius } from '../../constants/theme';
 import { GradientView } from '../../components/ui/GradientView';
 import { useAuth } from '../../context/AuthContext';

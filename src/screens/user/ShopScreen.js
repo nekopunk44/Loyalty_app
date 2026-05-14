@@ -4,7 +4,7 @@ import {
   Alert, ScrollView, FlatList, Animated, Platform,
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-import { spacing, borderRadius } from '../../constants/theme';
+import { spacing } from '../../constants/theme';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 
@@ -103,7 +103,7 @@ const prodStyles = StyleSheet.create({
 // ─── Main screen ─────────────────────────────────────────────────────────────
 
 export default function ShopScreen() {
-  const { user } = useAuth();
+  const { user: _user } = useAuth();
   const { theme } = useTheme();
   const colors = theme.colors;
 

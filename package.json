@@ -5,12 +5,17 @@
   "main": "node_modules/expo/AppEntry.js",
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
+    "android": "expo start --android --localhost --clear",
+    "android:lan": "expo start --android --lan",
+    "android:tunnel": "expo start --android --tunnel",
     "ios": "expo start --ios",
     "web": "expo start --web",
     "doctor": "npx expo-doctor",
     "check:server": "node --check server/index.js",
-    "check": "npm run check:server && npm run doctor"
+    "check": "npm run check:server && npm run doctor",
+    "lint": "eslint src/ App.js",
+    "lint:fix": "eslint src/ App.js --fix",
+    "lint:server": "eslint server/ --ignore-pattern server/node_modules"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
@@ -26,6 +31,7 @@
     "expo-image-picker": "~55.0.20",
     "expo-notifications": "~55.0.22",
     "expo-secure-store": "~55.0.13",
+    "lottie-react-native": "^7.3.6",
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "react-native": "0.83.6",
@@ -42,7 +48,11 @@
   },
   "devDependencies": {
     "@babel/core": "^7.12.9",
-    "babel-plugin-transform-remove-console": "^6.9.4"
+    "@expo/config-plugins": "^55.0.8",
+    "babel-plugin-transform-remove-console": "^6.9.4",
+    "eslint": "^8.57.1",
+    "eslint-config-expo": "^8.0.1",
+    "eslint-plugin-react-hooks": "^4.6.2"
   },
   "overrides": {
     "postcss": "^8.5.10"

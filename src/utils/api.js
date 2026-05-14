@@ -113,15 +113,21 @@ export const API_ENDPOINTS = new Proxy({}, {
   },
 });
 
+const FETCH_TIMEOUT_MS = 30_000;
+
 /**
  * Fetch wrapper с автоматическим обновлением токена при 401.
  * При первом 401 пробует тихо обновить access-токен и повторяет запрос.
  * При повторном 401 возвращает ошибку без бесконечного цикла.
  */
 export const apiCall = async (url, options = {}, _isRetry = false) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
   try {
     const authHeader = await getAuthHeader();
     const response = await fetch(url, {
+      signal: controller.signal,
       headers: {
         'Content-Type': 'application/json',
         ...authHeader,
@@ -129,6 +135,7 @@ export const apiCall = async (url, options = {}, _isRetry = false) => {
       },
       ...options,
     });
+    clearTimeout(timeoutId);
 
     // Тихое обновление при 401 (только один раз, не для /auth/refresh)
     if (response.status === 401 && !_isRetry && !url.includes('/auth/refresh')) {
@@ -159,6 +166,10 @@ export const apiCall = async (url, options = {}, _isRetry = false) => {
 
     return data;
   } catch (error) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      return { success: false, error: 'Превышено время ожидания ответа от сервера' };
+    }
     console.error('API Error:', error);
     return { success: false, error: error.message };
   }

@@ -18,8 +18,6 @@ import { useBookings } from '../../context/BookingContext';
 import { useNotification } from '../../context/NotificationContext';
 import { usePayment } from '../../context/PaymentContext';
 import BookingService from '../../services/BookingService';
-import LoyaltyCardService from '../../services/LoyaltyCardService';
-import { getApiUrl } from '../../utils/apiUrl';
 
 export default function CheckoutScreen({ route, navigation }) {
   const { theme } = useTheme();
@@ -28,7 +26,7 @@ export default function CheckoutScreen({ route, navigation }) {
   const { notifyNewBooking, notifyPaymentSuccess, notifyAdminEvent } = useNotification();
   const { payBookingFromCard, getCardBalance, cardBalance, setCardBalance } = usePayment();
 
-  const [balance, setBalance] = useState(0);
+  const [_balance, setBalance] = useState(0);
   const [loadingBalance, setLoadingBalance] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
   const [insufficientFunds, setInsufficientFunds] = useState(false);
