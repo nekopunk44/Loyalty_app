@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ScrollView, Modal, Animated, Platform, RefreshControl, TextInput } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ScrollView, Modal, Animated, Easing, Platform, RefreshControl, Dimensions } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { spacing, borderRadius } from '../../constants/theme';
@@ -22,9 +22,10 @@ export default function EventsScreen() {
   const { user } = useAuth(); // ← Получаем данные пользователя
   
   const [filter, setFilter] = useState('all');
-  const [searchQuery, setSearchQuery] = useState('');
   const [selectedEvent, setSelectedEvent] = useState(null);
-  const [eventDetailModalVisible, setEventDetailModalVisible] = useState(false);
+  const [modalMounted, setModalMounted] = useState(false);
+  const sheetAnim = useRef(new Animated.Value(0)).current;
+  const SCREEN_H = Dimensions.get('window').height;
   const [removingEventIds, setRemovingEventIds] = useState(new Set()); // Отслеживаем удаляемые события
   const [successModalVisible, _setSuccessModalVisible] = useState(false); // Модальное окно успеха
   const successFadeAnim = useRef(new Animated.Value(0)).current; // Анимация успеха
@@ -57,7 +58,6 @@ export default function EventsScreen() {
 
   // filteredEvents declared early so useEffect below can safely depend on it
   const filteredEvents = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
     return events.filter(event => {
       if (filter === 'all') {
         // show all
@@ -68,12 +68,6 @@ export default function EventsScreen() {
       } else if (filter === 'joined') {
         return event.id === '1' || event.id === '3';
       }
-
-      if (q && !(
-        (event.title || '').toLowerCase().includes(q) ||
-        (event.description || '').toLowerCase().includes(q) ||
-        (event.location || '').toLowerCase().includes(q)
-      )) return false;
 
       const allowedUsers = event.allowedUsers || 'all';
       if (allowedUsers === 'all') return true;
@@ -87,7 +81,7 @@ export default function EventsScreen() {
 
       return false;
     });
-  }, [filter, searchQuery, events, user]);
+  }, [filter, events, user]);
 
   // Функция для показа уведомления
   const showNotification = (message, type = 'info', duration = 3000) => {
@@ -210,13 +204,35 @@ export default function EventsScreen() {
   ];
 
 
-  const handleEventPress = (event) => {
-    // 🔄 Сразу берем обновленное событие из контекста если оно там есть
+  const openEventDetail = (event) => {
     const eventFromContext = events.find(e => e.id === event.id);
-    const eventToShow = eventFromContext || event;
-    
-    setSelectedEvent(eventToShow);
-    setEventDetailModalVisible(true);
+    setSelectedEvent(eventFromContext || event);
+    sheetAnim.setValue(0);
+    setModalMounted(true);
+    Animated.timing(sheetAnim, {
+      toValue: 1,
+      duration: 340,
+      easing: Easing.bezier(0.22, 1, 0.36, 1),
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const closeEventDetail = (onClosed) => {
+    Animated.timing(sheetAnim, {
+      toValue: 0,
+      duration: 260,
+      easing: Easing.bezier(0.4, 0, 0.2, 1),
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished) {
+        setModalMounted(false);
+        if (typeof onClosed === 'function') onClosed();
+      }
+    });
+  };
+
+  const handleEventPress = (event) => {
+    openEventDetail(event);
   };
 
   const handleJoinEvent = async () => {
@@ -228,11 +244,11 @@ export default function EventsScreen() {
 
     if (participantIds.includes(user.id)) {
       showNotification('Вы уже участвуете в этом событии', 'error');
-      setEventDetailModalVisible(false);
+      closeEventDetail();
       return;
     }
 
-    setEventDetailModalVisible(false);
+    closeEventDetail();
 
     try {
       const data = await apiCall(`${getApiUrl()}/events/${selectedEvent.id}/join`, {
@@ -375,9 +391,7 @@ export default function EventsScreen() {
   hBlob2: { position: 'absolute', width: 140, height: 140, borderRadius: 70, backgroundColor: `${AMBER}12`, bottom: -50, left: -20 },
   hArc: { position: 'absolute', width: 220, height: 220, borderRadius: 110, borderWidth: 1, borderColor: `${TEAL}28`, top: -90, left: -60 },
   // ── Filters ──
-  searchRow: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 16, marginTop: 14, marginBottom: 2, backgroundColor: colors.cardBg, borderRadius: 14, borderWidth: 1, borderColor: colors.border },
-  searchInput: { flex: 1, paddingVertical: 10, paddingHorizontal: 8, fontSize: 14, color: colors.text },
-  filterRow: { flexDirection: 'row', paddingHorizontal: 16, paddingTop: 10, paddingBottom: 4, gap: 8 },
+  filterRow: { flexDirection: 'row', paddingHorizontal: 16, paddingTop: 14, paddingBottom: 4, gap: 8 },
   filterPill: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.cardBg },
   filterPillActive: { borderColor: TEAL, backgroundColor: `${TEAL}14` },
   filterPillText: { fontSize: 12, fontWeight: '700', color: colors.textSecondary },
@@ -482,9 +496,6 @@ export default function EventsScreen() {
   modalContainer: {
     flex: 1,
     justifyContent: 'flex-end',
-  },
-  modalScrim: {
-    ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(6, 18, 30, 0.46)',
   },
   modalContent: {
@@ -720,42 +731,23 @@ export default function EventsScreen() {
 
       <FlatList
         ListHeaderComponent={
-          <View>
-            <View style={styles.searchRow}>
-              <MaterialIcons name="search" size={20} color={colors.textSecondary} style={{ marginLeft: 12 }} />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Поиск событий..."
-                placeholderTextColor={colors.textSecondary}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                returnKeyType="search"
-                clearButtonMode="while-editing"
-              />
-              {searchQuery.length > 0 && (
-                <TouchableOpacity onPress={() => setSearchQuery('')} style={{ paddingRight: 10 }}>
-                  <MaterialIcons name="close" size={18} color={colors.textSecondary} />
-                </TouchableOpacity>
-              )}
-            </View>
-            <View style={styles.filterRow}>
-              {filterTabs.map((tab) => (
-                <TouchableOpacity
-                  key={tab.id}
-                  style={[styles.filterPill, filter === tab.id && styles.filterPillActive]}
-                  onPress={() => setFilter(tab.id)}
-                >
-                  <MaterialIcons
-                    name={tab.icon}
-                    size={14}
-                    color={filter === tab.id ? TEAL : colors.textSecondary}
-                  />
-                  <Text style={[styles.filterPillText, filter === tab.id && styles.filterPillTextActive]}>
-                    {tab.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+          <View style={styles.filterRow}>
+            {filterTabs.map((tab) => (
+              <TouchableOpacity
+                key={tab.id}
+                style={[styles.filterPill, filter === tab.id && styles.filterPillActive]}
+                onPress={() => setFilter(tab.id)}
+              >
+                <MaterialIcons
+                  name={tab.icon}
+                  size={14}
+                  color={filter === tab.id ? TEAL : colors.textSecondary}
+                />
+                <Text style={[styles.filterPillText, filter === tab.id && styles.filterPillTextActive]}>
+                  {tab.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
         }
         data={filteredEvents}
@@ -785,15 +777,11 @@ export default function EventsScreen() {
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <View style={[styles.emptyIcon, { backgroundColor: `${NAVY}10` }]}>
-              <MaterialIcons name={searchQuery ? 'search-off' : 'event-busy'} size={30} color={NAVY} />
+              <MaterialIcons name="event-busy" size={30} color={NAVY} />
             </View>
-            <Text style={styles.emptyStateText}>
-              {searchQuery ? 'Ничего не найдено' : 'Нет событий'}
-            </Text>
+            <Text style={styles.emptyStateText}>Нет событий</Text>
             <Text style={styles.emptyStateSubtext}>
-              {searchQuery
-                ? `По запросу «${searchQuery}» событий не найдено`
-                : 'Скоро появятся новые акции и предложения'}
+              Скоро появятся новые акции и предложения
             </Text>
           </View>
         }
@@ -802,18 +790,30 @@ export default function EventsScreen() {
       {/* Модаль деталей события */}
       {selectedEvent && (
         <Modal
-          visible={eventDetailModalVisible}
-          animationType="slide"
+          visible={modalMounted}
+          animationType="none"
           transparent
-          onRequestClose={() => setEventDetailModalVisible(false)}
+          onRequestClose={() => closeEventDetail()}
         >
           <View style={styles.modalContainer}>
             <TouchableOpacity
-              style={styles.modalScrim}
+              style={StyleSheet.absoluteFillObject}
               activeOpacity={1}
-              onPress={() => setEventDetailModalVisible(false)}
+              onPress={() => closeEventDetail()}
             />
-            <View style={styles.modalContent}>
+            <Animated.View
+              style={[
+                styles.modalContent,
+                {
+                  transform: [{
+                    translateY: sheetAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [SCREEN_H * 0.82, 0],
+                    }),
+                  }],
+                },
+              ]}
+            >
               <View style={styles.sheetHandle} />
               <View style={styles.modalHeader}>
                 <View style={styles.modalTitleBlock}>
@@ -824,7 +824,7 @@ export default function EventsScreen() {
                 </View>
                 <TouchableOpacity
                   style={styles.modalCloseButton}
-                  onPress={() => setEventDetailModalVisible(false)}
+                  onPress={() => closeEventDetail()}
                   activeOpacity={0.82}
                 >
                   <MaterialIcons name="close" size={22} color={NAVY} />
@@ -910,7 +910,7 @@ export default function EventsScreen() {
                   <Text style={styles.joinButtonText}>Участвовать</Text>
                 </TouchableOpacity>
               </ScrollView>
-            </View>
+            </Animated.View>
           </View>
         </Modal>
       )}

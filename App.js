@@ -171,17 +171,26 @@ const AdminStatsTab  = withTabTransition(AdminStats);
 function UserTabs() {
   const { theme, isDark } = useTheme();
   const themeColors = theme.colors;
-  
+
   return (
     <Tab.Navigator
       initialRouteName="Home"
       screenOptions={({ route }) => {
         const headerColor = getUserHeaderColor(isDark);
-        const headerUnderlay = getUserHeaderUnderlayColor(route.name, isDark, themeColors.background);
+        // For Home, underlay is transparent and content extends under the header,
+        // so the curve's corner cutouts reveal whatever sits at the top of the
+        // screen content (hero when scrolled to top, screenBg when scrolled past).
+        const isHome = route.name === 'Home';
+        const headerUnderlay = isHome
+          ? 'transparent'
+          : getUserHeaderUnderlayColor(route.name, isDark, themeColors.background);
         const headerTint = getUserHeaderTint(isDark);
 
         return {
         headerShown: true,
+        // On Home, screen content extends under the header so the carved corners
+        // of the rounded header background reveal the hero/screen below it.
+        headerTransparent: isHome,
         headerStyle: {
           backgroundColor: 'transparent',
           elevation: 0,
