@@ -11,11 +11,27 @@
  * или ISO. `local_*` ID обрабатываются как no-op: клиент управляет ими локально.
  */
 const express = require('express');
+const jwt = require('jsonwebtoken');
 
 const logger = require('../logger');
 const { Event } = require('../models');
 const { verifyAdmin, verifyToken } = require('../middleware/auth');
 const { isoToRu } = require('../utils/dates');
+const mlClient = require('../services/mlClient');
+
+const getJwtSecret = () =>
+  process.env.JWT_SECRET || 'development-only-jwt-secret-change-me';
+
+/** Достаёт userId из Bearer-токена, но не падает при его отсутствии. */
+const tryGetUserId = (req) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return null;
+  try {
+    return jwt.verify(token, getJwtSecret()).userId || null;
+  } catch (_) {
+    return null;
+  }
+};
 
 const isDev = () => (process.env.NODE_ENV || 'development') === 'development';
 
@@ -51,15 +67,73 @@ module.exports = function createEventsRouter({ isDbConnected }) {
   const router = express.Router();
 
   /**
-   * GET / — список всех событий, отсортированных по дате начала.
+   * GET / — список событий.
+   * По умолчанию — сортировка по startDate ASC.
+   * При ?personalized=true и валидном Bearer-токене — события переупорядочены
+   * ML-рекомендером (CB + item-item CF). Если ML недоступен или пользователь
+   * неизвестен — возвращается обычный список (graceful fallback) с флагом
+   * `personalized: false` в ответе.
    */
   router.get('/', async (req, res) => {
     try {
       if (!isDbConnected()) {
         return res.status(503).json({ success: false, error: 'База данных не подключена' });
       }
+
+      const wantPersonalized = String(req.query.personalized || '').toLowerCase() === 'true';
       const events = await Event.findAll({ order: [['startDate', 'ASC']] });
-      return res.status(200).json({ success: true, events: events.map(formatEvent) });
+
+      if (!wantPersonalized) {
+        return res.status(200).json({
+          success: true,
+          events: events.map(formatEvent),
+          personalized: false,
+        });
+      }
+
+      const userId = tryGetUserId(req);
+      if (!userId) {
+        return res.status(200).json({
+          success: true,
+          events: events.map(formatEvent),
+          personalized: false,
+          reason: 'no_auth',
+        });
+      }
+
+      const k = Math.min(parseInt(req.query.k || '50', 10) || 50, 50);
+      const mlRes = await mlClient.recommendEvents({ userId, k });
+      if (!mlRes.ok) {
+        logger.warn('events personalized: ML недоступен, fallback', { error: mlRes.error });
+        return res.status(200).json({
+          success: true,
+          events: events.map(formatEvent),
+          personalized: false,
+          reason: 'ml_unavailable',
+        });
+      }
+
+      // ML возвращает [{event_id, score}]. Строим маппинг id → score; события,
+      // которых нет в ответе ML, идут после рекомендованных, в исходном порядке.
+      const scoreById = new Map(
+        (mlRes.data.recommendations || []).map((r) => [Number(r.event_id), Number(r.score)]),
+      );
+      const ranked = [...events].sort((a, b) => {
+        const ka = Number(a.id);
+        const kb = Number(b.id);
+        const sa = scoreById.has(ka) ? scoreById.get(ka) : -Infinity;
+        const sb = scoreById.has(kb) ? scoreById.get(kb) : -Infinity;
+        if (sa !== sb) return sb - sa;
+        // одинаковый score (включая -Infinity для unscored) → по startDate ASC
+        return new Date(a.startDate || 0) - new Date(b.startDate || 0);
+      });
+
+      return res.status(200).json({
+        success: true,
+        events: ranked.map(formatEvent),
+        personalized: true,
+        fallback_used: Boolean(mlRes.data.fallback_used),
+      });
     } catch (error) {
       logger.error('events list error', { error: error.message });
       return res.status(500).json({
