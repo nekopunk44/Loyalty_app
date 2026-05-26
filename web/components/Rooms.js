@@ -63,7 +63,7 @@ export default function Rooms() {
 
   return (
     <section id="rooms" ref={sectionRef} style={{
-      position: 'relative', height: '100svh', overflow: 'hidden',
+      position: 'relative', height: 'calc(100svh - 72px)', overflow: 'hidden',
       background: '#0a0805',
       display: 'grid', gridTemplateColumns: 'minmax(420px, 46%) 1fr',
       opacity: inView ? 1 : 0, transition: 'opacity 1.2s ease',
@@ -136,7 +136,7 @@ export default function Rooms() {
         {/* Основной контент */}
         <div key={tKey} style={{
           position: 'relative', zIndex: 2, flex: 1,
-          padding: 'clamp(88px,11vh,112px) clamp(48px,5vw,80px) clamp(16px,2vh,24px)',
+          padding: 'clamp(28px,4vh,48px) clamp(48px,5vw,80px) clamp(16px,2vh,24px)',
           display: 'flex', flexDirection: 'column', justifyContent: 'flex-start',
         }}>
 
