@@ -2,154 +2,279 @@
 
 import { useRef, useState } from 'react';
 import Image from 'next/image';
-import { motion, useScroll, useTransform, useInView } from 'motion/react';
+import { motion, useScroll, useTransform, useInView, useMotionValueEvent } from 'motion/react';
 
 const rooms = [
-  { src: '/images/luks1.png', name: 'Сюит',        size: '85 м²',  desc: 'Панорамные окна, отдельная гостиная, авторский декор.' },
-  { src: '/images/luks2.png', name: 'Делюкс',      size: '70 м²',  desc: 'Дизайнерская мебель, Smart TV, кофе-станция, мини-бар.' },
-  { src: '/images/luks3.png', name: 'King',        size: '65 м²',  desc: 'Кровать king-size, климат-контроль, тишина за blackout-шторами.' },
-  { src: '/images/luks4.png', name: 'Флагман',     size: '90 м²',  desc: 'Лучший вид виллы. Champagne welcome и персональный батлер.' },
-  { src: '/images/luks5.png', name: 'Spa-номер',   size: '25 м²',  desc: 'Мрамор, дождевой душ, free-standing ванна с видом на сад.' },
-  { src: '/images/luks6.png', name: 'Терраса',     size: '40 м²',  desc: 'Приватная терраса с лежаками и видом на бассейн.' },
-  { src: '/images/luks7.png', name: 'Panoramic',   size: '75 м²',  desc: 'Стеклянные стены, балкон на всю ширину, обзор 180°.' },
-  { src: '/images/luks8.png', name: 'Апартаменты', size: '120 м²', desc: 'Два уровня. Кухня, гостиная, спальня, личный бассейн.' },
+  {
+    id: 'standart',
+    name: 'Стандарт',
+    tag: 'Studio',
+    description: 'Студия с террасой и бассейном. Уютный формат для пары или небольшой компании.',
+    price: 150,
+    unit: 'ночь',
+    guests: 10,
+    rooms: 2,
+    amenities: ['WiFi', 'Кондиционер', 'TV', 'Бассейн', 'Сауна', 'Мангал', 'Парковка'],
+    photos: ['/images/std1.png', '/images/std2.png', '/images/std3.png', '/images/std4.png', '/images/std5.png'],
+  },
+  {
+    id: 'luks',
+    name: 'Люкс апартамент',
+    tag: 'Premium',
+    description: 'Полный комфорт с видом на природу. Десять комнат, большой зал и собственная кухня.',
+    price: 200,
+    unit: 'ночь',
+    guests: 20,
+    rooms: 10,
+    amenities: ['WiFi', 'Кондиционер', 'TV', 'Кухня', 'Бассейн', 'Сауна', 'Караоке', 'Большой зал'],
+    photos: ['/images/luks1.png', '/images/luks2.png', '/images/luks3.png', '/images/luks4.png', '/images/luks5.png'],
+  },
+  {
+    id: 'zad',
+    name: 'Задний двор',
+    tag: 'Outdoor',
+    description: 'Открытая территория с бассейном, беседкой и зоной мангала. Идеально для дневных праздников.',
+    price: 100,
+    unit: 'день',
+    guests: 15,
+    rooms: null,
+    amenities: ['WiFi', 'Бассейн', 'Мангал', 'Караоке', 'Беседка', 'Шезлонги', 'Зонты', 'Холодильник'],
+    photos: ['/images/zad1.png', '/images/zad2.png', '/images/zad3.png', '/images/zad4.png', '/images/zad5.png'],
+  },
+  {
+    id: 'full',
+    name: 'Вся территория',
+    tag: 'Exclusive',
+    description: 'Полный выкуп виллы со всеми удобствами. Закрытый формат для больших мероприятий.',
+    price: 500,
+    unit: 'ночь',
+    guests: 30,
+    rooms: 10,
+    amenities: ['WiFi', 'Кондиционер', 'Кухня', 'Бассейн', 'Сауна', 'Караоке', 'Большой зал', 'Беседка', 'Шезлонги'],
+    photos: ['/images/luks6.png', '/images/luks7.png', '/images/zad4.png', '/images/luks8.png', '/images/zad5.png'],
+  },
 ];
 
-function RoomCard({ room, index }) {
-  const ref = useRef(null);
-  const inView = useInView(ref, { once: true, margin: '-15%' });
-  const [hover, setHover] = useState(false);
+function RoomPanel({ room, index, total, progress }) {
+  const start = index / total;
+  const end = (index + 1) / total;
+
+  const opacity = useTransform(progress, [start - 0.05, start, end - 0.05, end], [0.3, 1, 1, 0.3]);
+  const imageScale = useTransform(progress, [start, end], [1.15, 1]);
+  const overlayOpacity = useTransform(progress, [start, (start + end) / 2, end], [0.85, 0.55, 0.85]);
 
   return (
     <motion.article
-      ref={ref}
-      initial={{ y: 60, opacity: 0 }}
-      animate={inView ? { y: 0, opacity: 1 } : {}}
-      transition={{ duration: 1.1, delay: (index % 2) * 0.15, ease: [0.16, 1, 0.3, 1] }}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      data-cursor
-      style={{ position: 'relative' }}
+      style={{
+        flex: '0 0 100vw',
+        height: '100vh',
+        position: 'relative',
+        opacity,
+      }}
     >
-      <div
-        style={{
-          position: 'relative',
-          aspectRatio: index % 3 === 0 ? '4 / 5' : '3 / 4',
-          overflow: 'hidden',
-          background: 'var(--surface)',
-        }}
-      >
-        <motion.div
-          animate={{ scale: hover ? 1.06 : 1 }}
-          transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
-          style={{ position: 'absolute', inset: 0 }}
-        >
-          <Image
-            src={room.src}
-            alt={room.name}
-            fill
-            sizes="(max-width: 768px) 100vw, 50vw"
-            className="object-cover"
-            style={{ filter: 'brightness(0.85)' }}
-          />
-        </motion.div>
-
-        <motion.div
-          animate={{ opacity: hover ? 1 : 0 }}
-          transition={{ duration: 0.5 }}
-          style={{
-            position: 'absolute',
-            inset: 0,
-            background: 'linear-gradient(180deg, transparent 50%, rgba(13,10,8,0.85) 100%)',
-            pointerEvents: 'none',
-          }}
+      <motion.div style={{ position: 'absolute', inset: 0, scale: imageScale }}>
+        <Image
+          src={room.photos[0]}
+          alt={room.name}
+          fill
+          sizes="100vw"
+          className="object-cover"
+          priority={index === 0}
         />
+      </motion.div>
 
-        <div
-          style={{
-            position: 'absolute',
-            top: 24,
-            left: 24,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            fontSize: 11,
-            letterSpacing: '0.18em',
-            textTransform: 'uppercase',
-            color: 'var(--text)',
-            mixBlendMode: 'difference',
-          }}
-        >
-          <span style={{ fontVariantNumeric: 'tabular-nums' }}>{String(index + 1).padStart(2, '0')}</span>
-          <span style={{ width: 24, height: 1, background: 'currentColor' }} />
-          <span>{room.size}</span>
-        </div>
-      </div>
+      <motion.div
+        style={{
+          position: 'absolute', inset: 0,
+          background: 'linear-gradient(180deg, rgba(13,10,8,0.4) 0%, rgba(13,10,8,1) 95%)',
+          opacity: overlayOpacity,
+        }}
+      />
 
-      <div style={{ paddingTop: 28, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 24 }}>
-        <div>
-          <h3 className="font-display" style={{ fontSize: 'clamp(1.6rem, 2.4vw, 2.2rem)', lineHeight: 1.1, marginBottom: 8 }}>
-            {room.name}
-          </h3>
-          <p style={{ color: 'var(--text-soft)', fontSize: 14, lineHeight: 1.6, maxWidth: 380 }}>
-            {room.desc}
-          </p>
+      <div className="container-x relative" style={{
+        height: '100%', display: 'grid', gridTemplateColumns: '1fr', alignItems: 'end',
+        paddingBottom: 'clamp(60px, 10vh, 120px)',
+      }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(360px, 100%), 1fr))', gap: 'clamp(40px, 6vw, 80px)', alignItems: 'end' }}>
+
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18 }}>
+              <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 11, letterSpacing: '0.25em', color: 'var(--gold)' }}>
+                {String(index + 1).padStart(2, '0')} / {String(total).padStart(2, '0')}
+              </span>
+              <span style={{ width: 40, height: 1, background: 'var(--gold)' }} />
+              <span style={{ fontSize: 11, letterSpacing: '0.25em', textTransform: 'uppercase', color: 'var(--text-soft)' }}>
+                {room.tag}
+              </span>
+            </div>
+
+            <h3 className="font-display" style={{
+              fontSize: 'clamp(2.4rem, 5.5vw, 4.8rem)',
+              lineHeight: 1.02,
+              marginBottom: 22,
+            }}>
+              {room.name}
+            </h3>
+
+            <p style={{ color: 'var(--text-soft)', fontSize: 'clamp(14px, 1.2vw, 16px)', lineHeight: 1.7, maxWidth: 460, marginBottom: 32 }}>
+              {room.description}
+            </p>
+
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'clamp(28px, 4vw, 56px)', marginBottom: 36 }}>
+              <Spec label="Цена" value={`${room.price} PRB`} sub={`за ${room.unit}`} />
+              <Spec label="Гости" value={`до ${room.guests}`} sub="человек" />
+              {room.rooms && <Spec label="Комнаты" value={room.rooms} sub={room.rooms === 1 ? 'комната' : 'комнат'} />}
+            </div>
+
+            <a href="#contact" className="btn btn-primary" data-cursor>
+              Забронировать
+              <span className="btn-arrow">→</span>
+            </a>
+          </div>
+
+          <div>
+            <p className="eyebrow mb-4" style={{ color: 'var(--text-soft)' }}>— Удобства</p>
+            <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {room.amenities.map((a) => (
+                <li key={a} style={{
+                  fontSize: 12,
+                  letterSpacing: '0.05em',
+                  padding: '8px 14px',
+                  border: '1px solid var(--line-strong)',
+                  borderRadius: 999,
+                  color: 'var(--text-soft)',
+                  background: 'rgba(13, 10, 8, 0.4)',
+                  backdropFilter: 'blur(8px)',
+                }}>
+                  {a}
+                </li>
+              ))}
+            </ul>
+
+            <div style={{ marginTop: 28, display: 'flex', gap: 8 }}>
+              {room.photos.slice(1, 5).map((p, i) => (
+                <div key={i} style={{ position: 'relative', width: 60, height: 60, overflow: 'hidden', borderRadius: 2, border: '1px solid var(--line)' }}>
+                  <Image src={p} alt="" fill sizes="60px" className="object-cover" />
+                </div>
+              ))}
+            </div>
+          </div>
+
         </div>
-        <a
-          href="#contact"
-          style={{
-            flexShrink: 0,
-            fontSize: 11,
-            letterSpacing: '0.18em',
-            textTransform: 'uppercase',
-            color: 'var(--gold)',
-            paddingBottom: 6,
-            borderBottom: '1px solid var(--line-strong)',
-            transition: 'color 0.3s ease, border-color 0.3s ease',
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--gold-light)'; e.currentTarget.style.borderColor = 'var(--gold-light)'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--gold)'; e.currentTarget.style.borderColor = 'var(--line-strong)'; }}
-        >
-          Бронь →
-        </a>
       </div>
     </motion.article>
   );
 }
 
+function Spec({ label, value, sub }) {
+  return (
+    <div>
+      <p style={{ fontSize: 10, letterSpacing: '0.25em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 8 }}>
+        {label}
+      </p>
+      <p className="font-display" style={{ fontSize: 'clamp(1.4rem, 2.2vw, 2rem)', lineHeight: 1, marginBottom: 4, color: 'var(--gold)' }}>
+        {value}
+      </p>
+      <p style={{ fontSize: 11, color: 'var(--muted)', letterSpacing: '0.08em' }}>
+        {sub}
+      </p>
+    </div>
+  );
+}
+
 export default function Rooms() {
   const ref = useRef(null);
-  const { scrollYProgress } = useScroll({ target: ref, offset: ['start end', 'end start'] });
-  const titleY = useTransform(scrollYProgress, [0, 1], ['20%', '-20%']);
+  const { scrollYProgress } = useScroll({
+    target: ref,
+    offset: ['start start', 'end end'],
+  });
+
+  const x = useTransform(scrollYProgress, [0, 1], ['0%', `-${(rooms.length - 1) * 100}vw`]);
+  const progressWidth = useTransform(scrollYProgress, [0, 1], ['0%', '100%']);
+
+  const [active, setActive] = useState(0);
+  useMotionValueEvent(scrollYProgress, 'change', (v) => {
+    const idx = Math.min(rooms.length - 1, Math.max(0, Math.round(v * (rooms.length - 1))));
+    if (idx !== active) setActive(idx);
+  });
+
+  const headerRef = useRef(null);
+  const headerInView = useInView(headerRef, { once: true, margin: '-25%' });
 
   return (
-    <section id="rooms" className="section" ref={ref}>
-      <div className="container-x">
+    <section id="rooms" ref={ref} style={{ position: 'relative', height: `${rooms.length * 100}vh`, background: 'var(--bg)' }}>
 
-        <motion.div style={{ y: titleY }} className="mb-20 md:mb-28 flex flex-col md:flex-row md:items-end md:justify-between gap-10">
-          <div>
-            <p className="eyebrow mb-6">— Номера</p>
-            <h2 className="font-display display-lg" style={{ maxWidth: '14ch' }}>
-              Каждый — со <em style={{ fontStyle: 'italic', color: 'var(--gold)' }}>своим</em> характером
-            </h2>
+      <div style={{ position: 'sticky', top: 0, height: '100vh', overflow: 'hidden' }}>
+
+        <div ref={headerRef} style={{
+          position: 'absolute', top: 0, left: 0, right: 0, zIndex: 5,
+          padding: 'clamp(80px, 10vh, 140px) 0 0',
+          pointerEvents: 'none',
+        }}>
+          <div className="container-x" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 24 }}>
+            <div>
+              <motion.p
+                initial={{ opacity: 0, y: 16 }}
+                animate={headerInView ? { opacity: 1, y: 0 } : {}}
+                transition={{ duration: 0.9 }}
+                className="eyebrow mb-4"
+              >
+                — Каталог · 4 формата
+              </motion.p>
+              <motion.h2
+                initial={{ opacity: 0, y: 24 }}
+                animate={headerInView ? { opacity: 1, y: 0 } : {}}
+                transition={{ duration: 1, delay: 0.1 }}
+                className="font-display"
+                style={{ fontSize: 'clamp(2rem, 3.6vw, 3.4rem)', lineHeight: 1.05, maxWidth: '14ch' }}
+              >
+                Каждый — со <em style={{ fontStyle: 'italic', color: 'var(--gold)' }}>своим</em> характером
+              </motion.h2>
+            </div>
+
+            <div style={{ display: 'flex', gap: 18, alignItems: 'center', pointerEvents: 'auto' }}>
+              {rooms.map((r, i) => (
+                <span
+                  key={r.id}
+                  style={{
+                    fontSize: 11,
+                    letterSpacing: '0.18em',
+                    textTransform: 'uppercase',
+                    color: i === active ? 'var(--gold)' : 'var(--muted)',
+                    transition: 'color 0.4s ease',
+                    fontVariantNumeric: 'tabular-nums',
+                  }}
+                >
+                  {String(i + 1).padStart(2, '0')}
+                </span>
+              ))}
+            </div>
           </div>
-          <p style={{ maxWidth: 380, color: 'var(--text-soft)', fontSize: 15, lineHeight: 1.7 }}>
-            Восемь решений — от Spa-номера до двухуровневых апартаментов. Никаких типовых конфигураций: каждый интерьер собран отдельно.
-          </p>
+        </div>
+
+        <motion.div style={{ display: 'flex', height: '100%', x }}>
+          {rooms.map((room, i) => (
+            <RoomPanel key={room.id} room={room} index={i} total={rooms.length} progress={scrollYProgress} />
+          ))}
         </motion.div>
 
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(min(420px, 100%), 1fr))',
-            gap: 'clamp(40px, 5vw, 80px)',
-          }}
-        >
-          {rooms.map((room, i) => (
-            <div key={room.src} style={{ marginTop: i % 2 === 1 ? 60 : 0 }}>
-              <RoomCard room={room} index={i} />
-            </div>
-          ))}
+        <div style={{
+          position: 'absolute', bottom: 0, left: 0, right: 0,
+          height: 2,
+          background: 'rgba(212, 164, 94, 0.12)',
+          zIndex: 5,
+        }}>
+          <motion.div style={{ height: '100%', width: progressWidth, background: 'var(--gold)' }} />
+        </div>
+
+        <div style={{
+          position: 'absolute', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+          fontSize: 10, letterSpacing: '0.3em', textTransform: 'uppercase', color: 'var(--muted)',
+          display: 'flex', alignItems: 'center', gap: 12, zIndex: 5,
+        }}>
+          <span style={{ width: 30, height: 1, background: 'currentColor' }} />
+          Scroll
+          <span style={{ width: 30, height: 1, background: 'currentColor' }} />
         </div>
       </div>
     </section>
