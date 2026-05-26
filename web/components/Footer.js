@@ -20,7 +20,7 @@ export default function Footer() {
   const leave = e => e.currentTarget.style.color = 'rgba(247,242,232,0.5)';
 
   return (
-    <footer style={{ background: 'var(--r-text)' }}>
+    <footer id="contact" style={{ background: 'var(--r-text)' }}>
       <div style={{ maxWidth: 1440, margin: '0 auto', padding: '40px clamp(20px,4vw,60px) 24px' }}>
 
         {/* Main row */}
