@@ -35,7 +35,6 @@ export default function Rooms() {
   const [active, setActive] = useState(0);
   const [photo,  setPhoto]  = useState(0);
   const [tKey,   setTKey]   = useState(0);
-  const [pKey,   setPKey]   = useState(0);
   const [inView, setInView] = useState(false);
   const sectionRef = useRef(null);
 
@@ -54,12 +53,10 @@ export default function Rooms() {
     setActive(i);
     setPhoto(0);
     setTKey(k => k + 1);
-    setPKey(k => k + 1);
   };
   const switchPhoto = (i) => {
     if (i === photo) return;
     setPhoto(i);
-    setPKey(k => k + 1);
   };
   const goContact = () => {
     const el = document.getElementById('contact');
@@ -77,11 +74,6 @@ export default function Rooms() {
       opacity: inView ? 1 : 0, transition: 'opacity 1.2s ease',
     }}>
       <style>{`
-        @keyframes kbRoom {
-          0%   { transform: scale(1.04) translate(0,0); }
-          50%  { transform: scale(1.12) translate(-1.4%,-0.9%); }
-          100% { transform: scale(1.04) translate(0,0); }
-        }
         @keyframes letterIn {
           from { opacity: 0; transform: translateY(36px) rotateX(-22deg); filter: blur(4px); }
           to   { opacity: 1; transform: translateY(0)    rotateX(0);      filter: blur(0); }
@@ -93,16 +85,6 @@ export default function Rooms() {
         @keyframes lineDraw {
           from { transform: scaleX(0); opacity: 0; }
           to   { transform: scaleX(1); opacity: 1; }
-        }
-        @keyframes wipeIn {
-          from { clip-path: inset(0 100% 0 0); }
-          to   { clip-path: inset(0 0 0 0); }
-        }
-        @keyframes sweep {
-          0%   { transform: translateX(-100%); opacity: 0; }
-          10%  { opacity: 1; }
-          90%  { opacity: 1; }
-          100% { transform: translateX(100%); opacity: 0; }
         }
         @keyframes goldPulse {
           0%, 100% { opacity: 0.5; }
@@ -318,34 +300,21 @@ export default function Rooms() {
       {/* ════════════════════ RIGHT PANEL ════════════════════ */}
       <div style={{ position: 'relative', overflow: 'hidden', background: '#0a0805' }}>
 
-        {/* Все фото — каждое появление с wipe-эффектом */}
+        {/* Все фото — простой crossfade */}
         {ROOMS.map((r, ri) => r.images.map((src, ii) => {
           const isAct = ri === active && ii === photo;
           return (
-            <img key={`${ri}-${ii}-${isAct ? pKey : 'h'}`}
-              src={src} alt=""
+            <img key={`${ri}-${ii}`} src={src} alt=""
               style={{
                 position: 'absolute', inset: 0, width: '100%', height: '100%',
                 objectFit: 'cover',
                 opacity: isAct ? 1 : 0,
-                transition: 'opacity 0.6s ease',
-                animation: isAct
-                  ? 'wipeIn 1.1s cubic-bezier(0.65,0,0.35,1) both, kbRoom 22s ease-in-out infinite 1.1s'
-                  : 'none',
-                willChange: 'opacity, transform, clip-path',
+                transition: 'opacity 0.9s ease',
+                willChange: 'opacity',
               }}
             />
           );
         }))}
-
-        {/* Sweep — золотая полоска проходит через фото при смене */}
-        <div key={`sweep-${pKey}`} style={{
-          position: 'absolute', top: 0, bottom: 0, left: 0, width: '8%',
-          background: 'linear-gradient(to right, transparent 0%, rgba(212,164,94,0.55) 50%, transparent 100%)',
-          zIndex: 4, pointerEvents: 'none',
-          animation: 'sweep 1.1s cubic-bezier(0.65,0,0.35,1) both',
-          mixBlendMode: 'screen',
-        }} />
 
         {/* Виньетирование */}
         <div style={{
@@ -373,7 +342,7 @@ export default function Rooms() {
         }} />
 
         {/* Верхний правый — счётчик фото */}
-        <div key={`pcnt-${pKey}`} style={{
+        <div key={`pcnt-${active}-${photo}`} style={{
           position: 'absolute', top: 'clamp(100px,13vh,130px)', right: 'clamp(40px,5vw,72px)',
           zIndex: 4, display: 'flex', alignItems: 'center', gap: 14,
           animation: 'numFlip 0.55s cubic-bezier(0.16,1,0.3,1) both',
