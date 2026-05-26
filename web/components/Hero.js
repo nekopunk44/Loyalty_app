@@ -49,11 +49,11 @@ export default function Hero() {
           fill
           priority
           sizes="100vw"
+          quality={70}
           className="object-cover"
-          style={{ filter: 'brightness(0.7) contrast(1.05) saturate(0.9)' }}
         />
         <div className="absolute inset-0" style={{
-          background: 'linear-gradient(180deg, rgba(13,10,8,0.5) 0%, rgba(13,10,8,0.1) 35%, rgba(13,10,8,0.2) 65%, rgba(13,10,8,0.9) 100%)',
+          background: 'linear-gradient(180deg, rgba(13,10,8,0.7) 0%, rgba(13,10,8,0.4) 35%, rgba(13,10,8,0.5) 65%, rgba(13,10,8,0.95) 100%)',
         }} />
       </motion.div>
 

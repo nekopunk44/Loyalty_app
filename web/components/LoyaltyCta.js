@@ -19,9 +19,10 @@ export default function LoyaltyCta() {
           alt="Villa Jaconda"
           fill
           sizes="100vw"
+          quality={70}
           className="object-cover"
-          style={{ filter: 'brightness(0.4) saturate(0.9)' }}
         />
+        <div style={{ position: 'absolute', inset: 0, background: 'rgba(13,10,8,0.6)' }} />
       </motion.div>
 
       <div style={{
