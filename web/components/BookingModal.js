@@ -421,39 +421,20 @@ export default function BookingModal() {
           {step === 3 && (
             <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 24, animation: 'bmFade .35s ease both' }}>
 
-              {/* Guests — pill selector */}
+              {/* Guests */}
               <div>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 14 }}>
-                  <label style={{ fontSize: 9, letterSpacing: '0.32em', textTransform: 'uppercase', color: GOLD_DIM }}>Гостей</label>
-                  <span style={{ fontFamily: 'var(--r-serif)', fontStyle: 'italic', fontSize: 22, color: GOLD, fontWeight: 300, lineHeight: 1 }}>{guests}</span>
-                  {room && <span style={{ fontSize: 10, color: 'rgba(245,237,224,0.28)', letterSpacing: '0.08em' }}>/ макс. {room.guests}</span>}
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {(room
-                    ? room.guests <= 10
-                      ? Array.from({ length: room.guests }, (_, i) => i + 1)
-                      : [1,2,3,4,5,6,8,10,12,15,room.guests].filter((v,i,a)=>a.indexOf(v)===i&&v<=room.guests)
-                    : [1,2,3,4,5,6,8,10]
-                  ).map(n => {
-                    const active = guests === n;
-                    return (
-                      <button key={n} type="button" onClick={() => setGuests(n)}
-                        style={{
-                          width: 40, height: 36,
-                          borderRadius: 8,
-                          border: `1px solid ${active ? GOLD : 'rgba(245,237,224,0.12)'}`,
-                          background: active ? GOLD : 'rgba(245,237,224,0.03)',
-                          color: active ? BG_DARK : 'rgba(245,237,224,0.65)',
-                          cursor: 'pointer', fontFamily: 'var(--r-serif)',
-                          fontSize: 13, fontWeight: active ? 500 : 300,
-                          transition: 'all .2s',
-                        }}
-                        onMouseEnter={e => { if (!active) { e.currentTarget.style.borderColor = `${GOLD}70`; e.currentTarget.style.color = CREAM; } }}
-                        onMouseLeave={e => { if (!active) { e.currentTarget.style.borderColor = 'rgba(245,237,224,0.12)'; e.currentTarget.style.color = 'rgba(245,237,224,0.65)'; } }}>
-                        {n}
-                      </button>
-                    );
-                  })}
+                <label style={{ display: 'block', fontSize: 9, letterSpacing: '0.32em', textTransform: 'uppercase', color: GOLD_DIM, marginBottom: 14 }}>Количество гостей</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <button type="button" onClick={() => setGuests(g => Math.max(1, g-1))}
+                    style={{ width: 40, height: 40, borderRadius: 10, border: '1px solid rgba(245,237,224,0.15)', background: 'rgba(245,237,224,0.04)', color: CREAM, cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .2s' }}
+                    onMouseEnter={e => { e.currentTarget.style.background = GOLD; e.currentTarget.style.color = BG_DARK; e.currentTarget.style.borderColor = GOLD; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'rgba(245,237,224,0.04)'; e.currentTarget.style.color = CREAM; e.currentTarget.style.borderColor = 'rgba(245,237,224,0.15)'; }}>−</button>
+                  <span style={{ fontFamily: 'var(--r-serif)', fontStyle: 'italic', fontSize: 28, color: CREAM, minWidth: 56, textAlign: 'center', fontWeight: 300 }}>{guests}</span>
+                  <button type="button" onClick={() => setGuests(g => g+1)}
+                    style={{ width: 40, height: 40, borderRadius: 10, border: '1px solid rgba(245,237,224,0.15)', background: 'rgba(245,237,224,0.04)', color: CREAM, cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .2s' }}
+                    onMouseEnter={e => { e.currentTarget.style.background = GOLD; e.currentTarget.style.color = BG_DARK; e.currentTarget.style.borderColor = GOLD; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'rgba(245,237,224,0.04)'; e.currentTarget.style.color = CREAM; e.currentTarget.style.borderColor = 'rgba(245,237,224,0.15)'; }}>+</button>
+                  {room && <span style={{ fontSize: 11, color: 'rgba(245,237,224,0.35)', letterSpacing: '0.1em', marginLeft: 10 }}>макс. {room.guests}</span>}
                 </div>
                 {extra > 0 && (
                   <div style={{ marginTop: 10, display: 'inline-flex', alignItems: 'center', gap: 8, padding: '7px 12px', background: 'rgba(255,107,53,0.07)', border: '1px solid rgba(255,107,53,0.22)', borderRadius: 8 }}>
