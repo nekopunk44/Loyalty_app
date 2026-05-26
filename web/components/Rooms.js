@@ -140,15 +140,12 @@ export default function Rooms() {
           display: 'flex', flexDirection: 'column', justifyContent: 'center',
         }}>
 
-          {/* Верхняя метка: Каталог — STUDIO в одну строку */}
+          {/* Верхняя метка */}
           <div className="fu d1" style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 22 }}>
             <span style={{ fontSize: 9, letterSpacing: '0.38em', textTransform: 'uppercase', color: 'rgba(212,164,94,0.55)' }}>
               Каталог
             </span>
-            <div className="line-draw" style={{ width: 20, height: 1, background: '#d4a45e', animationDelay: '0.15s' }} />
-            <span style={{ fontSize: 9, letterSpacing: '0.38em', textTransform: 'uppercase', color: '#d4a45e' }}>
-              {cur.tag}
-            </span>
+            <div className="line-draw" style={{ width: 20, height: 1, background: 'rgba(212,164,94,0.3)', animationDelay: '0.15s' }} />
           </div>
 
           {/* Название — пословное появление букв */}
@@ -177,7 +174,7 @@ export default function Rooms() {
           </p>
 
           {/* Табличные характеристики с line-draw анимацией */}
-          <div style={{ maxWidth: 400, marginBottom: 'clamp(28px,4vh,38px)' }}>
+          <div style={{ maxWidth: 400, marginBottom: 0 }}>
             {[
               ['Цена',   <>от <span style={{ color: '#d4a45e' }}>{cur.price}</span> PRB / {cur.unit}</>],
               ['Гостей', cur.guests],
@@ -216,7 +213,7 @@ export default function Rooms() {
         {/* Нижняя навигация по номерам */}
         <div style={{
           position: 'relative', zIndex: 2,
-          padding: '0 clamp(48px,5vw,80px) clamp(36px,4.5vh,52px)',
+          padding: '0 clamp(48px,5vw,80px) clamp(20px,2.5vh,32px)',
           borderTop: '1px solid rgba(212,164,94,0.28)',
           background: 'linear-gradient(to bottom, rgba(212,164,94,0.04), transparent 60%)',
           display: 'flex', gap: 0,
@@ -225,7 +222,7 @@ export default function Rooms() {
             const isAct = ri === active;
             return (
               <button key={ri} onClick={() => go(ri)} style={{
-                flex: 1, padding: 'clamp(22px,2.8vh,30px) 6px 4px',
+                flex: 1, padding: 'clamp(14px,1.8vh,20px) 6px 4px',
                 background: 'transparent', border: 'none',
                 borderRight: ri < ROOMS.length - 1 ? '1px solid rgba(212,164,94,0.10)' : 'none',
                 cursor: isAct ? 'default' : 'pointer',
