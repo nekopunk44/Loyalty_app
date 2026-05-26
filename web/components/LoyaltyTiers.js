@@ -33,8 +33,8 @@ export default function LoyaltyApp() {
           to   { opacity: 1; transform: translateY(0); }
         }
         @keyframes phoneFloat {
-          0%, 100% { transform: translateY(0); }
-          50%      { transform: translateY(-10px); }
+          0%, 100% { transform: translateY(0) rotate(-5deg); }
+          50%      { transform: translateY(-10px) rotate(-5deg); }
         }
         .loyalty-grid { display: grid; gap: clamp(32px, 4vw, 56px); grid-template-columns: minmax(0, 1fr) minmax(0, 320px); align-items: center; }
         @media (max-width: 980px) {
@@ -96,7 +96,7 @@ export default function LoyaltyApp() {
                       border: 'none',
                       borderTop: '1px solid rgba(212,164,94,0.10)',
                       borderBottom: i === TIERS.length - 1 ? '1px solid rgba(212,164,94,0.10)' : 'none',
-                      padding: 'clamp(8px,1vh,12px) clamp(10px,1.4vw,16px)',
+                      padding: 'clamp(11px,1.4vh,16px) clamp(12px,1.6vw,18px)',
                       cursor: isActive ? 'default' : 'pointer',
                       display: 'grid', gridTemplateColumns: '42px 1fr auto', gap: 16, alignItems: 'center',
                       transition: 'background 0.35s ease', textAlign: 'left',
@@ -167,7 +167,7 @@ export default function LoyaltyApp() {
                 {t.perks.map((perk, pi) => (
                   <div key={pi} style={{
                     display: 'flex', gap: 14, alignItems: 'center',
-                    padding: '10px 0',
+                    padding: '13px 0',
                     borderBottom: pi < t.perks.length - 1 ? '1px solid rgba(245,237,224,0.07)' : 'none',
                   }}>
                     <div style={{
@@ -206,7 +206,7 @@ export default function LoyaltyApp() {
 
               <div style={{
                 position: 'relative',
-                width: 180, height: 340,
+                width: 210, height: 390,
                 borderRadius: 42,
                 background: 'linear-gradient(160deg, #0c0a07 0%, #14110c 100%)',
                 border: '1px solid rgba(212,164,94,0.25)',
