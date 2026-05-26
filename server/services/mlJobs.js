@@ -25,6 +25,7 @@ const mlClient = require('./mlClient');
 
 const LEVELS = ['Bronze', 'Silver', 'Gold', 'Platinum'];
 const LEVEL_RANK = Object.fromEntries(LEVELS.map((l, i) => [l, i]));
+const LEVEL_CASHBACK = { Bronze: 3, Silver: 5, Gold: 7, Platinum: 10 };
 
 const _tasks = [];
 let _running = { rfm: false, churn: false };
@@ -83,7 +84,7 @@ async function runRfmRecompute() {
         const ids = byNewLevel[lvl];
         if (ids.length === 0) continue;
         await LoyaltyCard.update(
-          { membershipLevel: lvl },
+          { membershipLevel: lvl, cashbackRate: LEVEL_CASHBACK[lvl] },
           { where: { userId: { [Op.in]: ids } }, transaction: tx },
         );
         await User.update(
@@ -206,7 +207,7 @@ async function runChurnCheck({
           fresh.map(({ userId, probability }) => ({
             userId,
             title: 'Мы скучаем по вам',
-            message: 'Вернитесь до конца недели и получите дополнительный +5% кэшбек на следующее бронирование.',
+            message: 'Вернитесь до конца недели — для вас действует персональное предложение с повышенным кэшбеком на следующее бронирование.',
             type: 'retention_offer',
             data: { churn_probability: probability, source: 'churn_check' },
             read: false,

@@ -4,10 +4,10 @@ import Icon from './ui/Icon';
 import VJMonogram from './VJMonogram';
 
 const TIERS = [
-  { key: 'bronze',   name: 'Bronze',   threshold: 0,    next: 500,  color: '#c47432', cashback: '1%',   perks: ['Кешбек 1% с каждого бронирования', 'Бонус в день рождения', 'Полный архив визитов'] },
-  { key: 'silver',   name: 'Silver',   threshold: 500,  next: 2000, color: '#a3b1c1', cashback: '1.5%', perks: ['Кешбек 1.5% — +0.5% к базовому', 'Приоритетная поддержка', 'Бонус ко дню рождения ×2'] },
-  { key: 'gold',     name: 'Gold',     threshold: 2000, next: 5000, color: '#d4a45e', cashback: '2%',   perks: ['Кешбек 2% — двойной бонус', 'Ранний доступ к акциям и событиям', 'VIP поддержка 24/7'] },
-  { key: 'platinum', name: 'Platinum', threshold: 5000, next: null, color: '#b18cd9', cashback: '3%',   perks: ['Кешбек 3% — максимальный', 'Личный менеджер всегда на связи', 'Закрытые события и тарифы'] },
+  { key: 'bronze',   name: 'Bronze',   label: 'Начало пути',     color: '#c47432', cashback: '3%',  perks: ['Кэшбек 3% с каждого бронирования', 'История визитов в приложении', 'Персональные рекомендации событий', 'Бонус на день рождения'] },
+  { key: 'silver',   name: 'Silver',   label: 'Активный гость',  color: '#a3b1c1', cashback: '5%',  perks: ['Кэшбек 5% с каждого бронирования', 'Бесплатный кухонный сервиз при каждом заезде', 'Приоритетная поддержка в WhatsApp', 'Бонус на день рождения ×2'] },
+  { key: 'gold',     name: 'Gold',     label: 'Постоянный гость', color: '#d4a45e', cashback: '7%',  perks: ['Кэшбек 7% с каждого бронирования', 'Бесплатный кухонный сервиз', 'Скидка 20% на парилку', 'Ранний доступ к акциям — за 24 ч', 'VIP поддержка 24/7'] },
+  { key: 'platinum', name: 'Platinum', label: 'VIP-клиент',      color: '#b18cd9', cashback: '10%', perks: ['Кэшбек 10% — максимальный', 'Бесплатный кухонный сервиз', '1 час парилки бесплатно', 'Персональный менеджер на связи', 'Закрытые тарифы и события'] },
 ];
 
 export default function LoyaltyApp() {
@@ -136,7 +136,7 @@ export default function LoyaltyApp() {
                         color: isActive ? tier.color : 'rgba(245,237,224,0.32)',
                         margin: 0, transition: 'color 0.35s ease',
                       }}>
-                        {tier.next ? `${tier.threshold} – ${tier.next} баллов` : `от ${tier.threshold} баллов`}
+                        {tier.label}
                       </p>
                     </div>
 

@@ -90,11 +90,13 @@ const LEVEL_CARD_THEME = {
   },
 };
 
+const LEVEL_CASHBACK = { Bronze: 3, Silver: 5, Gold: 7, Platinum: 10 };
+
 const LEVEL_BENEFITS = {
-  Bronze:   ['Кэшбек 10% от каждого бронирования'],
-  Silver:   ['Кэшбек 20% от каждого бронирования', 'Бесплатный кухонный сервиз'],
-  Gold:     ['Кэшбек 30% от каждого бронирования', 'Бесплатный кухонный сервиз', 'Скидка 20% на парилку'],
-  Platinum: ['Кэшбек 40% от каждого бронирования', 'Бесплатный кухонный сервиз', 'Скидка 40% на парилку', 'Первый час парилки бесплатно'],
+  Bronze:   ['Кэшбек 3% с каждого бронирования', 'История визитов в приложении', 'Персональные рекомендации событий', 'Бонус на день рождения'],
+  Silver:   ['Кэшбек 5% с каждого бронирования', 'Бесплатный кухонный сервиз при каждом заезде', 'Приоритетная поддержка в WhatsApp', 'Бонус на день рождения ×2'],
+  Gold:     ['Кэшбек 7% с каждого бронирования', 'Бесплатный кухонный сервиз', 'Скидка 20% на парилку', 'Ранний доступ к акциям — за 24 ч', 'VIP поддержка 24/7'],
+  Platinum: ['Кэшбек 10% — максимальный', 'Бесплатный кухонный сервиз', '1 час парилки бесплатно', 'Персональный менеджер на связи', 'Закрытые тарифы и события'],
 };
 
 export default function ProfileScreen() {
@@ -106,7 +108,7 @@ export default function ProfileScreen() {
   const [_loading, setLoading]    = useState(true);
   const [accrued, setAccrued]     = useState(0);
   const [cardFlipped, setCardFlipped] = useState(false);
-  const [stats, setStats] = useState({ bookings: 0, nights: 0, totalSpent: 0, nextLevel: 200000 });
+  const [stats, setStats] = useState({ bookings: 0, nights: 0, totalSpent: 0 });
   const [monthlySpending, setMonthlySpending] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
   const [qrVisible, setQrVisible]   = useState(false);
@@ -216,7 +218,7 @@ export default function ProfileScreen() {
           const key = `${yi}-${mi}`;
           monthMap[key] = (monthMap[key] || 0) + amount;
         });
-        const newStats = { bookings: done.length, nights, totalSpent: spent, nextLevel: 200000 };
+        const newStats = { bookings: done.length, nights, totalSpent: spent };
         setStats(newStats);
         const now = new Date();
         const months = [];
@@ -265,6 +267,7 @@ export default function ProfileScreen() {
   const levelColor  = LEVEL_BORDER[level] || LEVEL_BORDER.Bronze;
   const cardTheme   = LEVEL_CARD_THEME[level] || LEVEL_CARD_THEME.Bronze;
   const cardGradient = LEVEL_GRADIENT[level] || LEVEL_GRADIENT.Bronze;
+  const cashbackRate = LEVEL_CASHBACK[level] || LEVEL_CASHBACK.Bronze;
   const progressPct = Math.min((stats.totalSpent || 0) / 200000, 1);
   const maskedCardGroups = useMemo(() => ['\u2022\u2022\u2022\u2022', '\u2022\u2022\u2022\u2022', '\u2022\u2022\u2022\u2022', cardSuffix], [cardSuffix]);
 
@@ -452,7 +455,7 @@ export default function ProfileScreen() {
                 }]} />
               </View>
               <Text style={[S.progressNote, { color: colors.textSecondary }]}>
-                Ещё {Math.max(0, 200000 - (stats.totalSpent || 0)).toLocaleString('ru-RU')} PRB до Platinum
+                Уровень обновляется автоматически на основе вашей активности · Кэшбек {cashbackRate}%
               </Text>
             </View>
 
