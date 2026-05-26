@@ -6,6 +6,12 @@
     "orientation": "portrait",
     "scheme": "villajaconda",
     "userInterfaceStyle": "automatic",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0D0A08"
+    },
     "assetBundlePatterns": [
       "**/*"
     ],
@@ -25,11 +31,14 @@
       "package": "com.villajaconda.loyalty",
       "softwareKeyboardLayoutMode": "pan",
       "adaptiveIcon": {
-        "backgroundColor": "#FF6B35"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0D0A08"
       },
       "permissions": [
         "INTERNET",
-        "CAMERA"
+        "CAMERA",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -58,8 +67,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "villa-jaconda-loyalty"
+        "projectId": "18b3a329-69ad-4b22-ace7-1aa7a4c0b4be"
       }
-    }
+    },
+    "owner": "nekopunk"
   }
 }
