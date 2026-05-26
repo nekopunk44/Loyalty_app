@@ -3,10 +3,10 @@
 import { useRef } from 'react';
 import { motion, useInView } from 'motion/react';
 
-// Бендеры (Tighina), Приднестровье — центр города
-// Координаты: 46.8302° N, 29.4826° E
-const LAT = 46.8302;
-const LNG = 29.4826;
+// Слободзея, Приднестровье
+// Координаты: 46.7275° N, 29.6852° E
+const LAT = 46.7275;
+const LNG = 29.6852;
 const ZOOM = 15;
 
 export default function MapSection() {
@@ -23,7 +23,7 @@ export default function MapSection() {
           — Расположение
         </motion.p>
         <motion.h2 initial={{ opacity: 0, y: 24 }} animate={inView ? { opacity: 1, y: 0 } : {}} transition={{ duration: 1, delay: 0.1 }} className="font-display" style={{ fontSize: 'clamp(2rem, 4vw, 3.8rem)', marginBottom: 12 }}>
-          г. Бендеры, <em style={{ fontStyle: 'italic', color: 'var(--gold)' }}>Приднестровье</em>
+          г. Слободзея, <em style={{ fontStyle: 'italic', color: 'var(--gold)' }}>Приднестровье</em>
         </motion.h2>
         <motion.p initial={{ opacity: 0 }} animate={inView ? { opacity: 1 } : {}} transition={{ duration: 1, delay: 0.2 }} style={{ color: 'var(--text-soft)', fontSize: 14, marginBottom: 32 }}>
           Уточните точный адрес при бронировании — пришлём геометку на WhatsApp.
