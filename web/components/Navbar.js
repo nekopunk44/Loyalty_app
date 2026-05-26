@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import VJMonogram from './VJMonogram';
 
 const LINKS = [
   { id:'rooms',   label:'Номера' },
@@ -65,19 +66,7 @@ export default function Navbar() {
 
         <a href="#" onClick={e => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
           style={{ display: 'flex', alignItems: 'center', gap: 11, textDecoration: 'none', color: 'var(--r-text)' }}>
-          <svg viewBox="0 0 100 100" fill="none" width="28" height="28" style={{ color: 'var(--r-gold)', flexShrink: 0 }}>
-            <g stroke="currentColor" strokeWidth="0.6" opacity="0.3">
-              <line x1="14" y1="12" x2="14" y2="88"/><line x1="36.6" y1="12" x2="36.6" y2="88"/>
-              <line x1="50" y1="12" x2="50" y2="88"/><line x1="63.4" y1="12" x2="63.4" y2="88"/>
-              <line x1="86" y1="12" x2="86" y2="88"/>
-              <line x1="12" y1="14" x2="88" y2="14"/><line x1="12" y1="36.6" x2="88" y2="36.6"/>
-              <line x1="12" y1="50" x2="88" y2="50"/><line x1="12" y1="63.4" x2="88" y2="63.4"/>
-              <line x1="12" y1="86" x2="88" y2="86"/>
-            </g>
-            <circle cx="50" cy="50" r="34" stroke="currentColor" strokeWidth="2"/>
-            <circle cx="50" cy="50" r="24" stroke="currentColor" strokeWidth="2"/>
-            <circle cx="50" cy="50" r="12" stroke="currentColor" strokeWidth="2"/>
-          </svg>
+          <VJMonogram size={36} mainColor="#1c1208" accentColor="#a07840" animate delay={400} fast />
           <span style={{ fontFamily: 'var(--r-serif)', fontSize: 20, fontWeight: 300, letterSpacing: '0.04em' }}>
             VILLA <span style={{ color: 'var(--r-gold)' }}>JACONDA</span>
           </span>
