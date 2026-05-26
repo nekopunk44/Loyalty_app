@@ -57,7 +57,7 @@ export default function LoyaltyApp() {
         transition: 'background 0.6s ease', pointerEvents: 'none',
       }} />
 
-      <div style={{ maxWidth: 1440, margin: '0 auto', padding: '0 clamp(20px,4vw,60px)', position: 'relative' }}>
+      <div style={{ width: '100%', maxWidth: 1440, margin: '0 auto', padding: '0 clamp(20px,4vw,60px)', position: 'relative' }}>
 
         {/* Header */}
         <div style={{ marginBottom: 'clamp(10px,1.5vh,20px)', maxWidth: 720 }}>
