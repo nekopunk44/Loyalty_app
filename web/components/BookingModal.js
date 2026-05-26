@@ -421,20 +421,39 @@ export default function BookingModal() {
           {step === 3 && (
             <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 24, animation: 'bmFade .35s ease both' }}>
 
-              {/* Guests */}
+              {/* Guests — pill selector */}
               <div>
-                <label style={{ display: 'block', fontSize: 9, letterSpacing: '0.32em', textTransform: 'uppercase', color: GOLD_DIM, marginBottom: 14 }}>Количество гостей</label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <button type="button" onClick={() => setGuests(g => Math.max(1, g-1))}
-                    style={{ width: 40, height: 40, borderRadius: 10, border: '1px solid rgba(245,237,224,0.15)', background: 'rgba(245,237,224,0.04)', color: CREAM, cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .2s' }}
-                    onMouseEnter={e => { e.currentTarget.style.background = GOLD; e.currentTarget.style.color = BG_DARK; e.currentTarget.style.borderColor = GOLD; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = 'rgba(245,237,224,0.04)'; e.currentTarget.style.color = CREAM; e.currentTarget.style.borderColor = 'rgba(245,237,224,0.15)'; }}>−</button>
-                  <span style={{ fontFamily: 'var(--r-serif)', fontStyle: 'italic', fontSize: 28, color: CREAM, minWidth: 56, textAlign: 'center', fontWeight: 300 }}>{guests}</span>
-                  <button type="button" onClick={() => setGuests(g => g+1)}
-                    style={{ width: 40, height: 40, borderRadius: 10, border: '1px solid rgba(245,237,224,0.15)', background: 'rgba(245,237,224,0.04)', color: CREAM, cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .2s' }}
-                    onMouseEnter={e => { e.currentTarget.style.background = GOLD; e.currentTarget.style.color = BG_DARK; e.currentTarget.style.borderColor = GOLD; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = 'rgba(245,237,224,0.04)'; e.currentTarget.style.color = CREAM; e.currentTarget.style.borderColor = 'rgba(245,237,224,0.15)'; }}>+</button>
-                  {room && <span style={{ fontSize: 11, color: 'rgba(245,237,224,0.35)', letterSpacing: '0.1em', marginLeft: 10 }}>макс. {room.guests}</span>}
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 14 }}>
+                  <label style={{ fontSize: 9, letterSpacing: '0.32em', textTransform: 'uppercase', color: GOLD_DIM }}>Гостей</label>
+                  <span style={{ fontFamily: 'var(--r-serif)', fontStyle: 'italic', fontSize: 22, color: GOLD, fontWeight: 300, lineHeight: 1 }}>{guests}</span>
+                  {room && <span style={{ fontSize: 10, color: 'rgba(245,237,224,0.28)', letterSpacing: '0.08em' }}>/ макс. {room.guests}</span>}
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {(room
+                    ? room.guests <= 10
+                      ? Array.from({ length: room.guests }, (_, i) => i + 1)
+                      : [1,2,3,4,5,6,8,10,12,15,room.guests].filter((v,i,a)=>a.indexOf(v)===i&&v<=room.guests)
+                    : [1,2,3,4,5,6,8,10]
+                  ).map(n => {
+                    const active = guests === n;
+                    return (
+                      <button key={n} type="button" onClick={() => setGuests(n)}
+                        style={{
+                          width: 40, height: 36,
+                          borderRadius: 8,
+                          border: `1px solid ${active ? GOLD : 'rgba(245,237,224,0.12)'}`,
+                          background: active ? GOLD : 'rgba(245,237,224,0.03)',
+                          color: active ? BG_DARK : 'rgba(245,237,224,0.65)',
+                          cursor: 'pointer', fontFamily: 'var(--r-serif)',
+                          fontSize: 13, fontWeight: active ? 500 : 300,
+                          transition: 'all .2s',
+                        }}
+                        onMouseEnter={e => { if (!active) { e.currentTarget.style.borderColor = `${GOLD}70`; e.currentTarget.style.color = CREAM; } }}
+                        onMouseLeave={e => { if (!active) { e.currentTarget.style.borderColor = 'rgba(245,237,224,0.12)'; e.currentTarget.style.color = 'rgba(245,237,224,0.65)'; } }}>
+                        {n}
+                      </button>
+                    );
+                  })}
                 </div>
                 {extra > 0 && (
                   <div style={{ marginTop: 10, display: 'inline-flex', alignItems: 'center', gap: 8, padding: '7px 12px', background: 'rgba(255,107,53,0.07)', border: '1px solid rgba(255,107,53,0.22)', borderRadius: 8 }}>
@@ -449,7 +468,9 @@ export default function BookingModal() {
                 <div style={{ borderRadius: 14, border: `1px solid ${sauna>0 ? `${GOLD}50` : 'rgba(245,237,224,0.09)'}`, background: sauna>0 ? `${GOLD}08` : 'rgba(245,237,224,0.02)', transition: 'all .3s', overflow: 'hidden' }}>
                   <button type="button" onClick={() => setSauna(h => h>0?0:1)}
                     style={{ width: '100%', padding: '14px 16px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12, fontFamily: 'inherit', textAlign: 'left' }}>
-                    <span style={{ fontSize: 20 }}>🔥</span>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={sauna>0?GOLD:GOLD_DIM} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                        <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>
+                      </svg>
                     <div style={{ flex: 1 }}>
                       <p style={{ fontFamily: 'var(--r-serif)', fontStyle: 'italic', fontSize: 15, color: CREAM, margin: '0 0 2px', fontWeight: 300 }}>Парилка</p>
                       <p style={{ fontSize: 10, color: GOLD_DIM, margin: 0 }}>{SAUNA_PRICE} PRB / час</p>
@@ -473,7 +494,9 @@ export default function BookingModal() {
                 {/* Kitchen */}
                 <button type="button" onClick={() => setKitchen(k=>!k)}
                   style={{ borderRadius: 14, border: `1px solid ${kitchen?`${GOLD}50`:'rgba(245,237,224,0.09)'}`, background: kitchen?`${GOLD}08`:'rgba(245,237,224,0.02)', padding: '14px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12, fontFamily: 'inherit', textAlign: 'left', transition: 'all .3s' }}>
-                  <span style={{ fontSize: 20 }}>🍴</span>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={kitchen?GOLD:GOLD_DIM} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                      <path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h1v4a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1z"/>
+                    </svg>
                   <div style={{ flex: 1 }}>
                     <p style={{ fontFamily: 'var(--r-serif)', fontStyle: 'italic', fontSize: 15, color: CREAM, margin: '0 0 2px', fontWeight: 300 }}>Кухонный сервиз</p>
                     <p style={{ fontSize: 10, color: GOLD_DIM, margin: 0 }}>{KITCHEN_PRICE} PRB · бесплатно от Silver</p>
@@ -547,7 +570,7 @@ export default function BookingModal() {
                   onMouseEnter={e => { if (!sent) { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = `0 14px 36px ${GOLD}50`; } }}
                   onMouseLeave={e => { if (!sent) { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = `0 8px 28px ${GOLD}35`; } }}>
                   <Icon name="message-circle" size={14} color={BG_DARK} strokeWidth={2} />
-                  {sent ? 'Открыто в WhatsApp ✓' : 'Отправить в WhatsApp →'}
+                  {sent ? 'Отправлено ✓' : 'Отправить →'}
                 </button>
                 <a href={INSTAGRAM_URL} target="_blank" rel="noopener noreferrer"
                   style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '16px 22px', background: 'transparent', border: `1px solid ${GOLD}40`, color: GOLD, borderRadius: 999, fontSize: 11, letterSpacing: '0.2em', textTransform: 'uppercase', textDecoration: 'none', fontWeight: 500, transition: 'all .3s', whiteSpace: 'nowrap' }}
