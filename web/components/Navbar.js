@@ -90,20 +90,22 @@ export default function Navbar() {
               </a>
             );
           })}
-          <a href="#contact" onClick={e => { e.preventDefault(); scrollTo('contact'); }}
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent('open-booking-modal'))}
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 8, padding: '11px 22px',
               background: scrolled ? 'var(--r-text)' : 'transparent',
               color: scrolled ? 'var(--r-bg)' : '#f5ede0',
               border: scrolled ? 'none' : '1px solid rgba(245,237,224,0.30)',
               borderRadius: 999, fontSize: 12, letterSpacing: '0.12em',
-              textTransform: 'uppercase', textDecoration: 'none', fontWeight: 500,
+              textTransform: 'uppercase', fontWeight: 500, cursor: 'pointer',
+              fontFamily: 'inherit',
               transition: 'all 0.4s ease',
             }}
             onMouseEnter={e => { e.currentTarget.style.background = '#d4a45e'; e.currentTarget.style.color = '#080604'; e.currentTarget.style.borderColor = 'transparent'; }}
             onMouseLeave={e => { e.currentTarget.style.background = scrolled ? 'var(--r-text)' : 'transparent'; e.currentTarget.style.color = scrolled ? 'var(--r-bg)' : '#f5ede0'; e.currentTarget.style.borderColor = scrolled ? 'transparent' : 'rgba(245,237,224,0.30)'; }}>
             Забронировать →
-          </a>
+          </button>
         </nav>
 
         <button className="md:hidden" onClick={() => setOpen(!open)} aria-label="Menu"
