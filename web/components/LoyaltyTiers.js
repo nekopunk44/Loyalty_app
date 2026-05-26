@@ -33,8 +33,8 @@ export default function LoyaltyApp() {
           to   { opacity: 1; transform: translateY(0); }
         }
         @keyframes phoneFloat {
-          0%, 100% { transform: translateY(0) perspective(900px) rotateY(-14deg) rotateX(2deg); }
-          50%      { transform: translateY(-10px) perspective(900px) rotateY(-14deg) rotateX(2deg); }
+          0%, 100% { transform: translateX(-32px) translateY(0) perspective(900px) rotateY(-14deg) rotateX(2deg); }
+          50%      { transform: translateX(-32px) translateY(-10px) perspective(900px) rotateY(-14deg) rotateX(2deg); }
         }
         .loyalty-grid { display: grid; gap: clamp(32px, 4vw, 56px); grid-template-columns: minmax(0, 1fr) minmax(0, 320px); align-items: center; }
         @media (max-width: 980px) {
