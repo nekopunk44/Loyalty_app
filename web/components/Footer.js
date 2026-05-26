@@ -4,7 +4,7 @@ import VJMonogram from './VJMonogram';
 
 const NAV = [
   { href: '#rooms', label: 'Номера' }, { href: '#tour', label: '3D-тур' }, { href: '#loyalty', label: 'Лояльность' },
-  { href: '#reviews', label: 'Отзывы' }, { href: '#faq', label: 'FAQ' }, { href: '#contact', label: 'Бронирование' },
+  { href: '#faq', label: 'FAQ' }, { href: '#contact', label: 'Бронирование' },
 ];
 const SOCIAL = [{ name: 'Instagram', icon: 'camera' }, { name: 'Telegram', icon: 'send' }, { name: 'WhatsApp', icon: 'message-circle' }];
 
@@ -15,24 +15,15 @@ export default function Footer() {
     <footer style={{ background: 'var(--r-text)', color: 'var(--r-bg)' }}>
       <div style={{ maxWidth: 1440, margin: '0 auto', padding: '80px clamp(20px,4vw,60px) 40px' }}>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 64, paddingBottom: 48, borderBottom: '1px solid rgba(247,242,232,0.12)', flexWrap: 'wrap', gap: 32 }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'flex-start', marginBottom: 64, paddingBottom: 48, borderBottom: '1px solid rgba(247,242,232,0.12)', flexWrap: 'wrap', gap: 32 }}>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <VJMonogram size={44} mainColor="rgba(247,242,232,0.95)" accentColor="#a07840" animate={false} />
               <span style={{ fontFamily: 'var(--r-serif)', fontSize: 24, fontWeight: 300, letterSpacing: '0.04em', color: 'rgba(247,242,232,0.95)' }}>
                 VILLA <span style={{ color: 'var(--r-gold)' }}>JACONDA</span>
               </span>
             </div>
-            <p style={{ fontSize: 13, color: 'rgba(247,242,232,0.5)', lineHeight: 1.7, maxWidth: 280 }}>
-              Приватная вилла в Слободзее. Программа лояльности для постоянных гостей.
-            </p>
           </div>
-          <a href="#contact"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 10, padding: '14px 28px', background: 'var(--r-gold)', color: 'var(--r-text)', borderRadius: 999, fontSize: 12, letterSpacing: '0.14em', textTransform: 'uppercase', textDecoration: 'none', fontWeight: 500, transition: 'background 0.3s ease', alignSelf: 'flex-start' }}
-            onMouseEnter={e => e.currentTarget.style.background = 'var(--r-gold-light)'}
-            onMouseLeave={e => e.currentTarget.style.background = 'var(--r-gold)'}>
-            Забронировать →
-          </a>
         </div>
 
         <div style={{ display: 'grid', gap: 48, gridTemplateColumns: 'repeat(auto-fit,minmax(min(180px,100%),1fr))', marginBottom: 64 }}>
@@ -54,7 +45,7 @@ export default function Footer() {
           <div>
             <p style={{ fontSize: 10, letterSpacing: '0.28em', textTransform: 'uppercase', color: 'rgba(247,242,232,0.35)', marginBottom: 20 }}>Контакты</p>
             <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <li><a href="tel:+37377812345" style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 14, color: 'rgba(247,242,232,0.6)', textDecoration: 'none', transition: 'color 0.3s ease' }} onMouseEnter={e => e.currentTarget.style.color = 'var(--r-gold)'} onMouseLeave={e => e.currentTarget.style.color = 'rgba(247,242,232,0.6)'}><Icon name="phone" size={13} strokeWidth={1.5} />+373 778 12 345</a></li>
+              <li><a href="tel:+3737791002" style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 14, color: 'rgba(247,242,232,0.6)', textDecoration: 'none', transition: 'color 0.3s ease' }} onMouseEnter={e => e.currentTarget.style.color = 'var(--r-gold)'} onMouseLeave={e => e.currentTarget.style.color = 'rgba(247,242,232,0.6)'}><Icon name="phone" size={13} strokeWidth={1.5} />+373 779 10 02</a></li>
               <li><a href="mailto:hello@villajaconda.com" style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 14, color: 'rgba(247,242,232,0.6)', textDecoration: 'none', transition: 'color 0.3s ease' }} onMouseEnter={e => e.currentTarget.style.color = 'var(--r-gold)'} onMouseLeave={e => e.currentTarget.style.color = 'rgba(247,242,232,0.6)'}><Icon name="mail" size={13} strokeWidth={1.5} />hello@villajaconda.com</a></li>
               <li style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 14, color: 'rgba(247,242,232,0.6)' }}><Icon name="map-pin" size={13} strokeWidth={1.5} color="var(--r-gold)" />ул. Набережная 85, Слободзея</li>
             </ul>
