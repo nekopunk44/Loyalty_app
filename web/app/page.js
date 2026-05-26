@@ -5,7 +5,7 @@ import Tour from '@/components/Tour';
 import LoyaltyTiers from '@/components/LoyaltyTiers';
 import Reviews from '@/components/Reviews';
 import BookingSection from '@/components/BookingSection';
-import MapSection from '@/components/MapSection';
+import FAQ from '@/components/FAQ';
 import Footer from '@/components/Footer';
 
 export default function Home() {
@@ -19,7 +19,7 @@ export default function Home() {
         <LoyaltyTiers />
         <Reviews />
         <BookingSection />
-        <MapSection />
+        <FAQ />
       </main>
       <Footer />
     </>
