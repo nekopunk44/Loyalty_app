@@ -47,7 +47,7 @@ export default function Footer() {
               <li>
                 <a href="mailto:hello@villajaconda.com" style={{ fontSize: 14, color: 'var(--text-soft)' }}>hello@villajaconda.com</a>
               </li>
-              <li style={{ fontSize: 14, color: 'var(--text-soft)' }}>г. Слободзея, Приднестровье</li>
+              <li style={{ fontSize: 14, color: 'var(--text-soft)' }}>ул. Набережная 85, Слободзея</li>
             </ul>
           </div>
 
