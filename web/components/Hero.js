@@ -7,18 +7,11 @@ const IMAGES = [
   '/images/property2.png',
   '/images/property3.png',
 ];
-const STATS = [
-  { v: '4',    l: 'Формата'  },
-  { v: '30+',  l: 'Гостей'   },
-  { v: '2022', l: 'Открытие' },
-];
-
 const D = {
   bg:        '#080604',
   cream:     '#f5ede0',
   creamSoft: 'rgba(202,187,169,0.80)',
   gold:      '#d4a45e',
-  goldBright:'#f0c987',
   goldDim:   'rgba(212,164,94,0.60)',
 };
 
@@ -146,36 +139,16 @@ export default function Hero() {
             Приватная вилла в Слободзее&nbsp;— от камерного отдыха до полного выкупа территории на&nbsp;30&nbsp;гостей.
           </p>
 
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', ...reveal(0.82, 8) }}>
-            <HeroBtn href="#booking" filled>Забронировать</HeroBtn>
-            <HeroBtn href="#rooms">Номера&nbsp;→</HeroBtn>
-          </div>
         </div>
       </div>
 
-      {/* ── Нижняя панель: статистика + Scroll ──── */}
+      {/* ── Scroll-индикатор ─────────────────────── */}
       <div style={{
         position: 'relative', zIndex: 2,
         padding: `0 ${hPad} clamp(28px, 5.5vh, 52px)`,
-        display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end',
-        ...reveal(1.55, 0),
+        display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-end',
+        ...reveal(1.2, 0),
       }}>
-        <div style={{ display: 'flex', gap: 'clamp(24px, 5vw, 64px)' }}>
-          {STATS.map(s => (
-            <div key={s.l}>
-              <p style={{
-                fontFamily: 'var(--r-serif)',
-                fontSize: 'clamp(1.5rem, 2.6vw, 2.2rem)',
-                lineHeight: 1, color: D.gold, margin: '0 0 7px', fontWeight: 400,
-              }}>{s.v}</p>
-              <p style={{
-                fontSize: 9, color: 'rgba(202,187,169,0.50)',
-                letterSpacing: '0.22em', textTransform: 'uppercase', margin: 0,
-              }}>{s.l}</p>
-            </div>
-          ))}
-        </div>
-
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, color: 'rgba(202,187,169,0.38)' }}>
           <span style={{ fontSize: 9, letterSpacing: '0.32em', textTransform: 'uppercase' }}>Scroll</span>
           <div style={{ width: 1, height: 36, background: 'currentColor', animation: 'pulse-line 2s ease-in-out infinite' }} />
@@ -192,31 +165,3 @@ export default function Hero() {
   );
 }
 
-// ── Кнопки Hero ──────────────────────────────────────────────────────────────
-function HeroBtn({ href, children, filled }) {
-  const [hov, setHov] = useState(false);
-
-  const base = {
-    display: 'inline-flex', alignItems: 'center',
-    padding: '13px 28px', borderRadius: 2,
-    fontSize: 11, fontWeight: filled ? 500 : 400,
-    letterSpacing: '0.18em', textTransform: 'uppercase',
-    textDecoration: 'none', whiteSpace: 'nowrap', cursor: 'pointer',
-    transition: 'background 0.3s ease, color 0.3s ease, border-color 0.3s ease',
-  };
-
-  return (
-    <a
-      href={href}
-      style={filled
-        ? { ...base, background: hov ? D.goldBright : D.gold, color: D.bg, border: 'none' }
-        : { ...base, background: 'transparent', color: hov ? D.gold : D.cream,
-            border: `1px solid ${hov ? 'rgba(212,164,94,0.50)' : 'rgba(245,237,224,0.22)'}` }
-      }
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
-    >
-      {children}
-    </a>
-  );
-}

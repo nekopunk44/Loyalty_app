@@ -60,41 +60,58 @@ export default function Navbar() {
       backdropFilter: scrolled ? 'blur(20px) saturate(1.2)' : 'none',
       WebkitBackdropFilter: scrolled ? 'blur(20px) saturate(1.2)' : 'none',
       background: scrolled ? 'rgba(247,242,232,0.92)' : 'transparent',
-      borderBottom: `1px solid ${scrolled ? 'rgba(160,120,60,0.15)' : 'transparent'}`,
+      borderBottom: `1px solid ${scrolled ? 'rgba(160,120,60,0.15)' : 'rgba(212,164,94,0.12)'}`,
       transition: 'all 0.5s ease',
     }}>
       <div style={{ maxWidth: 1440, margin: '0 auto', padding: '0 clamp(20px,4vw,60px)', height: scrolled ? 64 : 88, display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: 'height 0.4s ease' }}>
 
+        {/* Логотип: светлый на Hero, тёмный после скролла */}
         <a href="#" onClick={e => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-          style={{ display: 'flex', alignItems: 'center', gap: 11, textDecoration: 'none', color: 'var(--r-text)' }}>
-          <VJMonogram size={36} mainColor="#1c1208" accentColor="#a07840" animate delay={400} fast />
+          style={{ display: 'flex', alignItems: 'center', gap: 11, textDecoration: 'none', color: scrolled ? 'var(--r-text)' : '#f5ede0', transition: 'color 0.5s ease' }}>
+          <VJMonogram size={36}
+            mainColor={scrolled ? '#1c1208' : '#f5ede0'}
+            accentColor="#d4a45e"
+            animate delay={400} fast />
           <span style={{ fontFamily: 'var(--r-serif)', fontSize: 20, fontWeight: 300, letterSpacing: '0.04em' }}>
-            VILLA <span style={{ color: 'var(--r-gold)' }}>JACONDA</span>
+            VILLA <span style={{ color: '#d4a45e' }}>JACONDA</span>
           </span>
         </a>
 
         <nav className="hidden md:flex" style={{ alignItems: 'center', gap: 32 }}>
-          {LINKS.map(l => (
-            <a key={l.id} href={`#${l.id}`}
-              onClick={e => { e.preventDefault(); scrollTo(l.id); }}
-              style={{ fontSize: 12, letterSpacing: '0.16em', textTransform: 'uppercase', color: active === l.id ? 'var(--r-gold)' : 'var(--r-text-soft)', fontWeight: active === l.id ? 500 : 400, transition: 'color 0.3s ease', textDecoration: 'none' }}
-              onMouseEnter={e => { if (active !== l.id) e.currentTarget.style.color = 'var(--r-text)'; }}
-              onMouseLeave={e => { if (active !== l.id) e.currentTarget.style.color = 'var(--r-text-soft)'; }}>
-              {l.label}
-            </a>
-          ))}
+          {LINKS.map(l => {
+            const linkColor = scrolled
+              ? (active === l.id ? 'var(--r-gold)' : 'var(--r-text-soft)')
+              : (active === l.id ? '#d4a45e' : 'rgba(245,237,224,0.72)');
+            return (
+              <a key={l.id} href={`#${l.id}`}
+                onClick={e => { e.preventDefault(); scrollTo(l.id); }}
+                style={{ fontSize: 12, letterSpacing: '0.16em', textTransform: 'uppercase', color: linkColor, fontWeight: active === l.id ? 500 : 400, transition: 'color 0.4s ease', textDecoration: 'none' }}
+                onMouseEnter={e => { e.currentTarget.style.color = '#d4a45e'; }}
+                onMouseLeave={e => { e.currentTarget.style.color = linkColor; }}>
+                {l.label}
+              </a>
+            );
+          })}
           <a href="#contact" onClick={e => { e.preventDefault(); scrollTo('contact'); }}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '11px 22px', background: 'var(--r-text)', color: 'var(--r-bg)', borderRadius: 999, fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', textDecoration: 'none', fontWeight: 500, transition: 'background 0.3s ease' }}
-            onMouseEnter={e => e.currentTarget.style.background = 'var(--r-gold)'}
-            onMouseLeave={e => e.currentTarget.style.background = 'var(--r-text)'}>
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 8, padding: '11px 22px',
+              background: scrolled ? 'var(--r-text)' : 'transparent',
+              color: scrolled ? 'var(--r-bg)' : '#f5ede0',
+              border: scrolled ? 'none' : '1px solid rgba(245,237,224,0.30)',
+              borderRadius: 999, fontSize: 12, letterSpacing: '0.12em',
+              textTransform: 'uppercase', textDecoration: 'none', fontWeight: 500,
+              transition: 'all 0.4s ease',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = '#d4a45e'; e.currentTarget.style.color = '#080604'; e.currentTarget.style.borderColor = 'transparent'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = scrolled ? 'var(--r-text)' : 'transparent'; e.currentTarget.style.color = scrolled ? 'var(--r-bg)' : '#f5ede0'; e.currentTarget.style.borderColor = scrolled ? 'transparent' : 'rgba(245,237,224,0.30)'; }}>
             Забронировать →
           </a>
         </nav>
 
         <button className="md:hidden" onClick={() => setOpen(!open)} aria-label="Menu"
           style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 8 }}>
-          <div style={{ width: 28, height: 1, background: 'var(--r-text)', marginBottom: 8, transition: 'transform 0.3s', transform: open ? 'translateY(4.5px) rotate(45deg)' : 'none' }} />
-          <div style={{ width: 28, height: 1, background: 'var(--r-text)', transition: 'transform 0.3s', transform: open ? 'translateY(-4.5px) rotate(-45deg)' : 'none' }} />
+          <div style={{ width: 28, height: 1, background: scrolled ? 'var(--r-text)' : '#f5ede0', marginBottom: 8, transition: 'transform 0.3s, background 0.5s', transform: open ? 'translateY(4.5px) rotate(45deg)' : 'none' }} />
+          <div style={{ width: 28, height: 1, background: scrolled ? 'var(--r-text)' : '#f5ede0', transition: 'transform 0.3s, background 0.5s', transform: open ? 'translateY(-4.5px) rotate(-45deg)' : 'none' }} />
         </button>
       </div>
 
