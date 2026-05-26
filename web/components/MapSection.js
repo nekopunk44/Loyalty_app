@@ -11,7 +11,8 @@ export default function MapSection() {
   const ref = useRef(null);
   const inView = useInView(ref, { once: true, margin: '-10%' });
 
-  const osmEmbed = `https://www.openstreetmap.org/export/embed.html?bbox=${LNG - 0.012}%2C${LAT - 0.007}%2C${LNG + 0.012}%2C${LAT + 0.007}&layer=mapnik&marker=${LAT}%2C${LNG}`;
+  // tight bbox ≈ 400m radius so the pin is clearly visible at street level
+  const osmEmbed = `https://www.openstreetmap.org/export/embed.html?bbox=${LNG - 0.003}%2C${LAT - 0.002}%2C${LNG + 0.003}%2C${LAT + 0.002}&layer=mapnik&marker=${LAT}%2C${LNG}`;
 
   return (
     <section id="map" ref={ref} style={{ background: 'var(--bg)', borderTop: '1px solid var(--line)' }}>
