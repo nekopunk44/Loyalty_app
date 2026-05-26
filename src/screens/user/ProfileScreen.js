@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, TextInput, Alert, Image, ActivityIndicator } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, TextInput, Alert, Image, ActivityIndicator, Animated, Dimensions, Platform, PanResponder } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -11,6 +12,8 @@ import { useBookings } from '../../context/BookingContext';
 import { useAnalytics } from '../../context/AnalyticsContext';
 
 const BALANCE_KEY = '@loyalty_balance';
+const AVATAR_SHEET_HEIGHT = Math.round(Dimensions.get('window').height * 0.42);
+const useNative = Platform.OS !== 'web';
 
 export default function ProfileScreen() {
   const [balance, setBalance] = useState(0);
@@ -25,9 +28,56 @@ export default function ProfileScreen() {
   const { user, updateProfile } = useAuth();
   const { bookings, addBooking: _addBooking, updateBookingReview } = useBookings();
   const { trackEvent } = useAnalytics();
+  const insets = useSafeAreaInsets();
 
   const [avatarModalVisible, setAvatarModalVisible] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const avatarSheetAnim = useRef(new Animated.Value(1)).current;
+
+  const openAvatarModal = () => {
+    avatarSheetAnim.stopAnimation();
+    avatarSheetAnim.setValue(1);
+    setAvatarModalVisible(true);
+    Animated.timing(avatarSheetAnim, {
+      toValue: 0,
+      duration: 320,
+      useNativeDriver: useNative,
+    }).start();
+  };
+
+  const closeAvatarModal = () => {
+    avatarSheetAnim.stopAnimation();
+    Animated.timing(avatarSheetAnim, {
+      toValue: 1,
+      duration: 220,
+      useNativeDriver: useNative,
+    }).start(() => {
+      setAvatarModalVisible(false);
+    });
+  };
+
+  const avatarPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, g) => g.dy > 4 && Math.abs(g.dy) > Math.abs(g.dx),
+      onPanResponderMove: (_, g) => {
+        if (g.dy > 0) avatarSheetAnim.setValue(Math.min(1, g.dy / (AVATAR_SHEET_HEIGHT + 40)));
+      },
+      onPanResponderRelease: (_, g) => {
+        if (g.dy > 90 || g.vy > 0.8) {
+          closeAvatarModal();
+        } else {
+          Animated.spring(avatarSheetAnim, {
+            toValue: 0, useNativeDriver: useNative, tension: 80, friction: 12,
+          }).start();
+        }
+      },
+    })
+  ).current;
+
+  const [birthdayModalVisible, setBirthdayModalVisible] = useState(false);
+  const [birthdayInput, setBirthdayInput] = useState('');
+  const [birthdaySaving, setBirthdaySaving] = useState(false);
 
   // Load balance
   useEffect(() => {
@@ -137,6 +187,36 @@ export default function ProfileScreen() {
     return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || '?';
   };
 
+  const formatBirthDate = (iso) => {
+    if (!iso) return null;
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return null;
+    return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
+  };
+
+  const handleSaveBirthday = async () => {
+    const parts = birthdayInput.trim().split('.');
+    if (parts.length !== 3 || parts.some(p => isNaN(Number(p)))) {
+      Alert.alert('Ошибка', 'Введите дату в формате ДД.ММ.ГГГГ');
+      return;
+    }
+    const [day, month, year] = parts.map(Number);
+    if (month < 1 || month > 12 || day < 1 || day > 31 || year < 1900 || year > new Date().getFullYear()) {
+      Alert.alert('Ошибка', 'Некорректная дата');
+      return;
+    }
+    const iso = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    setBirthdaySaving(true);
+    try {
+      await updateProfile({ birthDate: iso });
+      setBirthdayModalVisible(false);
+    } catch (e) {
+      Alert.alert('Ошибка', 'Не удалось сохранить дату рождения');
+    } finally {
+      setBirthdaySaving(false);
+    }
+  };
+
   // Profile Tab Content
   const ProfileContent = () => (
     <ScrollView contentContainerStyle={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -144,7 +224,7 @@ export default function ProfileScreen() {
       {/* Аватар и данные пользователя */}
       <View style={[styles.userInfoSection, { backgroundColor: theme.colors.cardBg }]}>
         <View style={styles.avatarRow}>
-          <TouchableOpacity onPress={() => setAvatarModalVisible(true)} activeOpacity={0.8}>
+          <TouchableOpacity onPress={openAvatarModal} activeOpacity={0.8}>
             <View style={styles.avatarWrapper}>
               {user?.avatar ? (
                 <Image source={{ uri: user.avatar }} style={styles.avatarImage} />
@@ -172,6 +252,17 @@ export default function ProfileScreen() {
             ) : null}
           </View>
         </View>
+        <TouchableOpacity
+          style={{ flexDirection: 'row', alignItems: 'center', paddingTop: 12, gap: 8 }}
+          onPress={() => { setBirthdayInput(formatBirthDate(user?.birthDate) || ''); setBirthdayModalVisible(true); }}
+          activeOpacity={0.7}
+        >
+          <MaterialIcons name="cake" size={18} color={theme.colors.primary} />
+          <Text style={{ fontSize: 13, color: theme.colors.textSecondary, flex: 1 }}>
+            {user?.birthDate ? `День рождения: ${formatBirthDate(user.birthDate)}` : 'Добавить дату рождения'}
+          </Text>
+          <MaterialIcons name="edit" size={16} color={theme.colors.textSecondary} />
+        </TouchableOpacity>
       </View>
 
       {/* Card Display */}
@@ -378,11 +469,77 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
-      {/* Модал смены аватара */}
-      <Modal visible={avatarModalVisible} transparent animationType="fade" onRequestClose={() => setAvatarModalVisible(false)}>
+      {/* Модал дня рождения */}
+      <Modal visible={birthdayModalVisible} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setBirthdayModalVisible(false)}>
         <View style={styles.avatarModalOverlay}>
           <View style={[styles.modalContainer, { backgroundColor: theme.colors.cardBg }]}>
-            <Text style={[styles.avatarModalTitle, { color: theme.colors.text }]}>Изменить фото профиля</Text>
+            <Text style={[styles.avatarModalTitle, { color: theme.colors.text }]}>День рождения</Text>
+            <Text style={{ fontSize: 13, color: theme.colors.textSecondary, marginBottom: 12 }}>
+              Введите дату в формате ДД.ММ.ГГГГ
+            </Text>
+            <TextInput
+              style={[styles.reviewInput, { backgroundColor: theme.colors.background, color: theme.colors.text, borderColor: theme.colors.border, marginBottom: 16 }]}
+              placeholder="например 15.07.1995"
+              placeholderTextColor={theme.colors.textSecondary}
+              value={birthdayInput}
+              onChangeText={setBirthdayInput}
+              keyboardType="numeric"
+              maxLength={10}
+            />
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TouchableOpacity
+                style={[styles.submitButton, { flex: 1, backgroundColor: theme.colors.border }]}
+                onPress={() => setBirthdayModalVisible(false)}
+              >
+                <Text style={[styles.submitButtonText, { color: theme.colors.text }]}>Отмена</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.submitButton, { flex: 1, backgroundColor: theme.colors.primary, opacity: birthdaySaving ? 0.7 : 1 }]}
+                onPress={handleSaveBirthday}
+                disabled={birthdaySaving}
+              >
+                {birthdaySaving
+                  ? <ActivityIndicator size="small" color="#fff" />
+                  : <Text style={styles.submitButtonText}>Сохранить</Text>
+                }
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Модал смены аватара — bottom sheet с анимацией (паттерн BookingScreen) */}
+      <Modal visible={avatarModalVisible} animationType="none" transparent statusBarTranslucent onRequestClose={closeAvatarModal}>
+        <View style={styles.avatarModalContainer}>
+          <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={closeAvatarModal} />
+          <Animated.View
+            style={[
+              styles.avatarSheetWrap,
+              {
+                backgroundColor: theme.colors.background,
+                paddingBottom: insets.bottom + spacing.lg,
+                transform: [{
+                  translateY: avatarSheetAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0, AVATAR_SHEET_HEIGHT + 40],
+                  }),
+                }],
+              },
+            ]}
+          >
+            <View {...avatarPanResponder.panHandlers} style={styles.avatarSheetHandleArea}>
+              <View style={[styles.avatarSheetHandle, { backgroundColor: theme.colors.border }]} />
+            </View>
+            <View style={styles.avatarSheetHeader}>
+              <Text style={[styles.avatarSheetTitle, { color: theme.colors.text }]}>Изменить фото профиля</Text>
+              <TouchableOpacity
+                style={[styles.avatarSheetCloseBtn, { backgroundColor: theme.colors.cardBg, borderColor: theme.colors.border }]}
+                onPress={closeAvatarModal}
+                activeOpacity={0.8}
+              >
+                <MaterialIcons name="close" size={22} color={theme.colors.text} />
+              </TouchableOpacity>
+            </View>
             {avatarUploading ? (
               <ActivityIndicator size="large" color={theme.colors.primary} style={{ marginVertical: 24 }} />
             ) : (
@@ -403,13 +560,7 @@ export default function ProfileScreen() {
                 </TouchableOpacity>
               </View>
             )}
-            <TouchableOpacity
-              style={[styles.modalCancelBtn, { borderColor: theme.colors.border, marginTop: 8 }]}
-              onPress={() => setAvatarModalVisible(false)}
-            >
-              <Text style={[styles.modalCancelText, { color: theme.colors.textSecondary }]}>Отмена</Text>
-            </TouchableOpacity>
-          </View>
+          </Animated.View>
         </View>
       </Modal>
     </View>
@@ -799,6 +950,55 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: spacing.lg,
+  },
+  avatarModalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(6, 18, 30, 0.42)',
+    justifyContent: 'flex-end',
+  },
+  avatarSheetWrap: {
+    width: '100%',
+    alignSelf: 'stretch',
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    overflow: 'hidden',
+    shadowColor: '#063B5C',
+    shadowOffset: { width: 0, height: -10 },
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    elevation: 18,
+    paddingHorizontal: 20,
+  },
+  avatarSheetHandleArea: {
+    alignItems: 'center',
+    paddingTop: 10,
+    paddingBottom: 6,
+    marginHorizontal: -20,
+  },
+  avatarSheetHandle: {
+    width: 46,
+    height: 5,
+    borderRadius: 3,
+  },
+  avatarSheetHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 8,
+    paddingBottom: 14,
+  },
+  avatarSheetTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    flex: 1,
+  },
+  avatarSheetCloseBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
   },
   modalContainer: {
     borderRadius: borderRadius.xl,

@@ -58,7 +58,8 @@
           "organization": "other-c6",
           "project": "react-native"
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
     "platforms": [
       "ios",

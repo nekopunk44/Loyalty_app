@@ -13,7 +13,7 @@ import { Platform } from 'react-native';
 const LOCAL_MACHINE_IP = '192.168.0.106';
 
 // 🌐 Production URL (когда сервер развёрнут)
-const PRODUCTION_API_URL = null; // Пример: 'https://api.villajaconda.com/api'
+const PRODUCTION_API_URL = 'https://loyaltyapp-production-0d1c.up.railway.app/api';
 
 const API_PORT = 5002;
 

@@ -10,6 +10,9 @@ import { useTheme } from '../../context/ThemeContext';
 import NotificationCenter from './NotificationCenter';
 import LoyaltyCardService from '../../services/LoyaltyCardService';
 import * as ImagePicker from 'expo-image-picker';
+import Svg, { Path } from 'react-native-svg';
+import SignaturePad from '../../components/ui/SignaturePad';
+import { HOUSE_RULES, RULES_SIGN_KEY as SHARED_RULES_SIGN_KEY } from '../../constants/houseRules';
 
 const NAVY  = '#063B5C';
 const TEAL  = '#14B8A6';
@@ -23,26 +26,27 @@ const LEVEL_HERO = {
   admin:    { bg: '#1A8A78', accent: '#A0F0E4', sub: 'rgba(255,255,255,0.7)' },
 };
 
-const AVATAR_KEY   = '@user_avatar_uri';
-const RULES_KEY    = '@loyalty_rules_v2';
-const CONTACT_KEY  = '@loyalty_contact_v1';
+const AVATAR_KEY    = '@user_avatar_uri';
+const RULES_KEY     = '@loyalty_rules_v2';
+const CONTACT_KEY   = '@loyalty_contact_v1';
+const RULES_SIGN_KEY = SHARED_RULES_SIGN_KEY;
 
 const DEFAULT_RULES = {
   levels: [
-    { name: 'Bronze',   range: '0 – 10 000 PRB',       bonus: '10% кешбек', color: '#CD7F32', icon: 'military-tech' },
-    { name: 'Silver',   range: '10 000 – 50 000 PRB',  bonus: '20% кешбек', color: '#94A3B8', icon: 'workspace-premium' },
-    { name: 'Gold',     range: '50 000 – 200 000 PRB', bonus: '30% кешбек', color: '#F59E0B', icon: 'star' },
-    { name: 'Platinum', range: '200 000+ PRB',          bonus: '40% кешбек', color: '#8B5CF6', icon: 'diamond' },
+    { name: 'Bronze',   range: '0 – 10 000 PRB',       bonus: '3% кешбек',  color: '#CD7F32', icon: 'military-tech' },
+    { name: 'Silver',   range: '10 000 – 50 000 PRB',  bonus: '5% кешбек',  color: '#94A3B8', icon: 'workspace-premium' },
+    { name: 'Gold',     range: '50 000 – 200 000 PRB', bonus: '7% кешбек',  color: '#F59E0B', icon: 'star' },
+    { name: 'Platinum', range: '200 000+ PRB',         bonus: '10% кешбек', color: '#8B5CF6', icon: 'diamond' },
   ],
   rules: [
-    { text: 'Каждая покупка даёт 1% кешбека',                             icon: 'percent',        color: '#10B981' },
-    { text: 'Накопленные бонусы можно использовать как оплату',            icon: 'payment',         color: '#06B6D4' },
-    { text: 'Статус участника зависит от накопленной суммы',               icon: 'trending-up',     color: '#F59E0B' },
-    { text: 'Кешбек не накапливается на возвраты',                         icon: 'block',           color: '#EF4444' },
-    { text: 'Статус снижается при отсутствии активности 12 месяцев',       icon: 'schedule',        color: '#8B5CF6' },
-    { text: 'Бонусы не переводятся другим пользователям',                  icon: 'person-off',      color: '#64748B' },
-    { text: 'В день рождения начисляется дополнительный бонус',            icon: 'cake',            color: '#F43F5E' },
+    { text: 'Кешбек начисляется по ставке вашего уровня (3–10%)',          icon: 'percent',         color: '#10B981' },
+    { text: 'Накопленные бонусы можно использовать как оплату',             icon: 'payment',         color: '#06B6D4' },
+    { text: 'Уровень повышается по сумме накопленных трат',                 icon: 'trending-up',     color: '#F59E0B' },
+    { text: 'Кешбек не начисляется на возвраты и отменённые брони',         icon: 'block',           color: '#EF4444' },
+    { text: 'Бонусы не переводятся между пользователями',                   icon: 'person-off',      color: '#64748B' },
+    { text: 'В день рождения кешбек удваивается',                           icon: 'cake',            color: '#F43F5E' },
   ],
+  houseRules: HOUSE_RULES,
 };
 
 const DEFAULT_CONTACT = {
@@ -209,6 +213,10 @@ export default function SettingsScreen() {
   const [contactData, setContactData]                     = useState(DEFAULT_CONTACT);
   const [isEditingContact, setIsEditingContact]           = useState(false);
   const [avatarPickerVisible, setAvatarPickerVisible]     = useState(false);
+  const [rulesAck, setRulesAck]                           = useState(false);
+  const [signaturePaths, setSignaturePaths]               = useState([]);
+  const [signedAt, setSignedAt]                           = useState(null);
+  const [signedPaths, setSignedPaths]                     = useState([]);
 
   const { logout, isAdmin, user } = useAuth();
   const { isDark, toggleTheme, theme } = useTheme();
@@ -231,10 +239,26 @@ export default function SettingsScreen() {
       .then(uri => { if (uri) setAvatarUri(uri); })
       .catch(() => {});
     AsyncStorage.getItem(RULES_KEY)
-      .then(v => { if (v) setRulesData(JSON.parse(v)); })
+      .then(v => {
+        if (!v) return;
+        const parsed = JSON.parse(v);
+        setRulesData({
+          ...DEFAULT_RULES,
+          ...parsed,
+          houseRules: parsed?.houseRules || DEFAULT_RULES.houseRules,
+        });
+      })
       .catch(() => {});
     AsyncStorage.getItem(CONTACT_KEY)
       .then(v => { if (v) setContactData(JSON.parse(v)); })
+      .catch(() => {});
+    AsyncStorage.getItem(RULES_SIGN_KEY)
+      .then(v => {
+        if (!v) return;
+        const obj = JSON.parse(v);
+        if (obj?.signedAt) setSignedAt(obj.signedAt);
+        if (Array.isArray(obj?.paths)) setSignedPaths(obj.paths);
+      })
       .catch(() => {});
   }, []);
 
@@ -349,6 +373,28 @@ export default function SettingsScreen() {
     setContactData(draft);
     setIsEditingContact(false);
     await AsyncStorage.setItem(CONTACT_KEY, JSON.stringify(draft));
+  };
+
+  const submitSignature = async () => {
+    if (!signaturePaths.length) {
+      Alert.alert('Пустая подпись', 'Пожалуйста, поставьте свою подпись пальцем в поле.');
+      return;
+    }
+    const ts = new Date().toISOString();
+    const payload = { signedAt: ts, paths: signaturePaths };
+    await AsyncStorage.setItem(RULES_SIGN_KEY, JSON.stringify(payload));
+    setSignedAt(ts);
+    setSignedPaths(signaturePaths);
+    setSignaturePaths([]);
+    setRulesAck(false);
+  };
+
+  const resetSignature = async () => {
+    await AsyncStorage.removeItem(RULES_SIGN_KEY);
+    setSignedAt(null);
+    setSignedPaths([]);
+    setSignaturePaths([]);
+    setRulesAck(false);
   };
 
   const btnSlideStyle = {
@@ -654,6 +700,15 @@ export default function SettingsScreen() {
             isEditing={isEditingRules}
             draft={rulesDraft}
             onDraftChange={setRulesDraft}
+            rulesAck={rulesAck}
+            setRulesAck={setRulesAck}
+            signaturePaths={signaturePaths}
+            setSignaturePaths={setSignaturePaths}
+            signedAt={signedAt}
+            signedPaths={signedPaths}
+            onSubmitSignature={submitSignature}
+            onResetSignature={resetSignature}
+            isDark={isDark}
           />
         </ScrollView>
       </BottomSheet>
@@ -781,6 +836,7 @@ export default function SettingsScreen() {
         visible={notifCenterVisible}
         animationType="none"
         transparent
+        statusBarTranslucent
         onRequestClose={closeNotifCenter}
       >
         <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(6,18,30,0.46)' }}>
@@ -840,7 +896,7 @@ function BottomSheet({ visible, onClose, title, headerRight, children, colors })
   if (!mounted) return null;
 
   return (
-    <Modal visible animationType="none" transparent onRequestClose={onClose}>
+    <Modal visible animationType="none" transparent statusBarTranslucent onRequestClose={onClose}>
       <View style={{ flex: 1 }}>
         <Animated.View
           style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.5)', opacity: bgOpacity }]}
@@ -866,9 +922,17 @@ function BottomSheet({ visible, onClose, title, headerRight, children, colors })
   );
 }
 
-function RulesContent({ colors, data, isEditing, draft, onDraftChange }) {
+function RulesContent({
+  colors, data, isEditing, draft, onDraftChange,
+  rulesAck, setRulesAck,
+  signaturePaths, setSignaturePaths,
+  signedAt, signedPaths,
+  onSubmitSignature, onResetSignature,
+  isDark,
+}) {
   const display = data || DEFAULT_RULES;
   const editData = draft || display;
+  const houseRules = display.houseRules || DEFAULT_RULES.houseRules;
 
   const updateRuleText = (i, text) => {
     const next = JSON.parse(JSON.stringify(editData));
@@ -879,6 +943,14 @@ function RulesContent({ colors, data, isEditing, draft, onDraftChange }) {
     const next = JSON.parse(JSON.stringify(editData));
     next.levels[i][field] = text;
     onDraftChange(next);
+  };
+
+  const formatSignedDate = (iso) => {
+    try {
+      const d = new Date(iso);
+      const pad = (n) => String(n).padStart(2, '0');
+      return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()} в ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    } catch { return ''; }
   };
 
   return (
@@ -939,6 +1011,90 @@ function RulesContent({ colors, data, isEditing, draft, onDraftChange }) {
           )}
         </View>
       ))}
+
+      <Text style={[styles.rulesSectionTitle, { color: colors.text, borderBottomColor: TEAL, marginTop: 20 }]}>
+        Правила проживания
+      </Text>
+      {houseRules.map((r, i) => (
+        <View key={`house-${i}`} style={[styles.ruleRow, { backgroundColor: colors.background, borderColor: colors.border }]}>
+          <View style={[styles.ruleIconBox, { backgroundColor: `${r.color}18` }]}>
+            <MaterialIcons name={r.icon || 'check-circle'} size={18} color={r.color} />
+          </View>
+          <Text style={[styles.ruleText, { color: colors.text }]}>{r.text}</Text>
+        </View>
+      ))}
+
+      {!isEditing && (
+        <View style={[styles.signCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
+          <View style={styles.signHeader}>
+            <MaterialIcons name="draw" size={20} color={TEAL} />
+            <Text style={[styles.signTitle, { color: colors.text }]}>Согласие с правилами</Text>
+          </View>
+
+          {signedAt ? (
+            <View>
+              <View style={styles.signedBadge}>
+                <MaterialIcons name="verified" size={18} color="#10B981" />
+                <Text style={styles.signedBadgeText}>Подписано {formatSignedDate(signedAt)}</Text>
+              </View>
+              <View style={[styles.signedPreview, { backgroundColor: isDark ? '#0B1F33' : '#F8FAFC', borderColor: colors.border }]}>
+                <Svg width="100%" height="100%">
+                  {signedPaths.map((d, i) => (
+                    <Path key={i} d={d} stroke={isDark ? '#E2E8F0' : '#063B5C'} strokeWidth={2.2} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                  ))}
+                </Svg>
+              </View>
+              <TouchableOpacity onPress={onResetSignature} style={styles.signResetBtn} activeOpacity={0.75}>
+                <MaterialIcons name="refresh" size={16} color="#EF4444" />
+                <Text style={styles.signResetText}>Отозвать подпись и подписать заново</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <>
+              <Text style={[styles.signDesc, { color: colors.textSecondary }]}>
+                Ознакомьтесь с правилами лояльности и проживания, после чего поставьте свою подпись.
+              </Text>
+
+              <TouchableOpacity
+                style={[styles.ackRow, rulesAck && styles.ackRowOn, { borderColor: rulesAck ? TEAL : colors.border }]}
+                onPress={() => setRulesAck(!rulesAck)}
+                activeOpacity={0.75}
+              >
+                <View style={[styles.ackBox, rulesAck && styles.ackBoxOn]}>
+                  {rulesAck && <MaterialIcons name="check" size={14} color="#fff" />}
+                </View>
+                <Text style={[styles.ackText, { color: colors.text }]}>
+                  Я ознакомился(ась) с правилами программы и проживания
+                </Text>
+              </TouchableOpacity>
+
+              {rulesAck && (
+                <View style={{ marginTop: 14 }}>
+                  <SignaturePad
+                    value={signaturePaths}
+                    onChange={setSignaturePaths}
+                    color={isDark ? '#E2E8F0' : '#063B5C'}
+                    backgroundColor={isDark ? '#0B1F33' : '#FFFFFF'}
+                    borderColor={colors.border}
+                  />
+                  <TouchableOpacity
+                    style={[
+                      styles.signSubmitBtn,
+                      { backgroundColor: signaturePaths.length ? TEAL : '#94A3B8' },
+                    ]}
+                    onPress={onSubmitSignature}
+                    disabled={!signaturePaths.length}
+                    activeOpacity={0.85}
+                  >
+                    <MaterialIcons name="check-circle" size={18} color="#fff" />
+                    <Text style={styles.signSubmitText}>Подписать и принять</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </>
+          )}
+        </View>
+      )}
     </>
   );
 }
@@ -1167,6 +1323,24 @@ const styles = StyleSheet.create({
   ruleIconBox:  { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   ruleText:     { flex: 1, fontSize: 13, lineHeight: 18 },
   ruleInput:    { flex: 1, fontSize: 13, lineHeight: 18, borderWidth: 1, borderRadius: 6, padding: 6 },
+
+  // Signature / acknowledgment
+  signCard:       { marginTop: 22, padding: 16, borderRadius: 16, borderWidth: 1 },
+  signHeader:     { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
+  signTitle:      { fontSize: 16, fontWeight: '800' },
+  signDesc:       { fontSize: 13, lineHeight: 19, marginBottom: 14 },
+  ackRow:         { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 12, borderWidth: 1.5 },
+  ackRowOn:       { backgroundColor: `${TEAL}10` },
+  ackBox:         { width: 22, height: 22, borderRadius: 6, borderWidth: 1.8, borderColor: '#94A3B8', alignItems: 'center', justifyContent: 'center' },
+  ackBoxOn:       { backgroundColor: TEAL, borderColor: TEAL },
+  ackText:        { flex: 1, fontSize: 13, lineHeight: 18, fontWeight: '600' },
+  signSubmitBtn:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 13, borderRadius: 14, marginTop: 14 },
+  signSubmitText: { color: '#fff', fontSize: 14, fontWeight: '800' },
+  signedBadge:    { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#10B98115', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 10 },
+  signedBadgeText:{ color: '#10B981', fontSize: 13, fontWeight: '700', flex: 1 },
+  signedPreview:  { height: 130, borderRadius: 12, borderWidth: 1, overflow: 'hidden' },
+  signResetBtn:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 10, paddingVertical: 8 },
+  signResetText:  { color: '#EF4444', fontSize: 12, fontWeight: '700' },
 
   // Edit chips
   editChip:     { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 },

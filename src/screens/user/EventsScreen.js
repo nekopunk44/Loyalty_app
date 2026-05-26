@@ -15,6 +15,17 @@ const NAVY  = '#063B5C';
 const TEAL  = '#14B8A6';
 const AMBER = '#F59E0B';
 
+const EVENT_LEVEL_ORDER = { all: 0, bronze: 0, silver: 1, gold: 2, platinum: 3 };
+const LEVEL_LABELS = { silver: 'Silver', gold: 'Gold', platinum: 'Platinum' };
+const LEVEL_COLORS = { silver: '#C0C0C0', gold: '#FFD700', platinum: '#9B59B6' };
+
+const isEventLocked = (event, user) => {
+  const required = (event?.allowedUsers || 'all').toLowerCase();
+  if (required === 'all' || required === 'bronze') return false;
+  const userLvl = (user?.membershipLevel || 'Bronze').toLowerCase();
+  return (EVENT_LEVEL_ORDER[userLvl] ?? 0) < (EVENT_LEVEL_ORDER[required] ?? 0);
+};
+
 export default function EventsScreen() {
   const { theme } = useTheme();
   const colors = theme.colors;
@@ -22,6 +33,8 @@ export default function EventsScreen() {
   const { user } = useAuth(); // ← Получаем данные пользователя
   
   const [filter, setFilter] = useState('all');
+  const [personalized, setPersonalized] = useState(false);
+  const [personalizedHint, setPersonalizedHint] = useState(null);
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [modalMounted, setModalMounted] = useState(false);
   const sheetAnim = useRef(new Animated.Value(0)).current;
@@ -43,6 +56,28 @@ export default function EventsScreen() {
   const heroAnim  = useRef(new Animated.Value(0)).current;
   const hBlob1    = useRef(new Animated.Value(1)).current;
   const hBlob2    = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (!refreshEvents) return;
+    let cancelled = false;
+    (async () => {
+      const meta = await refreshEvents(personalized ? { personalized: true } : {});
+      if (cancelled || !personalized) {
+        if (!personalized) setPersonalizedHint(null);
+        return;
+      }
+      if (meta && meta.personalized) {
+        setPersonalizedHint(null);
+      } else if (meta?.reason === 'no_auth') {
+        setPersonalizedHint('Войдите, чтобы получить персональные рекомендации');
+        setPersonalized(false);
+      } else if (meta?.reason === 'ml_unavailable' || meta?.reason === 'network_error') {
+        setPersonalizedHint('Рекомендации временно недоступны — показан общий список');
+        setPersonalized(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [personalized]);
 
   useEffect(() => {
     Animated.timing(heroAnim, { toValue: 1, duration: 500, useNativeDriver: useNative }).start();
@@ -238,6 +273,12 @@ export default function EventsScreen() {
   const handleJoinEvent = async () => {
     if (!selectedEvent || !user) return;
 
+    if (isEventLocked(selectedEvent, user)) {
+      const required = (selectedEvent.allowedUsers || '').toLowerCase();
+      showNotification(`Доступно только для уровня ${LEVEL_LABELS[required] || required} и выше`, 'error');
+      return;
+    }
+
     const participantIds = Array.isArray(selectedEvent.participantIds)
       ? selectedEvent.participantIds
       : [];
@@ -290,7 +331,6 @@ export default function EventsScreen() {
   };
 
   const renderEvent = ({ item, index }) => {
-    // Используем цвет и иконку которые уже содержатся в событии
     const eventData = {
       ...item,
       icon: item.icon || 'event',
@@ -298,7 +338,9 @@ export default function EventsScreen() {
       description: item.description || item.title,
       participants: item.participants || 0,
     };
-    
+    const locked = isEventLocked(item, user);
+    const requiredKey = (item.allowedUsers || 'all').toLowerCase();
+    const lockColor = LEVEL_COLORS[requiredKey] || AMBER;
     const isRemoving = removingEventIds.has(item.id);
     
     return (
@@ -361,12 +403,11 @@ export default function EventsScreen() {
                 </View>
               </View>
               
-              {/* Информация о требуемом уровне доступа */}
-              {item.allowedUsers && item.allowedUsers !== 'all' && (
-                <View style={[styles.accessRestriction, { borderTopColor: eventData.color }]}>
-                  <MaterialIcons name="shield" size={12} color={eventData.color} />
-                  <Text style={[styles.accessText, { color: eventData.color }]}>
-                    Только для {item.allowedUsers}
+              {locked && (
+                <View style={[styles.accessRestriction, { borderTopColor: lockColor, backgroundColor: `${lockColor}15` }]}>
+                  <MaterialIcons name="lock" size={12} color={lockColor} />
+                  <Text style={[styles.accessText, { color: lockColor }]}>
+                    Только {LEVEL_LABELS[requiredKey]}+
                   </Text>
                 </View>
               )}
@@ -392,6 +433,61 @@ export default function EventsScreen() {
   hArc: { position: 'absolute', width: 220, height: 220, borderRadius: 110, borderWidth: 1, borderColor: `${TEAL}28`, top: -90, left: -60 },
   // ── Filters ──
   filterRow: { flexDirection: 'row', paddingHorizontal: 16, paddingTop: 14, paddingBottom: 4, gap: 8 },
+  personalizedToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 16,
+    marginTop: 8,
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    borderRadius: 22,
+    borderWidth: 1.5,
+    borderColor: `${AMBER}55`,
+    backgroundColor: `${AMBER}10`,
+    gap: 8,
+  },
+  personalizedToggleActive: {
+    borderColor: AMBER,
+    backgroundColor: AMBER,
+  },
+  personalizedToggleText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: AMBER,
+  },
+  personalizedToggleTextActive: {
+    color: '#fff',
+  },
+  personalizedBadge: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    marginLeft: 4,
+  },
+  personalizedBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#fff',
+    letterSpacing: 0.5,
+  },
+  personalizedHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 16,
+    marginTop: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: `${colors.textSecondary}10`,
+    borderRadius: 10,
+    gap: 6,
+  },
+  personalizedHintText: {
+    fontSize: 11,
+    color: colors.textSecondary,
+    flex: 1,
+  },
   filterPill: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.cardBg },
   filterPillActive: { borderColor: TEAL, backgroundColor: `${TEAL}14` },
   filterPillText: { fontSize: 12, fontWeight: '700', color: colors.textSecondary },
@@ -731,23 +827,53 @@ export default function EventsScreen() {
 
       <FlatList
         ListHeaderComponent={
-          <View style={styles.filterRow}>
-            {filterTabs.map((tab) => (
-              <TouchableOpacity
-                key={tab.id}
-                style={[styles.filterPill, filter === tab.id && styles.filterPillActive]}
-                onPress={() => setFilter(tab.id)}
-              >
-                <MaterialIcons
-                  name={tab.icon}
-                  size={14}
-                  color={filter === tab.id ? TEAL : colors.textSecondary}
-                />
-                <Text style={[styles.filterPillText, filter === tab.id && styles.filterPillTextActive]}>
-                  {tab.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
+          <View>
+            <View style={styles.filterRow}>
+              {filterTabs.map((tab) => (
+                <TouchableOpacity
+                  key={tab.id}
+                  style={[styles.filterPill, filter === tab.id && styles.filterPillActive]}
+                  onPress={() => setFilter(tab.id)}
+                >
+                  <MaterialIcons
+                    name={tab.icon}
+                    size={14}
+                    color={filter === tab.id ? TEAL : colors.textSecondary}
+                  />
+                  <Text style={[styles.filterPillText, filter === tab.id && styles.filterPillTextActive]}>
+                    {tab.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <TouchableOpacity
+              style={[styles.personalizedToggle, personalized && styles.personalizedToggleActive]}
+              onPress={() => {
+                setPersonalizedHint(null);
+                setPersonalized((v) => !v);
+              }}
+              activeOpacity={0.85}
+            >
+              <MaterialIcons
+                name={personalized ? 'auto-awesome' : 'auto-awesome'}
+                size={16}
+                color={personalized ? '#fff' : AMBER}
+              />
+              <Text style={[styles.personalizedToggleText, personalized && styles.personalizedToggleTextActive]}>
+                {personalized ? 'Подобрано для вас' : 'Подобрать для меня'}
+              </Text>
+              {personalized && (
+                <View style={styles.personalizedBadge}>
+                  <Text style={styles.personalizedBadgeText}>ML</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+            {personalizedHint ? (
+              <View style={styles.personalizedHint}>
+                <MaterialIcons name="info-outline" size={14} color={colors.textSecondary} />
+                <Text style={styles.personalizedHintText}>{personalizedHint}</Text>
+              </View>
+            ) : null}
           </View>
         }
         data={filteredEvents}
@@ -767,7 +893,15 @@ export default function EventsScreen() {
             refreshing={refreshing}
             onRefresh={async () => {
               setRefreshing(true);
-              if (refreshEvents) await refreshEvents();
+              if (refreshEvents) {
+                const meta = await refreshEvents(personalized ? { personalized: true } : {});
+                if (personalized && meta && !meta.personalized) {
+                  if (meta.reason === 'ml_unavailable' || meta.reason === 'network_error') {
+                    setPersonalizedHint('Рекомендации временно недоступны — показан общий список');
+                    setPersonalized(false);
+                  }
+                }
+              }
               setRefreshing(false);
             }}
             colors={[colors.primary]}
@@ -902,13 +1036,22 @@ export default function EventsScreen() {
                 </View>
 
                 {/* Кнопка участия */}
-                <TouchableOpacity
-                  style={[styles.joinButton, { backgroundColor: selectedEvent.color }]}
-                  onPress={handleJoinEvent}
-                >
-                  <MaterialIcons name="star" size={20} color="#fff" />
-                  <Text style={styles.joinButtonText}>Участвовать</Text>
-                </TouchableOpacity>
+                {isEventLocked(selectedEvent, user) ? (
+                  <View style={[styles.joinButton, { backgroundColor: '#94A3B8' }]}>
+                    <MaterialIcons name="lock" size={20} color="#fff" />
+                    <Text style={styles.joinButtonText}>
+                      Только {LEVEL_LABELS[(selectedEvent.allowedUsers || '').toLowerCase()] || selectedEvent.allowedUsers}+
+                    </Text>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={[styles.joinButton, { backgroundColor: selectedEvent.color }]}
+                    onPress={handleJoinEvent}
+                  >
+                    <MaterialIcons name="star" size={20} color="#fff" />
+                    <Text style={styles.joinButtonText}>Участвовать</Text>
+                  </TouchableOpacity>
+                )}
               </ScrollView>
             </Animated.View>
           </View>

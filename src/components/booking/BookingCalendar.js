@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Animated,
   Dimensions,
+  PanResponder,
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { useTheme } from '../../context/ThemeContext';
@@ -43,6 +44,27 @@ export const BookingCalendar = ({
   const selectedPulse = useRef(new Animated.Value(1)).current;
   const checkInPillAnim = useRef(new Animated.Value(selectedCheckIn ? 1 : 0)).current;
   const checkOutPillAnim = useRef(new Animated.Value(selectedCheckOut ? 1 : 0)).current;
+
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, g) => g.dy > 4 && Math.abs(g.dy) > Math.abs(g.dx),
+      onPanResponderMove: (_, g) => {
+        if (g.dy > 0) slideAnim.setValue(g.dy);
+      },
+      onPanResponderRelease: (_, g) => {
+        if (g.dy > 110 || g.vy > 0.8) {
+          onCloseRef.current?.();
+        } else {
+          Animated.spring(slideAnim, {
+            toValue: 0, useNativeDriver: true, tension: 80, friction: 12,
+          }).start();
+        }
+      },
+    })
+  ).current;
 
   useEffect(() => {
     slideAnim.stopAnimation();
@@ -311,7 +333,9 @@ export const BookingCalendar = ({
             },
           ]}
         >
-          <View style={styles.handle} />
+          <View {...panResponder.panHandlers} style={styles.handleArea}>
+            <View style={styles.handle} />
+          </View>
           <View style={styles.header}>
             <View style={styles.titleBlock}>
               <Text style={styles.eyebrow}>
@@ -426,7 +450,8 @@ const styles = StyleSheet.create({
   backdrop: { flex: 1, justifyContent: 'flex-end' },
   backdropScrim: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(6, 18, 30, 0.44)' },
   container: { height: CALENDAR_SHEET_HEIGHT, backgroundColor: '#F6F8FA', borderTopLeftRadius: 30, borderTopRightRadius: 30, overflow: 'hidden', shadowColor: NAVY, shadowOffset: { width: 0, height: -10 }, shadowOpacity: 0.18, shadowRadius: 22, elevation: 16 },
-  handle: { width: 46, height: 5, borderRadius: 3, backgroundColor: '#DDE3EA', alignSelf: 'center', marginTop: 10, marginBottom: 4 },
+  handleArea: { alignItems: 'center', paddingTop: 10, paddingBottom: 6 },
+  handle: { width: 46, height: 5, borderRadius: 3, backgroundColor: '#DDE3EA' },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 22, paddingTop: 8, paddingBottom: 14 },
   titleBlock: { flex: 1, paddingRight: 14 },
   eyebrow: { fontSize: 11, fontWeight: '900', color: CORAL, textTransform: 'uppercase', marginBottom: 4 },

@@ -14,10 +14,13 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 
 const logger = require('../logger');
-const { Event } = require('../models');
+const { Event, User } = require('../models');
 const { verifyAdmin, verifyToken } = require('../middleware/auth');
 const { isoToRu } = require('../utils/dates');
 const mlClient = require('../services/mlClient');
+const { LEVEL_ORDER } = require('../config/loyalty');
+
+const EVENT_LEVEL_ORDER = { all: 0, bronze: 0, silver: 1, gold: 2, platinum: 3 };
 
 const getJwtSecret = () =>
   process.env.JWT_SECRET || 'development-only-jwt-secret-change-me';
@@ -314,6 +317,22 @@ module.exports = function createEventsRouter({ isDbConnected }) {
       const event = await Event.findByPk(eventId);
       if (!event) {
         return res.status(404).json({ success: false, error: 'Событие не найдено' });
+      }
+
+      // Проверяем минимальный уровень для участия
+      const requiredLevel = (event.allowedUsers || 'all').toLowerCase();
+      if (requiredLevel !== 'all' && requiredLevel !== 'bronze') {
+        const user = await User.findOne({ where: { userId }, attributes: ['membershipLevel'] });
+        const userLevelOrder = LEVEL_ORDER[user?.membershipLevel || 'Bronze'];
+        const requiredLevelOrder = EVENT_LEVEL_ORDER[requiredLevel] ?? 0;
+        if (userLevelOrder < requiredLevelOrder) {
+          const levelLabel = requiredLevel.charAt(0).toUpperCase() + requiredLevel.slice(1);
+          return res.status(403).json({
+            success: false,
+            error: `Это событие доступно только участникам уровня ${levelLabel} и выше`,
+            requiredLevel: levelLabel,
+          });
+        }
       }
 
       const participantIds = Array.isArray(event.participantIds) ? event.participantIds : [];

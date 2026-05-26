@@ -72,6 +72,16 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
+// Stripe webhook должен получать RAW body для проверки подписи —
+// поэтому регистрируется ДО bodyParser.json(). Подпись проверяется внутри
+// обработчика; путь /api/payments/stripe/webhook.
+const { createStripeWebhookHandler } = require('./routes/stripe');
+app.post(
+  '/api/payments/stripe/webhook',
+  express.raw({ type: 'application/json' }),
+  createStripeWebhookHandler({ isDbConnected: () => dbConnected })
+);
+
 // Explicit size limits prevent bodyParser from reading beyond 1 MB before our
 // bodySizeGuard header check already rejected oversized requests upstream.
 app.use(bodyParser.json({ limit: '1mb' }));
@@ -333,6 +343,7 @@ app.use('/api/bookings',      require('./routes/bookings')({ isDbConnected: () =
 app.use('/api/properties',    require('./routes/properties')({ isDbConnected: () => dbConnected }));
 app.use('/api/loyalty-card',  require('./routes/loyalty')({ isDbConnected: () => dbConnected }));
 app.use('/api/card',          require('./routes/card')({ isDbConnected: () => dbConnected }));
+app.use('/api/payments/stripe', require('./routes/stripe')({ isDbConnected: () => dbConnected }));
 app.use('/api/admin',         require('./routes/admin')({ isDbConnected: () => dbConnected }));
 
 /**
@@ -413,11 +424,13 @@ const listenWithRetry = (retries = 10) => {
 };
 
 const mlJobs = require('./services/mlJobs');
+const mlProcess = require('./services/mlProcess');
 
 const startServer = async () => {
   try {
     await connectDB();
     await listenWithRetry();
+    mlProcess.start();
     mlJobs.start();
   } catch (error) {
     logger.error('Server startup failed', { error: error.message, stack: error.stack });
@@ -425,8 +438,8 @@ const startServer = async () => {
   }
 };
 
-process.on('SIGTERM', () => { mlJobs.stop(); });
-process.on('SIGINT', () => { mlJobs.stop(); });
+process.on('SIGTERM', () => { mlProcess.stop(); mlJobs.stop(); });
+process.on('SIGINT', () => { mlProcess.stop(); mlJobs.stop(); });
 
 startServer();
 

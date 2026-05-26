@@ -120,7 +120,7 @@ const makeStyles = (colors) => StyleSheet.create({
   amenitiesScroller: { marginBottom: 16, maxHeight: 42 },
   amenitiesContent:  { flexDirection: 'row', gap: 8, paddingRight: 8 },
   badge:           { backgroundColor: colors.background, paddingHorizontal: 11, paddingVertical: 7, borderRadius: 12, borderWidth: 1, borderColor: colors.border },
-  badgeText:       { fontSize: 12, color: NAVY, fontWeight: '700' },
+  badgeText:       { fontSize: 12, color: colors.text, fontWeight: '700' },
   badgeMore:       { backgroundColor: `${TEAL}12`, borderColor: `${TEAL}24` },
   badgeMoreText:   { color: TEAL },
   button:          { backgroundColor: NAVY, paddingVertical: 14, borderRadius: 14, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: spacing.sm, shadowColor: NAVY, shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.22, shadowRadius: 9, elevation: 5 },

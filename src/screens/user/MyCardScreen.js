@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Modal, Animated, Easing,
-  RefreshControl, Platform, Dimensions,
+  RefreshControl, Platform, Dimensions, PanResponder,
 } from 'react-native';
 import Svg, { Rect, Text as SvgText, Line } from 'react-native-svg';
 import { useFocusEffect } from '@react-navigation/native';
@@ -143,6 +143,25 @@ export default function ProfileScreen() {
       useNativeDriver: useNative,
     }).start(() => setTopUpSheetVisible(false));
   };
+
+  const topUpPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, g) => g.dy > 4 && Math.abs(g.dy) > Math.abs(g.dx),
+      onPanResponderMove: (_, g) => {
+        if (g.dy > 0) topUpSheetAnim.setValue(Math.min(1, g.dy / (TOPUP_SHEET_HEIGHT + 40)));
+      },
+      onPanResponderRelease: (_, g) => {
+        if (g.dy > 110 || g.vy > 0.8) {
+          closeTopUpSheet();
+        } else {
+          Animated.spring(topUpSheetAnim, {
+            toValue: 0, useNativeDriver: useNative, tension: 80, friction: 12,
+          }).start();
+        }
+      },
+    })
+  ).current;
 
   // Card flip animation
   const flipAnim   = useRef(new Animated.Value(0)).current;
@@ -528,7 +547,9 @@ export default function ProfileScreen() {
               inputRange: [0, 1], outputRange: [0, TOPUP_SHEET_HEIGHT + 40],
             }) }],
           }]}>
-            <View style={S.topUpHandle} />
+            <View {...topUpPanResponder.panHandlers} style={S.topUpHandleArea}>
+              <View style={S.topUpHandle} />
+            </View>
             <CardTopUpScreen onClose={closeTopUpSheet} />
           </Animated.View>
         </Animated.View>
@@ -920,5 +941,6 @@ const S = StyleSheet.create({
     borderTopRightRadius: 30,
     overflow: 'hidden',
   },
-  topUpHandle: { width: 46, height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.15)', alignSelf: 'center', marginTop: 10, marginBottom: 2 },
+  topUpHandleArea: { alignItems: 'center', paddingTop: 10, paddingBottom: 4 },
+  topUpHandle: { width: 46, height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.15)' },
 });

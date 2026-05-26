@@ -80,10 +80,18 @@ const PAYMENT_METHODS = [
   },
 ];
 
+// Курсы PRB ↔ внешние валюты (синхронизированы со server/.env: PRB_RATE_*).
+// На клиенте используются только для превью конвертации; авторитетный
+// курс — на сервере при создании Stripe-сессии.
+const PRB_RATES = {
+  RUB: 0.18,
+  USD: 16.10,
+};
+
 export default function CardTopUpScreen({ navigation, onClose }) {
   const isSheet = !!onClose;
   const { user } = useAuth();
-  const { topUpCard, getCardBalance, isProcessing, paymentError } = usePayment();
+  const { topUpCard, topUpCardStripe, getCardBalance, isProcessing, paymentError } = usePayment();
   const { notifyPaymentSuccess } = useNotification();
   const { isDark, theme } = useTheme();
 
@@ -107,6 +115,7 @@ export default function CardTopUpScreen({ navigation, onClose }) {
   const [loading, setLoading]         = useState(true);
   const [topUpAmount, setTopUpAmount] = useState('');
   const [selectedMethod, setSelectedMethod] = useState('card');
+  const [currency, setCurrency]       = useState('RUB');
   const [showMethodPicker, setShowMethodPicker] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showBankDetails, setShowBankDetails]   = useState(false);
@@ -163,6 +172,13 @@ export default function CardTopUpScreen({ navigation, onClose }) {
   const parsedAmount   = parseFloat(topUpAmount) || 0;
   const amountValid    = parsedAmount > 0 && parsedAmount <= 1000000;
   const isBankTransfer = currentMethod.bankDetails != null;
+  const isOnlineGateway = selectedMethod === 'card' || selectedMethod === 'paypal';
+
+  // Конвертация PRB → внешняя валюта (для превью; авторитет — сервер)
+  const providerAmount = parsedAmount > 0
+    ? +(parsedAmount / PRB_RATES[currency]).toFixed(2)
+    : 0;
+  const currencySymbol = currency === 'USD' ? '$' : '₽';
 
   const handleContinue = () => {
     if (!amountValid) return;
@@ -173,8 +189,31 @@ export default function CardTopUpScreen({ navigation, onClose }) {
   const handleTopUp = async () => {
     setShowConfirmModal(false);
     try {
+      if (selectedMethod === 'card') {
+        const result = await topUpCardStripe(user.id, parsedAmount, currency);
+        if (result?.success) {
+          Alert.alert(
+            'Готово',
+            `Баланс пополнен на ${parsedAmount.toLocaleString('ru-RU')} PRB`,
+            [{ text: 'OK', onPress: () => { setTopUpAmount(''); loadBalance(); notifyPaymentSuccess?.(); } }],
+          );
+        } else if (result?.status === 'cancelled') {
+          // Пользователь закрыл браузер — молча, ничего не показываем
+        } else if (result?.status === 'failed') {
+          Alert.alert('Ошибка', 'Платёж был отклонён или истёк. Попробуйте ещё раз.');
+        } else {
+          Alert.alert(
+            'Платёж в обработке',
+            'Не удалось подтвердить оплату за отведённое время. Если средства списаны — баланс обновится в ближайшее время.',
+            [{ text: 'OK', onPress: () => loadBalance() }],
+          );
+        }
+        return;
+      }
+
+      // PayPal и банковские переводы — старый flow (демо/manual)
       await topUpCard(user.id, parsedAmount, selectedMethod);
-      Alert.alert('Готово', `Баланс пополнен на ${parsedAmount.toLocaleString('ru-RU')} ₽`, [
+      Alert.alert('Готово', `Баланс пополнен на ${parsedAmount.toLocaleString('ru-RU')} PRB`, [
         { text: 'OK', onPress: () => { setTopUpAmount(''); loadBalance(); notifyPaymentSuccess?.(); } },
       ]);
     } catch (e) {
@@ -264,7 +303,7 @@ export default function CardTopUpScreen({ navigation, onClose }) {
                     />
                   )}
                   <Text style={[styles.presetText, active && styles.presetTextActive]}>
-                    {amt.toLocaleString('ru-RU')} ₽
+                    {amt.toLocaleString('ru-RU')} PRB
                   </Text>
                 </TouchableOpacity>
               );
@@ -273,7 +312,7 @@ export default function CardTopUpScreen({ navigation, onClose }) {
 
           {/* ── CUSTOM INPUT ── */}
           <View style={styles.inputWrap}>
-            <Text style={styles.inputPrefix}>₽</Text>
+            <Text style={styles.inputPrefix}>PRB</Text>
             <TextInput
               style={styles.input}
               placeholder="Другая сумма"
@@ -288,6 +327,36 @@ export default function CardTopUpScreen({ navigation, onClose }) {
               </TouchableOpacity>
             )}
           </View>
+
+          {/* ── CURRENCY TOGGLE + CONVERSION (только для онлайн-шлюзов) ── */}
+          {isOnlineGateway && (
+            <View style={styles.currencyRow}>
+              <View style={styles.currencyToggle}>
+                {['RUB', 'USD'].map(c => {
+                  const active = currency === c;
+                  return (
+                    <TouchableOpacity
+                      key={c}
+                      style={[styles.currencyChip, active && styles.currencyChipActive]}
+                      onPress={() => setCurrency(c)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={[styles.currencyChipText, active && styles.currencyChipTextActive]}>
+                        {c}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              {parsedAmount > 0 && (
+                <Text style={styles.conversionText}>
+                  ≈ <Text style={styles.conversionValue}>
+                    {providerAmount.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} {currencySymbol}
+                  </Text>
+                </Text>
+              )}
+            </View>
+          )}
 
           {/* ── PAYMENT METHOD ── */}
           <Text style={styles.sectionLabel}>Способ оплаты</Text>
@@ -359,8 +428,8 @@ export default function CardTopUpScreen({ navigation, onClose }) {
                 {!amountValid
                   ? 'Введите сумму'
                   : isBankTransfer
-                    ? `Получить реквизиты — ${parsedAmount.toLocaleString('ru-RU')} ₽`
-                    : `Оплатить ${parsedAmount.toLocaleString('ru-RU')} ₽`
+                    ? `Получить реквизиты — ${parsedAmount.toLocaleString('ru-RU')} PRB`
+                    : `Оплатить ${providerAmount.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ${currencySymbol}`
                 }
               </Text>
             </>
@@ -412,7 +481,7 @@ export default function CardTopUpScreen({ navigation, onClose }) {
                 <MaterialIcons name="account-balance" size={28} color={currentMethod.color} />
               </View>
               <Text style={styles.confirmTitle}>Реквизиты для перевода</Text>
-              <Text style={styles.confirmSubtitle}>{parsedAmount.toLocaleString('ru-RU')} ₽</Text>
+              <Text style={styles.confirmSubtitle}>{parsedAmount.toLocaleString('ru-RU')} PRB</Text>
             </GradientView>
             <View style={styles.confirmBody}>
               {currentMethod.bankDetails && Object.entries({
@@ -455,13 +524,21 @@ export default function CardTopUpScreen({ navigation, onClose }) {
                 <MaterialIcons name={selectedMethod === 'paypal' ? 'language' : 'credit-card'} size={28} color={currentMethod.color} />
               </View>
               <Text style={styles.confirmTitle}>Подтверждение</Text>
-              <Text style={styles.confirmSubtitle}>{parsedAmount.toLocaleString('ru-RU')} ₽</Text>
+              <Text style={styles.confirmSubtitle}>{parsedAmount.toLocaleString('ru-RU')} PRB</Text>
             </GradientView>
             <View style={styles.confirmBody}>
               <View style={styles.confirmRow}>
-                <Text style={styles.confirmLabel}>Сумма</Text>
-                <Text style={[styles.confirmValue, { color: ACCENT }]}>{parsedAmount.toLocaleString('ru-RU')} ₽</Text>
+                <Text style={styles.confirmLabel}>Зачислится на баланс</Text>
+                <Text style={[styles.confirmValue, { color: ACCENT }]}>{parsedAmount.toLocaleString('ru-RU')} PRB</Text>
               </View>
+              {isOnlineGateway && (
+                <View style={styles.confirmRow}>
+                  <Text style={styles.confirmLabel}>К оплате</Text>
+                  <Text style={styles.confirmValue}>
+                    {providerAmount.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} {currencySymbol}
+                  </Text>
+                </View>
+              )}
               <View style={[styles.confirmRow, { borderBottomWidth: 0 }]}>
                 <Text style={styles.confirmLabel}>Способ оплаты</Text>
                 <Text style={styles.confirmValue}>{currentMethod.label}</Text>
@@ -575,9 +652,31 @@ function makeStyles({ bg, cardBg, line, textPri, textSec, isDark }) {
       borderWidth: 1.5, borderColor: line,
       paddingHorizontal: spacing.md,
     },
-    inputPrefix: { fontSize: 20, fontWeight: '700', color: ACCENT, marginRight: spacing.sm },
+    inputPrefix: { fontSize: 14, fontWeight: '700', color: ACCENT, marginRight: spacing.sm, letterSpacing: 0.5 },
     input:       { flex: 1, fontSize: 17, fontWeight: '600', color: textPri, paddingVertical: 14 },
     inputClear:  { padding: 6 },
+
+    // Currency toggle row
+    currencyRow: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+      marginHorizontal: spacing.lg, marginTop: spacing.sm,
+      gap: spacing.md,
+    },
+    currencyToggle: {
+      flexDirection: 'row',
+      backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)',
+      borderRadius: 10, padding: 3,
+      borderWidth: 1, borderColor: line,
+    },
+    currencyChip: {
+      paddingHorizontal: 14, paddingVertical: 6,
+      borderRadius: 8,
+    },
+    currencyChipActive: { backgroundColor: cardBg, borderWidth: 1, borderColor: `${ACCENT}40` },
+    currencyChipText: { fontSize: 12, fontWeight: '700', color: textSec, letterSpacing: 0.4 },
+    currencyChipTextActive: { color: ACCENT },
+    conversionText: { fontSize: 13, color: textSec, flexShrink: 1, textAlign: 'right' },
+    conversionValue: { fontWeight: '700', color: textPri },
 
     // Method row
     methodRow: {

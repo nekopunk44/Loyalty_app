@@ -11,23 +11,24 @@ const OUT = path.join(__dirname, 'assets');
 if (!fs.existsSync(OUT)) fs.mkdirSync(OUT, { recursive: true });
 
 const C = {
-  bg:       '#FFFFFF',
-  border:   '#1C1208',
-  fill:     '#F7F2E8',
-  fillMid:  '#EDE8DC',
-  fillDark: '#1C1208',
-  gold:     '#8B6914',
-  text:     '#1C1208',
-  textLight:'#FFFFFF',
-  arrow:    '#1C1208',
-  grey:     '#888888',
+  bg:        '#FFFFFF',
+  border:    '#1C1208',
+  fill:      '#FDFAF2',
+  fillMid:   '#EDE8DC',
+  fillDark:  '#1C1208',
+  gold:      '#8B6914',
+  text:      '#1C1208',
+  textLight: '#FFFFFF',
+  arrow:     '#1C1208',
+  zone1:     '#F0EBE0',
+  zone2:     '#E8E4D8',
+  zone3:     '#E2DED0',
 };
 
 function setFont(ctx, size, bold = false) {
   ctx.font = `${bold ? 'bold ' : ''}${size}px Arial, sans-serif`;
 }
 
-// Разбивает текст на строки по \n и по ширине
 function wrapText(ctx, text, maxWidth) {
   const paragraphs = text.split('\n');
   const result = [];
@@ -57,36 +58,28 @@ function drawRect(ctx, x, y, w, h, { fill = C.fill, stroke = C.border, lw = 1.5 
   ctx.strokeRect(x, y, w, h);
 }
 
-// Рисует прямоугольник с текстом внутри. text — строка (с \n) или массив строк.
 function drawBox(ctx, x, y, w, h, text, opts = {}) {
   const { fill, stroke, textSize = 12, bold = false, color = C.text, valign = 'middle' } = opts;
   drawRect(ctx, x, y, w, h, { fill, stroke });
-
   setFont(ctx, textSize, bold);
   const lines = Array.isArray(text) ? text : wrapText(ctx, text, w - 16);
   if (lines.length === 0) return;
-
   const lineH = Math.round(textSize * 1.45);
   const totalH = lines.length * lineH;
   let startY;
   if (valign === 'top') startY = y + 10 + lineH / 2;
   else startY = y + h / 2 - totalH / 2 + lineH / 2;
-
   ctx.save();
   ctx.beginPath();
   ctx.rect(x + 2, y + 2, w - 4, h - 4);
   ctx.clip();
-
   ctx.fillStyle = color;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  lines.forEach((ln, i) => {
-    ctx.fillText(ln, x + w / 2, startY + i * lineH);
-  });
+  lines.forEach((ln, i) => ctx.fillText(ln, x + w / 2, startY + i * lineH));
   ctx.restore();
 }
 
-// Метка яруса (золотой жирный текст вверху слева от блока)
 function tierLabel(ctx, x, y, text) {
   setFont(ctx, 11, true);
   ctx.fillStyle = C.gold;
@@ -109,6 +102,7 @@ function arrowHead(ctx, x, y, angle) {
 function drawArrow(ctx, x1, y1, x2, y2, label = '', lw = 1.5) {
   ctx.strokeStyle = C.arrow;
   ctx.lineWidth = lw;
+  ctx.setLineDash([]);
   ctx.beginPath();
   ctx.moveTo(x1, y1);
   ctx.lineTo(x2, y2);
@@ -181,75 +175,102 @@ function genFig21() {
 
   const pad = 30;
 
-  // ── Ярус 1: Клиент (y 20–230) ───────────────────────────────────────────
+  // ── Ярус 1: Клиент ───────────────────────────────────────────────────────
   const t1y = 20, t1h = 210;
-  drawRect(ctx, pad, t1y, W - pad * 2, t1h, { fill: '#F2EDE3', stroke: C.gold, lw: 2 });
+  drawRect(ctx, pad, t1y, W - pad * 2, t1h, { fill: C.zone1, stroke: C.gold, lw: 2 });
   tierLabel(ctx, pad, t1y, 'ЯРУС КЛИЕНТА');
 
-  const bxW = (W - pad * 2 - 60) / 2;   // ~525
-  const bxH = 150;
-  const bxY = t1y + 32;
+  const bxW = (W - pad * 2 - 60) / 2;
+  const bxH = 150, bxY = t1y + 32;
 
-  // Mobile App
-  drawBox(ctx, pad + 20, bxY, bxW, bxH,
-    'Mobile App (React Native / Expo)\n18 экранов · 10 контекстов React Context\nModules: Superstore, Services, Navigation\nAuthContext · LoyaltyCardContext · PaymentContext',
-    { fill: C.fill, textSize: 12 });
+  // Left border accent for inner boxes
+  function drawAccentBox(ctx, x, y, w, h, lines, size = 12) {
+    drawRect(ctx, x, y, w, h, { fill: C.fill, stroke: C.border, lw: 1.5 });
+    // gold left accent bar
+    ctx.fillStyle = C.gold;
+    ctx.fillRect(x, y, 4, h);
+    setFont(ctx, size);
+    ctx.fillStyle = C.text;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    const lineH = Math.round(size * 1.5);
+    lines.forEach((ln, i) => {
+      const isBold = i === 0;
+      setFont(ctx, isBold ? size + 1 : size, isBold);
+      ctx.fillStyle = isBold ? C.gold : C.text;
+      ctx.fillText(ln, x + 14, y + 10 + i * lineH);
+    });
+  }
 
-  // Web Landing
-  drawBox(ctx, pad + 20 + bxW + 20, bxY, bxW, bxH,
-    'Web Landing (Next.js 15 / SSR)\nСтраницы: Hero · Rooms · Tour · LoyaltyTiers\nAppDownload · Reviews · BookingSection · FAQ\nCSS-переменные дизайн-системы Villa Jaconda',
-    { fill: C.fill, textSize: 12 });
+  drawAccentBox(ctx, pad + 20, bxY, bxW, bxH, [
+    'Mobile App  (React Native / Expo)',
+    '18 экранов · 10 контекстов React Context',
+    'Modules: Superstore, Services, Navigation',
+    'AuthContext · LoyaltyCardContext · PaymentContext',
+  ]);
 
-  // стрелки вниз
+  drawAccentBox(ctx, pad + 20 + bxW + 20, bxY, bxW, bxH, [
+    'Web Landing  (Next.js 15 / SSR)',
+    'Страницы: Hero · Rooms · Tour · LoyaltyTiers',
+    'AppDownload · Reviews · BookingSection · FAQ',
+    'CSS-переменные дизайн-системы Villa Jaconda',
+  ]);
+
+  // Стрелки вниз
   const mid1 = pad + 20 + bxW / 2;
   const mid2 = pad + 20 + bxW + 20 + bxW / 2;
   const arrowFrom = t1y + t1h;
-  const arrowTo = arrowFrom + 46;
+  const arrowTo   = arrowFrom + 46;
   drawArrow(ctx, mid1, arrowFrom, mid1, arrowTo, 'HTTPS / JWT');
   drawArrow(ctx, mid2, arrowFrom, mid2, arrowTo, 'HTTPS / JWT');
 
-  // ── Ярус 2: API (y 276–456) ──────────────────────────────────────────────
+  // ── Ярус 2: API ──────────────────────────────────────────────────────────
   const t2y = arrowTo, t2h = 180;
-  drawRect(ctx, pad, t2y, W - pad * 2, t2h, { fill: '#ECEAE2', stroke: C.gold, lw: 2 });
+  drawRect(ctx, pad, t2y, W - pad * 2, t2h, { fill: C.zone2, stroke: C.gold, lw: 2 });
   tierLabel(ctx, pad, t2y, 'ЯРУС СЕРВЕРНОГО API');
 
-  drawBox(ctx, pad + 20, t2y + 32, W - pad * 2 - 40, t2h - 42,
-    'Express.js 5 — REST API сервер\nМидлвары: helmet · rate-limit · cors · JWT-аутентификация · Zod-валидация входных данных\nМаршруты: /auth /users /bookings /loyalty /card /events /notifications /admin\nСервисы: AuthService · PaymentService · LoyaltyService · NotificationService · MLClient',
-    { fill: C.fill, textSize: 12 });
+  drawAccentBox(ctx, pad + 20, t2y + 32, W - pad * 2 - 40, t2h - 42, [
+    'Express.js 5 — REST API сервер',
+    'Мидлвары: helmet · rate-limit · cors · JWT-аутентификация · Zod-валидация входных данных',
+    'Маршруты: /auth  /users  /bookings  /loyalty  /card  /events  /notifications  /admin',
+    'Сервисы: AuthService · PaymentService · LoyaltyService · NotificationService · MLClient',
+  ]);
 
-  // стрелки вниз от API
-  const apiMidL = mid1;
-  const apiMidR = mid2;
+  // Стрелки вниз от API
   const t2bot = t2y + t2h;
   const t3top = t2bot + 50;
-  drawArrow(ctx, apiMidL, t2bot, apiMidL, t3top, 'Sequelize ORM / SQL');
-  drawArrow(ctx, apiMidR, t2bot, apiMidR, t3top, 'HTTP / JSON');
+  drawArrow(ctx, mid1, t2bot, mid1, t3top, 'Sequelize ORM / SQL');
+  drawArrow(ctx, mid2, t2bot, mid2, t3top, 'HTTP / JSON');
 
-  // ── Ярус 3: Хранилище + ML (y t3top–t3top+210) ───────────────────────────
+  // ── Ярус 3: Хранилище + ML ───────────────────────────────────────────────
   const t3h = 210;
-  const colW = (W - pad * 2 - 20) / 2;  // ~565
+  const colW = (W - pad * 2 - 20) / 2;
 
-  // ХРАНИЛИЩЕ
-  drawRect(ctx, pad, t3top, colW, t3h, { fill: '#EDE8DC', stroke: C.gold, lw: 2 });
+  drawRect(ctx, pad, t3top, colW, t3h, { fill: C.zone3, stroke: C.gold, lw: 2 });
   tierLabel(ctx, pad, t3top, 'ХРАНИЛИЩЕ ДАННЫХ');
 
-  drawBox(ctx, pad + 12, t3top + 32, colW - 24, 110,
-    'PostgreSQL 16\n13 таблиц: users · bookings · loyalty_cards\npayments · events · notifications · referrals\nadmin_wallets · transactions · referrals',
-    { fill: C.fill, textSize: 11 });
+  drawAccentBox(ctx, pad + 12, t3top + 32, colW - 24, 108, [
+    'PostgreSQL 16',
+    '13 таблиц: users · bookings · loyalty_cards',
+    'payments · events · notifications · referrals',
+    'admin_wallets · transactions · referrals',
+  ], 11);
 
-  drawBox(ctx, pad + 12, t3top + 150, colW - 24, 46,
+  drawAccentBox(ctx, pad + 12, t3top + 150, colW - 24, 46, [
     'Redis — кеш сессий и очередь фоновых задач',
-    { fill: C.fill, textSize: 11 });
+  ], 11);
 
-  // ML-МИКРОСЕРВИС
   const mlX = pad + colW + 20;
   const mlW = W - mlX - pad;
-  drawRect(ctx, mlX, t3top, mlW, t3h, { fill: '#EDE8DC', stroke: C.gold, lw: 2 });
+  drawRect(ctx, mlX, t3top, mlW, t3h, { fill: C.zone3, stroke: C.gold, lw: 2 });
   tierLabel(ctx, mlX, t3top, 'ML-МИКРОСЕРВИС');
 
-  drawBox(ctx, mlX + 12, t3top + 32, mlW - 24, t3h - 42,
-    'FastAPI (Python 3.11) — Railway отдельный сервис\nPOST /rfm/recompute  —  k-means кластеризация клиентов\nPOST /churn/predict  —  Gradient Boosting прогноз оттока\nPOST /recommend/events  —  гибридный рекомендер событий',
-    { fill: C.fill, textSize: 11 });
+  drawAccentBox(ctx, mlX + 12, t3top + 32, mlW - 24, t3h - 42, [
+    'FastAPI (Python 3.11) — Railway отдельный сервис',
+    'POST /rfm/recompute  —  k-means кластеризация клиентов',
+    'POST /churn/predict  —  Gradient Boosting прогноз оттока',
+    'POST /recommend/events  —  гибридный рекомендер событий',
+  ], 11);
 
   const capY = t3top + t3h + 16;
   caption(ctx, W, capY, 'Рисунок 2.1 — Диаграмма компонентов системы Villa Jaconda Loyalty App');
@@ -271,20 +292,18 @@ function genFig23() {
   function drawEntity(x, y, name, attrs) {
     const bodyH = attrs.length * ATTR_H + 8;
     const totalH = HEAD_H + bodyH;
-    // Заголовок
     drawRect(ctx, x, y, EW, HEAD_H, { fill: C.fillDark, stroke: C.border });
     setFont(ctx, 12, true);
     ctx.fillStyle = C.textLight;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(name, x + EW / 2, y + HEAD_H / 2);
-    // Тело
     drawRect(ctx, x, y + HEAD_H, EW, bodyH, { fill: C.fill, stroke: C.border });
     attrs.forEach((a, i) => {
       const isPK = a.startsWith('PK');
       const isUK = a.startsWith('UK');
       setFont(ctx, 10, isPK || isUK);
-      ctx.fillStyle = isPK ? C.gold : isUK ? '#444' : C.text;
+      ctx.fillStyle = isPK ? C.gold : isUK ? '#555' : C.text;
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
       ctx.fillText(a, x + 7, y + HEAD_H + 10 + i * ATTR_H);
@@ -293,9 +312,9 @@ function genFig23() {
     return { x, y, w: EW, h: totalH, cx: x + EW / 2, cy: y + totalH / 2, top: y, bottom, left: x, right: x + EW };
   }
 
-  // Позиции сущностей (равномерно разнесены)
+  // ROW[0]=100 gives 100px top margin — used for routing User→distant entities above entities
   const COL = [30, 220, 415, 615, 815, 1010];
-  const ROW = [30, 330];
+  const ROW  = [100, 400];
 
   const user     = drawEntity(COL[0], ROW[0], 'User',        ['PK id','UK userId','UK email','   passwordHash','   role','   adminLevel','   membershipLevel','   pushToken']);
   const booking  = drawEntity(COL[1], ROW[0], 'Booking',     ['PK id','   userId','   propertyId','   checkIn','   checkOut','   guests','   status','   totalPrice']);
@@ -308,32 +327,102 @@ function genFig23() {
   const prop     = drawEntity(COL[2], ROW[1], 'Property',    ['PK id','   name','   description','   priceNumber','   rooms','   guests','   status']);
   const event    = drawEntity(COL[3], ROW[1], 'Event',       ['PK id','   title','   description','   date','   capacity','   participantIds']);
 
-  // Связи: линия + кардинальности
-  function rel(e1, s1, e2, s2, c1, c2) {
-    const pts = { left:[e1.left, e1.cy], right:[e1.right, e1.cy], top:[e1.cx, e1.top], bottom:[e1.cx, e1.bottom] };
-    const pts2 = { left:[e2.left, e2.cy], right:[e2.right, e2.cy], top:[e2.cx, e2.top], bottom:[e2.cx, e2.bottom] };
-    const [x1,y1] = pts[s1], [x2,y2] = pts2[s2];
-    ctx.strokeStyle = C.border; ctx.lineWidth = 1.2;
-    ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
-    setFont(ctx, 11, true); ctx.fillStyle = C.gold; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    const off = 15;
-    const lx1 = s1==='right' ? x1+off : s1==='left' ? x1-off : x1+12;
-    const ly1 = s1==='bottom' ? y1+off : y1-10;
-    ctx.fillText(c1, lx1, ly1);
-    const lx2 = s2==='left' ? x2-off : s2==='right' ? x2+off : x2+12;
-    const ly2 = s2==='top' ? y2-off : y2-10;
-    ctx.fillText(c2, lx2, ly2);
+  function cardLabel(x, y, text) {
+    setFont(ctx, 11, true);
+    ctx.fillStyle = C.gold;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, x, y);
   }
 
-  rel(user,'bottom', lcard,'top',    '1','1');
-  rel(user,'right',  booking,'left', '1','N');
-  rel(booking,'right', payment,'left','1','N');
-  rel(booking,'bottom', tx,'top',    '1','N');
-  rel(lcard,'right', tx,'left',      '1','N');
-  rel(booking,'right', prop,'top',   'N','1');
-  rel(user,'right',  notif,'left',   '1','N');
-  rel(user,'right',  referral,'left','1','N');
-  rel(user,'right',  adminW,'left',  '1','1');
+  // Draw a polyline with arrowhead at the last point, and optional cardinality labels
+  function relPath(points, c1, c1pos, c2, c2pos) {
+    ctx.strokeStyle = C.border;
+    ctx.lineWidth = 1.2;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(points[0][0], points[0][1]);
+    for (let i = 1; i < points.length; i++) ctx.lineTo(points[i][0], points[i][1]);
+    ctx.stroke();
+    const n = points.length;
+    const dx = points[n-1][0] - points[n-2][0];
+    const dy = points[n-1][1] - points[n-2][1];
+    arrowHead(ctx, points[n-1][0], points[n-1][1], Math.atan2(dy, dx));
+    if (c1 && c1pos) cardLabel(c1pos[0], c1pos[1], c1);
+    if (c2 && c2pos) cardLabel(c2pos[0], c2pos[1], c2);
+  }
+
+  // ── Connections without crossings ──────────────────────────────────────────
+
+  // User → LoyaltyCard  (straight down, same column)
+  relPath(
+    [[user.cx, user.bottom], [lcard.cx, lcard.top]],
+    '1', [user.cx - 16, user.bottom + 14],
+    '1', [lcard.cx - 16, lcard.top  - 14]
+  );
+
+  // User → Booking  (straight right)
+  relPath(
+    [[user.right, user.cy], [booking.left, booking.cy]],
+    '1', [user.right  + 12, user.cy    - 14],
+    'N', [booking.left - 12, booking.cy - 14]
+  );
+
+  // Booking → Payment  (straight right)
+  relPath(
+    [[booking.right, booking.cy], [payment.left, payment.cy]],
+    '1', [booking.right + 12, booking.cy - 14],
+    'N', [payment.left  - 12, payment.cy - 14]
+  );
+
+  // Booking → Transaction  (straight down, same column)
+  relPath(
+    [[booking.cx, booking.bottom], [tx.cx, tx.top]],
+    '1', [booking.cx - 16, booking.bottom + 14],
+    'N', [tx.cx      - 16, tx.top         - 14]
+  );
+
+  // LoyaltyCard → Transaction  (straight right)
+  relPath(
+    [[lcard.right, lcard.cy], [tx.left, tx.cy]],
+    '1', [lcard.right + 12, lcard.cy - 14],
+    'N', [tx.left     - 12, tx.cy    - 14]
+  );
+
+  // Booking → Property  (elbow: down from Booking, then right to Property)
+  // Avoids diagonal; routes through gap between rows
+  const bpMidY = Math.round((booking.bottom + prop.top) / 2);
+  relPath(
+    [[booking.cx, booking.bottom], [booking.cx, bpMidY], [prop.cx, bpMidY], [prop.cx, prop.top]],
+    'N', [booking.cx - 16, booking.bottom + 14],
+    '1', [prop.cx   - 16, prop.top       - 14]
+  );
+
+  // ── User → distant row-0 entities: route ABOVE all entities (top margin) ──
+  // Three staggered horizontals at y=55, y=37, y=19 avoid overlapping in routing lanes.
+  // The vertical segments near user.cx are deliberately staggered by ±3px
+  // so three lines appear as a clear "bus" rather than one merged line.
+
+  // User → Notification  (route at y=55)
+  relPath(
+    [[user.cx - 3, user.top], [user.cx - 3, 55], [notif.cx, 55], [notif.cx, notif.top]],
+    '1', [user.cx - 20, user.top - 10],
+    'N', [notif.cx + 16, notif.top + 10]
+  );
+
+  // User → Referral  (route at y=37)
+  relPath(
+    [[user.cx, user.top], [user.cx, 37], [referral.cx, 37], [referral.cx, referral.top]],
+    null, null,
+    'N', [referral.cx + 16, referral.top + 10]
+  );
+
+  // User → AdminWallet  (route at y=19)
+  relPath(
+    [[user.cx + 3, user.top], [user.cx + 3, 19], [adminW.cx, 19], [adminW.cx, adminW.top]],
+    null, null,
+    '1', [adminW.cx + 16, adminW.top + 10]
+  );
 
   caption(ctx, W, H - 26, 'Рисунок 2.3 — ER-диаграмма базы данных системы (основные сущности)');
 
@@ -341,84 +430,96 @@ function genFig23() {
   console.log('✓ fig_2_3.png');
 }
 
-// ─── Рисунок 2.4 — Функциональная схема (ГОСТ 19.701-90) ─────────────────────
+// ─── Рисунок 2.4 — Функциональная схема ──────────────────────────────────────
 function genFig24() {
-  const W = 780, H = 1020;
+  const W = 820, H = 1260; // increased from 1020 — diagram overflowed
   const canvas = createCanvas(W, H);
   const ctx = canvas.getContext('2d');
   ctx.fillStyle = C.bg;
   ctx.fillRect(0, 0, W, H);
 
   const cx = W / 2;
-  const BW = 280, BH = 46;
+  const BW = 290, BH = 46;
   const DW = 240, DH = 56;
 
   let y = 28;
 
-  function nextArrow(label = '') { const from = y; y += 36; drawArrow(ctx, cx, from, cx, y, label); }
-  function nextArrowShort(label = '') { const from = y; y += 24; drawArrow(ctx, cx, from, cx, y, label); }
+  function nextArrow(label = '') { const from = y; y += 38; drawArrow(ctx, cx, from, cx, y, label); }
+  function nextArrowShort(label = '') { const from = y; y += 26; drawArrow(ctx, cx, from, cx, y, label); }
 
-  // Терминатор НАЧАЛО
-  drawTerminator(ctx, cx, y + 22, 210, 40, 'НАЧАЛО'); y += 40;
+  // НАЧАЛО
+  drawTerminator(ctx, cx, y + 22, 220, 40, 'НАЧАЛО'); y += 40;
   nextArrow();
 
-  // Запуск приложения
   drawBox(ctx, cx - BW/2, y, BW, BH, 'Запуск мобильного приложения', { textSize: 13 }); y += BH;
   nextArrow();
 
-  // Аутентификация
   drawBox(ctx, cx - BW/2, y, BW, BH, 'Аутентификация пользователя (JWT)', { textSize: 13 }); y += BH;
   nextArrow();
 
   // ◇ Авторизован?
   const dY1 = y + DH/2;
   drawDiamond(ctx, cx, dY1, DW, DH, 'Авторизован?');
-  // «Нет» → экран входа → петля обратно
   const loginX = cx + DW/2 + 14, loginY = dY1 - BH/2;
-  drawBox(ctx, loginX, loginY, 175, BH, 'Экран входа / регистрации', { fill: C.fillMid, textSize: 11 });
+  drawBox(ctx, loginX, loginY, 178, BH, 'Экран входа / регистрации', { fill: C.fillMid, textSize: 11 });
   drawArrow(ctx, cx + DW/2, dY1, loginX, dY1, 'Нет');
-  const loopX = loginX + 175 + 12;
-  ctx.strokeStyle = C.border; ctx.lineWidth = 1.2;
-  ctx.beginPath(); ctx.moveTo(loginX + 175, dY1); ctx.lineTo(loopX, dY1); ctx.lineTo(loopX, y - 16); ctx.lineTo(cx, y - 16); ctx.stroke();
-  arrowHead(ctx, cx, y - 16, Math.PI / 2 * 3);
+  // loop back
+  const loopX = loginX + 178 + 12;
+  ctx.strokeStyle = C.border; ctx.lineWidth = 1.2; ctx.setLineDash([]);
+  ctx.beginPath();
+  ctx.moveTo(loginX + 178, dY1);
+  ctx.lineTo(loopX, dY1);
+  ctx.lineTo(loopX, y - 16);
+  ctx.lineTo(cx, y - 16);
+  ctx.stroke();
+  arrowHead(ctx, cx, y - 16, (3 * Math.PI) / 2);
 
   y = dY1 + DH/2;
   nextArrow('Да');
 
-  // Главный экран
   drawBox(ctx, cx - BW/2, y, BW, BH, 'Главный экран: баланс, события, рекомендации', { textSize: 12 }); y += BH;
   nextArrow();
 
   // ◇ Действие пользователя
   const dY2 = y + DH/2;
   drawDiamond(ctx, cx, dY2, DW + 20, DH, 'Действие пользователя');
+  // Right branch: Events / other
+  const evtW = 148, evtX = cx + (DW + 20)/2 + 14, evtY = dY2 - BH/2;
+  drawBox(ctx, evtX, evtY, evtW, BH, 'События / Профиль', { fill: C.fillMid, textSize: 11 });
+  drawArrow(ctx, cx + (DW + 20)/2, dY2, evtX, dY2, 'Другое');
+  // loop back up
+  const evtLoopX = evtX + evtW + 10;
+  ctx.strokeStyle = C.border; ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(evtX + evtW, dY2);
+  ctx.lineTo(evtLoopX, dY2);
+  ctx.lineTo(evtLoopX, y - 16);
+  ctx.lineTo(cx, y - 16);
+  ctx.stroke();
+  arrowHead(ctx, cx, y - 16, (3 * Math.PI) / 2);
+
   y = dY2 + DH/2;
   nextArrow('Бронирование');
 
-  // Выбор объекта
   drawBox(ctx, cx - BW/2, y, BW, BH, 'Выбор объекта размещения и дат', { textSize: 13 }); y += BH;
   nextArrowShort();
 
-  // Расчёт стоимости
   drawBox(ctx, cx - BW/2, y, BW, BH, 'Расчёт стоимости с учётом кэшбека', { textSize: 13 }); y += BH;
   nextArrow();
 
   // ◇ Способ оплаты
   const dY3 = y + DH/2;
   drawDiamond(ctx, cx, dY3, DW, DH, 'Способ оплаты');
-  // Левая ветка: карта
-  const payLX = 28, payLY = dY3 - BH/2;
-  drawBox(ctx, payLX, payLY, 130, BH, 'Карта\nлояльности', { fill: C.fillMid, textSize: 11 });
-  drawArrow(ctx, cx - DW/2, dY3, payLX + 130, dY3, 'Баллы');
-  // Правая ветка: шлюз
-  const payRW = 160, payRX = W - 28 - payRW, payRY = dY3 - BH/2;
+  const payLX = 22, payLY = dY3 - BH/2;
+  drawBox(ctx, payLX, payLY, 134, BH, 'Карта\nлояльности', { fill: C.fillMid, textSize: 11 });
+  drawArrow(ctx, cx - DW/2, dY3, payLX + 134, dY3, 'Баллы');
+  const payRW = 164, payRX = W - 22 - payRW, payRY = dY3 - BH/2;
   drawBox(ctx, payRX, payRY, payRW, BH, 'Stripe / PayPal\n(платёжный шлюз)', { fill: C.fillMid, textSize: 11 });
   drawArrow(ctx, cx + DW/2, dY3, payRX, dY3, 'Карта');
 
   y = dY3 + DH/2;
   nextArrow();
 
-  // Подтверждение
   drawBox(ctx, cx - BW/2, y, BW, BH, 'Подтверждение бронирования', { fill: C.fillMid, textSize: 13 }); y += BH;
   nextArrowShort();
   drawBox(ctx, cx - BW/2, y, BW, BH, 'Начисление кэшбека на карту лояльности', { textSize: 12 }); y += BH;
@@ -426,20 +527,20 @@ function genFig24() {
   drawBox(ctx, cx - BW/2, y, BW, BH, 'Push-уведомление (Expo Push API)', { textSize: 13 }); y += BH;
   nextArrow();
 
-  // ◇ Уровень изменился?
+  // ◇ Уровень лояльности изменился?
   const dY4 = y + DH/2;
   drawDiamond(ctx, cx, dY4, DW, DH, 'Уровень лояльности\nизменился?', 11);
-  const mlX = cx + DW/2 + 14, mlY = dY4 - BH/2;
-  drawBox(ctx, mlX, mlY, 162, BH, 'RFM-пересчёт\n(ML-сервис)', { fill: C.fillMid, textSize: 11 });
+  const mlW = 166, mlX = cx + DW/2 + 14, mlY = dY4 - BH/2;
+  drawBox(ctx, mlX, mlY, mlW, BH, 'RFM-пересчёт\n(ML-сервис)', { fill: C.fillMid, textSize: 11 });
   drawArrow(ctx, cx + DW/2, dY4, mlX, dY4, 'Да');
 
   y = dY4 + DH/2;
   nextArrow('Нет');
 
-  // Терминатор КОНЕЦ
-  drawTerminator(ctx, cx, y + 22, 210, 40, 'КОНЕЦ');
+  // КОНЕЦ
+  drawTerminator(ctx, cx, y + 22, 220, 40, 'КОНЕЦ');
 
-  caption(ctx, W, y + 54, 'Рисунок 2.4 — Функциональная схема системы Villa Jaconda Loyalty App');
+  caption(ctx, W, y + 56, 'Рисунок 2.4 — Функциональная схема системы Villa Jaconda Loyalty App');
 
   fs.writeFileSync(path.join(OUT, 'fig_2_4.png'), canvas.toBuffer('image/png'));
   console.log('✓ fig_2_4.png');
