@@ -1,94 +1,120 @@
 'use client';
-import { useEffect, useState } from 'react';
-import Image from 'next/image';
 
-const slides = [
-  '/images/property1.png',
-  '/images/property2.png',
-  '/images/property3.png',
-  '/images/property4.png',
-];
+import { useRef } from 'react';
+import Image from 'next/image';
+import { motion, useScroll, useTransform } from 'motion/react';
+
+const slides = ['/images/property1.png', '/images/property2.png', '/images/property3.png', '/images/property4.png'];
+
+function SplitText({ text, delay = 0 }) {
+  return (
+    <span style={{ display: 'inline-block' }}>
+      {text.split('').map((ch, i) => (
+        <motion.span
+          key={i}
+          initial={{ y: '110%', opacity: 0 }}
+          animate={{ y: '0%', opacity: 1 }}
+          transition={{
+            duration: 1.2,
+            delay: delay + i * 0.04,
+            ease: [0.16, 1, 0.3, 1],
+          }}
+          style={{ display: 'inline-block', whiteSpace: 'pre' }}
+        >
+          {ch === ' ' ? ' ' : ch}
+        </motion.span>
+      ))}
+    </span>
+  );
+}
 
 export default function Hero() {
-  const [current, setCurrent] = useState(0);
+  const ref = useRef(null);
+  const { scrollYProgress } = useScroll({ target: ref, offset: ['start start', 'end start'] });
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrent(prev => (prev + 1) % slides.length);
-    }, 5000);
-    return () => clearInterval(timer);
-  }, []);
+  const imageY = useTransform(scrollYProgress, [0, 1], ['0%', '25%']);
+  const imageScale = useTransform(scrollYProgress, [0, 1], [1.05, 1.2]);
+  const contentY = useTransform(scrollYProgress, [0, 1], ['0%', '-15%']);
+  const contentOpacity = useTransform(scrollYProgress, [0, 0.6], [1, 0]);
 
   return (
-    <section className="relative h-screen w-full overflow-hidden" id="about">
-      {/* Slideshow */}
-      {slides.map((src, i) => (
-        <div
-          key={src}
-          className="absolute inset-0 transition-opacity duration-1000"
-          style={{ opacity: i === current ? 1 : 0 }}
+    <section ref={ref} id="villa" className="relative h-screen w-full overflow-hidden" style={{ background: 'var(--bg)' }}>
+      <motion.div
+        className="absolute inset-0"
+        style={{ y: imageY, scale: imageScale }}
+      >
+        <Image
+          src={slides[0]}
+          alt="Villa Jaconda"
+          fill
+          priority
+          sizes="100vw"
+          className="object-cover"
+          style={{ filter: 'brightness(0.7) contrast(1.05) saturate(0.9)' }}
+        />
+        <div className="absolute inset-0" style={{
+          background: 'linear-gradient(180deg, rgba(13,10,8,0.5) 0%, rgba(13,10,8,0.1) 35%, rgba(13,10,8,0.2) 65%, rgba(13,10,8,0.9) 100%)',
+        }} />
+      </motion.div>
+
+      <motion.div
+        className="relative h-full container-x flex flex-col justify-end pb-24 md:pb-32"
+        style={{ y: contentY, opacity: contentOpacity }}
+      >
+        <motion.p
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 1, delay: 0.2 }}
+          className="eyebrow mb-8"
         >
-          <Image
-            src={src}
-            alt="Villa Jaconda"
-            fill
-            className="object-cover"
-            priority={i === 0}
-          />
-        </div>
-      ))}
+          <span className="dot" /> &nbsp; Est. 2022 &nbsp; · &nbsp; Приднестровье
+        </motion.p>
 
-      {/* Gradient overlay */}
-      <div className="absolute inset-0 hero-gradient" />
-      <div className="absolute inset-0" style={{ background: 'rgba(15,23,42,0.35)' }} />
+        <h1 className="font-display display-xl overflow-hidden">
+          <span style={{ display: 'block', overflow: 'hidden' }}>
+            <SplitText text="Villa" delay={0.3} />
+          </span>
+          <span style={{ display: 'block', overflow: 'hidden', color: 'var(--gold)' }}>
+            <SplitText text="Jaconda" delay={0.6} />
+          </span>
+        </h1>
 
-      {/* Content */}
-      <div className="relative h-full flex flex-col justify-end pb-20 px-6 max-w-6xl mx-auto">
-        <div className="fade-in-up">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full mb-5 text-sm font-medium"
-            style={{ background: 'rgba(255,107,53,0.15)', border: '1px solid rgba(255,107,53,0.4)', color: '#FF6B35' }}>
-            ✦ Эксклюзивная программа лояльности
-          </div>
-
-          <h1 className="text-5xl md:text-7xl font-bold text-white leading-tight mb-4">
-            Villa <span className="gradient-text">Jaconda</span>
-          </h1>
-          <p className="text-slate-300 text-lg md:text-xl max-w-xl mb-8 leading-relaxed">
-            Откройте мир привилегий. Каждое ваше пребывание — это баллы,
-            которые открывают доступ к эксклюзивным предложениям и опыту.
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 1, delay: 1.6 }}
+          className="mt-10 flex flex-col md:flex-row md:items-end md:justify-between gap-8"
+        >
+          <p className="font-display max-w-md" style={{ fontSize: 'clamp(1.1rem, 1.6vw, 1.5rem)', lineHeight: 1.4, color: 'var(--text-soft)', fontStyle: 'italic' }}>
+            Восемь номеров. Один дом. Дюжина историй, которые случаются здесь каждый сезон.
           </p>
 
-          <div className="flex flex-wrap gap-4">
-            <a href="#loyalty" className="btn-primary">
-              Узнать о программе
+          <div className="flex items-center gap-4">
+            <a href="#contact" className="btn btn-primary">
+              Забронировать
+              <span className="btn-arrow">→</span>
             </a>
-            <a href="#contact" className="btn-outline">
-              Запросить доступ
+            <a href="#rooms" className="btn btn-ghost">
+              Номера
             </a>
           </div>
-        </div>
+        </motion.div>
+      </motion.div>
 
-        {/* Slide indicators */}
-        <div className="absolute bottom-8 right-6 flex gap-2">
-          {slides.map((_, i) => (
-            <button
-              key={i}
-              onClick={() => setCurrent(i)}
-              className="h-1 rounded-full transition-all duration-300"
-              style={{
-                width: i === current ? 24 : 8,
-                background: i === current ? '#FF6B35' : 'rgba(255,255,255,0.3)',
-              }}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* Scroll indicator */}
-      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 text-slate-400">
-        <span className="text-xs uppercase tracking-widest">Scroll</span>
-        <div className="w-px h-10 bg-gradient-to-b from-slate-400 to-transparent" />
-      </div>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 1.5, delay: 2 }}
+        className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-3"
+        style={{ color: 'var(--muted)' }}
+      >
+        <span style={{ fontSize: 10, letterSpacing: '0.3em', textTransform: 'uppercase' }}>Scroll</span>
+        <motion.div
+          animate={{ scaleY: [1, 0.4, 1], originY: 1 }}
+          transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+          style={{ width: 1, height: 50, background: 'currentColor', transformOrigin: 'bottom' }}
+        />
+      </motion.div>
     </section>
   );
 }

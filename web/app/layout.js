@@ -1,52 +1,42 @@
+import { Cormorant_Garamond, Inter } from "next/font/google";
 import "./globals.css";
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+const serif = Cormorant_Garamond({
+  subsets: ["latin", "cyrillic"],
+  weight: ["300", "400", "500"],
+  display: "swap",
+  variable: "--font-serif",
+});
+
+const sans = Inter({
+  subsets: ["latin", "cyrillic"],
+  weight: ["300", "400", "500", "600"],
+  display: "swap",
+  variable: "--font-sans",
+});
+
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://villajaconda.com";
 
 export const metadata = {
   metadataBase: new URL(siteUrl),
-  title: "Villa Jaconda - Приватная вилла и программа лояльности",
+  title: "Villa Jaconda — Приватная вилла",
   description:
-    "Villa Jaconda - luxury-вилла с атмосферным отдыхом, персональным сервисом и программой лояльности для постоянных гостей.",
-  keywords: [
-    "Villa Jaconda",
-    "вилла",
-    "программа лояльности",
-    "luxury stay",
-    "отдых",
-    "приватная вилла",
-  ],
+    "Приватная вилла Villa Jaconda. Восемь премиальных номеров, виртуальный тур, программа лояльности для постоянных гостей.",
   openGraph: {
-    title: "Villa Jaconda - Приватная вилла и программа лояльности",
+    title: "Villa Jaconda — Приватная вилла",
     description:
-      "Откройте формат отдыха, где каждая следующая поездка приносит новые привилегии, персональные предложения и premium-сервис.",
-    images: [
-      {
-        url: "/images/property1.png",
-        width: 1200,
-        height: 630,
-        alt: "Villa Jaconda",
-      },
-    ],
+      "Восемь премиальных номеров. Виртуальный тур. Программа лояльности для постоянных гостей.",
+    images: [{ url: "/images/property1.png", width: 1200, height: 630, alt: "Villa Jaconda" }],
     type: "website",
     locale: "ru_RU",
   },
-  twitter: {
-    card: "summary_large_image",
-    title: "Villa Jaconda - Приватная вилла и программа лояльности",
-    description:
-      "Premium-лендинг для luxury-виллы с акцентом на привилегии, атмосферу и конверсию.",
-    images: ["/images/property1.png"],
-  },
-  icons: {
-    icon: "/favicon.png",
-    apple: "/logo.png",
-  },
+  icons: { icon: "/favicon.png", apple: "/logo.png" },
 };
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="ru" className="h-full antialiased">
-      <body className="min-h-full">{children}</body>
+    <html lang="ru" className={`${serif.variable} ${sans.variable}`}>
+      <body className="noise">{children}</body>
     </html>
   );
 }
