@@ -37,7 +37,7 @@ export default function Hero() {
   return (
     <section
       id="villa"
-      style={{ position: 'relative', height: '100svh', overflow: 'hidden',
+      style={{ position: 'relative', height: '100svh', overflowX: 'clip', overflowY: 'hidden',
                display: 'flex', flexDirection: 'column', background: D.bg }}
     >
 
@@ -89,7 +89,7 @@ export default function Hero() {
         </div>
 
         {/* Заголовок */}
-        <div style={{ overflow: 'hidden' }}>
+        <div style={{ overflow: 'visible' }}>
           <h1 style={{
             fontFamily: 'var(--r-serif)',
             fontSize: 'clamp(4.8rem, 14.5vw, 13rem)',
