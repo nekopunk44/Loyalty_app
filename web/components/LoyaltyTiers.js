@@ -17,8 +17,8 @@ export default function LoyaltyApp() {
   return (
     <section id="loyalty" style={{
       background: 'linear-gradient(180deg, #0a0805 0%, #0d0a07 100%)',
-      paddingTop: 'clamp(90px,11vw,160px)',
-      paddingBottom: 'clamp(90px,11vw,160px)',
+      paddingTop: 'clamp(48px,6vw,80px)',
+      paddingBottom: 'clamp(48px,6vw,80px)',
       position: 'relative', overflow: 'hidden',
     }}>
       <style>{`
@@ -34,7 +34,7 @@ export default function LoyaltyApp() {
           0%, 100% { transform: translateY(0); }
           50%      { transform: translateY(-10px); }
         }
-        .loyalty-grid { display: grid; gap: clamp(48px, 6vw, 96px); grid-template-columns: minmax(0, 1fr) minmax(0, 380px); align-items: center; }
+        .loyalty-grid { display: grid; gap: clamp(32px, 4vw, 56px); grid-template-columns: minmax(0, 1fr) minmax(0, 320px); align-items: center; }
         @media (max-width: 980px) {
           .loyalty-grid { grid-template-columns: 1fr !important; }
           .loyalty-phone-wrap { justify-self: center; }
@@ -58,8 +58,8 @@ export default function LoyaltyApp() {
       <div style={{ maxWidth: 1440, margin: '0 auto', padding: '0 clamp(20px,4vw,60px)', position: 'relative' }}>
 
         {/* Header */}
-        <div style={{ marginBottom: 'clamp(48px,6vw,80px)', maxWidth: 720 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 22 }}>
+        <div style={{ marginBottom: 'clamp(24px,3vw,40px)', maxWidth: 720 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
             <div style={{ width: 22, height: 1, background: '#d4a45e', opacity: 0.55 }} />
             <span style={{ fontSize: 9, letterSpacing: '0.38em', textTransform: 'uppercase', color: 'rgba(212,164,94,0.7)' }}>
               Программа · Приложение
@@ -67,13 +67,13 @@ export default function LoyaltyApp() {
           </div>
           <h2 style={{
             fontFamily: 'var(--r-serif)',
-            fontSize: 'clamp(2.6rem,5vw,4.8rem)',
-            fontWeight: 300, lineHeight: 1, letterSpacing: '-0.025em',
+            fontSize: 'clamp(1.8rem,3.2vw,3rem)',
+            fontWeight: 300, lineHeight: 1.05, letterSpacing: '-0.025em',
             color: '#f5ede0', margin: 0,
           }}>
             Лояльность <em style={{ fontStyle: 'italic', color: t.color, transition: 'color 0.5s ease' }}>{t.name}</em>
-            <br />
-            <span style={{ fontSize: '0.62em', color: 'rgba(245,237,224,0.55)' }}>в одном приложении</span>
+            {' · '}
+            <span style={{ fontSize: '0.75em', color: 'rgba(245,237,224,0.5)' }}>в одном приложении</span>
           </h2>
         </div>
 
@@ -83,7 +83,7 @@ export default function LoyaltyApp() {
           <div>
 
             {/* Tier rail */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 0, marginBottom: 'clamp(32px,4vw,48px)' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 0, marginBottom: 'clamp(20px,2.5vw,28px)' }}>
               {TIERS.map((tier, i) => {
                 const isActive = i === active;
                 const isPast = i < active;
@@ -94,9 +94,9 @@ export default function LoyaltyApp() {
                       border: 'none',
                       borderTop: '1px solid rgba(212,164,94,0.10)',
                       borderBottom: i === TIERS.length - 1 ? '1px solid rgba(212,164,94,0.10)' : 'none',
-                      padding: 'clamp(20px,2.5vw,28px) clamp(16px,2vw,24px)',
+                      padding: 'clamp(12px,1.6vw,18px) clamp(12px,1.5vw,18px)',
                       cursor: isActive ? 'default' : 'pointer',
-                      display: 'grid', gridTemplateColumns: '52px 1fr auto', gap: 22, alignItems: 'center',
+                      display: 'grid', gridTemplateColumns: '42px 1fr auto', gap: 16, alignItems: 'center',
                       transition: 'background 0.35s ease', textAlign: 'left',
                       fontFamily: 'inherit', position: 'relative', overflow: 'hidden',
                     }}>
@@ -107,7 +107,7 @@ export default function LoyaltyApp() {
                       }} />
                     )}
                     <div style={{
-                      width: 44, height: 44, borderRadius: '50%',
+                      width: 36, height: 36, borderRadius: '50%',
                       background: isActive || isPast ? tier.color : 'transparent',
                       border: `1px solid ${isActive || isPast ? tier.color : 'rgba(212,164,94,0.28)'}`,
                       boxShadow: isActive ? `0 0 0 6px ${tier.color}1a, 0 8px 24px ${tier.color}33` : 'none',
@@ -126,7 +126,7 @@ export default function LoyaltyApp() {
                     <div>
                       <p style={{
                         fontFamily: 'var(--r-serif)', fontStyle: 'italic',
-                        fontSize: isActive ? 22 : 17, fontWeight: 300,
+                        fontSize: isActive ? 17 : 14, fontWeight: 300,
                         color: isActive ? '#f5ede0' : 'rgba(245,237,224,0.55)',
                         lineHeight: 1, margin: '0 0 5px',
                         transition: 'all 0.35s ease',
@@ -142,7 +142,7 @@ export default function LoyaltyApp() {
 
                     <span style={{
                       fontFamily: 'var(--r-serif)',
-                      fontSize: isActive ? 28 : 18, fontWeight: 400,
+                      fontSize: isActive ? 20 : 14, fontWeight: 400,
                       color: isActive ? tier.color : 'rgba(245,237,224,0.3)',
                       transition: 'all 0.35s ease',
                     }}>{tier.cashback}</span>
@@ -184,7 +184,7 @@ export default function LoyaltyApp() {
           </div>
 
           {/* ═══════════ RIGHT: PHONE + DOWNLOAD ═══════════ */}
-          <div className="loyalty-phone-wrap" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 36 }}>
+          <div className="loyalty-phone-wrap" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20 }}>
 
             {/* Phone mockup */}
             <div style={{
@@ -195,7 +195,7 @@ export default function LoyaltyApp() {
               <div style={{
                 position: 'absolute', top: '50%', left: '50%',
                 transform: 'translate(-50%, -50%)',
-                width: 340, height: 340, borderRadius: '50%',
+                width: 260, height: 260, borderRadius: '50%',
                 background: `radial-gradient(circle, ${t.color}18 0%, transparent 70%)`,
                 pointerEvents: 'none',
                 animation: 'glowPulse 4s ease-in-out infinite',
@@ -204,7 +204,7 @@ export default function LoyaltyApp() {
 
               <div style={{
                 position: 'relative',
-                width: 240, height: 480,
+                width: 200, height: 390,
                 borderRadius: 42,
                 background: 'linear-gradient(160deg, #0c0a07 0%, #14110c 100%)',
                 border: '1px solid rgba(212,164,94,0.25)',
