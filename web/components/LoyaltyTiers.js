@@ -17,9 +17,11 @@ export default function LoyaltyApp() {
   return (
     <section id="loyalty" style={{
       background: 'linear-gradient(180deg, #0a0805 0%, #0d0a07 100%)',
-      paddingTop: 'clamp(48px,6vw,80px)',
-      paddingBottom: 'clamp(48px,6vw,80px)',
+      height: 'calc(100svh - 72px)',
+      paddingTop: 'clamp(16px,2.5vh,36px)',
+      paddingBottom: 'clamp(16px,2.5vh,36px)',
       position: 'relative', overflow: 'hidden',
+      display: 'flex', flexDirection: 'column', justifyContent: 'center',
     }}>
       <style>{`
         @keyframes glowPulse {
@@ -58,7 +60,7 @@ export default function LoyaltyApp() {
       <div style={{ maxWidth: 1440, margin: '0 auto', padding: '0 clamp(20px,4vw,60px)', position: 'relative' }}>
 
         {/* Header */}
-        <div style={{ marginBottom: 'clamp(24px,3vw,40px)', maxWidth: 720 }}>
+        <div style={{ marginBottom: 'clamp(10px,1.5vh,20px)', maxWidth: 720 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
             <div style={{ width: 22, height: 1, background: '#d4a45e', opacity: 0.55 }} />
             <span style={{ fontSize: 9, letterSpacing: '0.38em', textTransform: 'uppercase', color: 'rgba(212,164,94,0.7)' }}>
@@ -83,7 +85,7 @@ export default function LoyaltyApp() {
           <div>
 
             {/* Tier rail */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 0, marginBottom: 'clamp(20px,2.5vw,28px)' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 0, marginBottom: 'clamp(10px,1.5vh,16px)' }}>
               {TIERS.map((tier, i) => {
                 const isActive = i === active;
                 const isPast = i < active;
@@ -94,7 +96,7 @@ export default function LoyaltyApp() {
                       border: 'none',
                       borderTop: '1px solid rgba(212,164,94,0.10)',
                       borderBottom: i === TIERS.length - 1 ? '1px solid rgba(212,164,94,0.10)' : 'none',
-                      padding: 'clamp(12px,1.6vw,18px) clamp(12px,1.5vw,18px)',
+                      padding: 'clamp(8px,1vh,12px) clamp(10px,1.4vw,16px)',
                       cursor: isActive ? 'default' : 'pointer',
                       display: 'grid', gridTemplateColumns: '42px 1fr auto', gap: 16, alignItems: 'center',
                       transition: 'background 0.35s ease', textAlign: 'left',
@@ -164,8 +166,8 @@ export default function LoyaltyApp() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
                 {t.perks.map((perk, pi) => (
                   <div key={pi} style={{
-                    display: 'flex', gap: 18, alignItems: 'center',
-                    padding: '16px 0',
+                    display: 'flex', gap: 14, alignItems: 'center',
+                    padding: '10px 0',
                     borderBottom: pi < t.perks.length - 1 ? '1px solid rgba(245,237,224,0.07)' : 'none',
                   }}>
                     <div style={{
@@ -184,7 +186,7 @@ export default function LoyaltyApp() {
           </div>
 
           {/* ═══════════ RIGHT: PHONE + DOWNLOAD ═══════════ */}
-          <div className="loyalty-phone-wrap" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20 }}>
+          <div className="loyalty-phone-wrap" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
 
             {/* Phone mockup */}
             <div style={{
@@ -204,7 +206,7 @@ export default function LoyaltyApp() {
 
               <div style={{
                 position: 'relative',
-                width: 200, height: 390,
+                width: 180, height: 340,
                 borderRadius: 42,
                 background: 'linear-gradient(160deg, #0c0a07 0%, #14110c 100%)',
                 border: '1px solid rgba(212,164,94,0.25)',
@@ -305,7 +307,7 @@ export default function LoyaltyApp() {
 
             {/* Download links */}
             <div style={{ width: '100%', maxWidth: 340 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, justifyContent: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10, justifyContent: 'center' }}>
                 <div style={{ width: 18, height: 1, background: '#d4a45e', opacity: 0.5 }} />
                 <span style={{ fontSize: 9, letterSpacing: '0.32em', textTransform: 'uppercase', color: 'rgba(212,164,94,0.7)' }}>
                   Скачать приложение
@@ -313,7 +315,7 @@ export default function LoyaltyApp() {
                 <div style={{ width: 18, height: 1, background: '#d4a45e', opacity: 0.5 }} />
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <a href="#" style={{
                   display: 'flex', alignItems: 'center', gap: 14,
                   padding: '12px 18px',
