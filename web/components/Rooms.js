@@ -137,48 +137,49 @@ export default function Rooms() {
         <div key={tKey} style={{
           position: 'relative', zIndex: 2, flex: 1,
           padding: 'clamp(28px,4vh,48px) clamp(48px,5vw,80px) clamp(16px,2vh,24px)',
-          display: 'flex', flexDirection: 'column', justifyContent: 'flex-start',
+          display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
         }}>
 
-          {/* Верхняя метка */}
-          <div className="fu d1" style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-            <span style={{ fontSize: 9, letterSpacing: '0.38em', textTransform: 'uppercase', color: 'rgba(212,164,94,0.55)' }}>
-              Каталог
-            </span>
-            <div className="line-draw" style={{ width: 20, height: 1, background: 'rgba(212,164,94,0.3)', animationDelay: '0.15s' }} />
+          {/* Верхний блок: метка + название + описание */}
+          <div>
+            <div className="fu d1" style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 'clamp(24px,3.5vh,40px)' }}>
+              <span style={{ fontSize: 11, letterSpacing: '0.32em', textTransform: 'uppercase', color: 'rgba(212,164,94,0.7)' }}>
+                Каталог
+              </span>
+              <div className="line-draw" style={{ width: 28, height: 1, background: 'rgba(212,164,94,0.35)', animationDelay: '0.15s' }} />
+            </div>
+
+            <h2 style={{
+              fontFamily: 'var(--r-serif)', fontStyle: 'italic', fontWeight: 300,
+              fontSize: 'clamp(2.8rem, 5vw, 5.2rem)', lineHeight: 0.95,
+              letterSpacing: '-0.025em', color: '#f5ede0',
+              margin: '0 0 clamp(14px,2vh,22px)',
+              perspective: '600px',
+            }}>
+              {letters.map((ch, i) => (
+                <span key={`${tKey}-${i}`} className="letter" style={{
+                  animation: `letterIn 0.75s cubic-bezier(0.16,1,0.3,1) ${0.2 + i * 0.035}s both`,
+                }}>
+                  {ch === ' ' ? ' ' : ch}
+                </span>
+              ))}
+            </h2>
+
+            <p className="fu d3" style={{
+              fontSize: 14, color: 'rgba(202,187,169,0.62)',
+              lineHeight: 1.85, maxWidth: 400,
+              margin: 0, letterSpacing: '0.005em',
+            }}>
+              {cur.desc}
+            </p>
           </div>
 
-          {/* Название — пословное появление букв */}
-          <h2 style={{
-            fontFamily: 'var(--r-serif)', fontStyle: 'italic', fontWeight: 300,
-            fontSize: 'clamp(2.8rem, 5vw, 5.2rem)', lineHeight: 0.95,
-            letterSpacing: '-0.025em', color: '#f5ede0',
-            margin: '0 0 clamp(14px,2vh,22px)',
-            perspective: '600px',
-          }}>
-            {letters.map((ch, i) => (
-              <span key={`${tKey}-${i}`} className="letter" style={{
-                animation: `letterIn 0.75s cubic-bezier(0.16,1,0.3,1) ${0.2 + i * 0.035}s both`,
-              }}>
-                {ch === ' ' ? ' ' : ch}
-              </span>
-            ))}
-          </h2>
-
-          <p className="fu d3" style={{
-            fontSize: 14, color: 'rgba(202,187,169,0.62)',
-            lineHeight: 1.85, maxWidth: 400,
-            margin: '0 0 clamp(16px,2.5vh,28px)', letterSpacing: '0.005em',
-          }}>
-            {cur.desc}
-          </p>
-
           {/* Табличные характеристики с line-draw анимацией */}
-          <div style={{ maxWidth: 400, marginBottom: 0 }}>
+          <div style={{ maxWidth: 400 }}>
             {[
-              ['Цена',   <>от <span style={{ color: '#d4a45e' }}>{cur.price}</span> PRB / {cur.unit}</>],
-              ['Гостей', cur.guests],
               ['Формат', cur.format],
+              ['Гостей', cur.guests],
+              ['Цена',   <>от <span style={{ color: '#d4a45e' }}>{cur.price}</span> PRB / {cur.unit}</>],
             ].map(([label, value], idx) => (
               <div key={idx} className="fu" style={{
                 animationDelay: `${0.38 + idx * 0.08}s`,
