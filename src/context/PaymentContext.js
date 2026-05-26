@@ -56,17 +56,18 @@ export const PaymentProvider = ({ children }) => {
   /**
    * Пополнение через Stripe Checkout.
    *
-   * Поток:
-   *   1. Запрос на сервер /payments/stripe/create-session → получаем URL.
-   *   2. Открываем URL в системном браузере (WebBrowser.openBrowserAsync).
-   *   3. После закрытия — polling GET /payments/stripe/session/:id, пока
-   *      сервер не подтвердит paymentStatus === 'paid' (webhook отработал).
-   *   4. Затем подтягиваем актуальный баланс.
+   * Поток (без deep link, чтобы не было cold-start в Expo Go):
+   *   1. POST /payments/stripe/create-session → получаем session URL.
+   *   2. Открываем URL в Custom Tab через WebBrowser.openBrowserAsync.
+   *   3. ПАРАЛЛЕЛЬНО polling GET /session/:id каждые 1.5 с.
+   *   4. Когда сервер подтвердил paid → программно закрываем Custom Tab
+   *      через WebBrowser.dismissBrowser() и подтягиваем актуальный баланс.
+   *   5. Если юзер закрыл Tab сам → status='cancelled'.
    *
    * @param {string|number} userId
    * @param {number} amount   Сумма в PRB
    * @param {string} currency 'RUB' | 'USD'
-   * @returns {Promise<{ success: boolean, status: 'paid'|'unpaid'|'cancelled', newBalance?: number }>}
+   * @returns {Promise<{ success: boolean, status: 'paid'|'unpaid'|'cancelled'|'failed', newBalance?: number }>}
    */
   const topUpCardStripe = async (userId, amount, currency = 'RUB') => {
     setIsProcessing(true);
@@ -82,42 +83,50 @@ export const PaymentProvider = ({ children }) => {
         throw new Error(session.error || 'Не удалось создать платёжную сессию');
       }
 
-      const browserResult = await WebBrowser.openBrowserAsync(session.url, {
-        dismissButtonStyle: 'cancel',
-        readerMode: false,
-        showTitle: true,
-      });
-
-      // Polling статуса (webhook мог не успеть прийти к моменту закрытия)
-      // Максимум 12 попыток по 1.5 секунды = 18 секунд
+      // Параллельный polling статуса оплаты.
+      // Завершается, когда сервер вернул paid/failed/expired или
+      // когда юзер закрыл Custom Tab вручную (browserDismissed=true).
       const POLL_INTERVAL_MS = 1500;
-      const MAX_ATTEMPTS = 12;
+      const MAX_ATTEMPTS = 60; // 90 секунд — на медленных сетях / 3DS
+      let browserDismissed = false;
       let finalStatus = 'unpaid';
 
-      for (let i = 0; i < MAX_ATTEMPTS; i++) {
-        await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
-        try {
-          const status = await apiCall(
-            `${getApiUrl()}/payments/stripe/session/${session.sessionId}`
-          );
-          if (status.paymentStatus === 'paid' || status.topupStatus === 'completed') {
-            finalStatus = 'paid';
-            break;
-          }
-          if (status.sessionStatus === 'expired' || status.topupStatus === 'failed') {
-            finalStatus = 'failed';
-            break;
-          }
-        } catch (_) {
-          // network blip — продолжаем polling
+      const pollPromise = (async () => {
+        for (let i = 0; i < MAX_ATTEMPTS; i++) {
+          if (browserDismissed) return;
+          await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
+          if (browserDismissed) return;
+          try {
+            const status = await apiCall(
+              `${getApiUrl()}/payments/stripe/session/${session.sessionId}`
+            );
+            if (status.paymentStatus === 'paid' || status.topupStatus === 'completed') {
+              finalStatus = 'paid';
+              // Программно закрываем Custom Tab — без deep link
+              try { WebBrowser.dismissBrowser(); } catch (_) {}
+              return;
+            }
+            if (status.sessionStatus === 'expired' || status.topupStatus === 'failed') {
+              finalStatus = 'failed';
+              try { WebBrowser.dismissBrowser(); } catch (_) {}
+              return;
+            }
+          } catch (_) { /* network blip — продолжаем */ }
         }
-      }
+      })();
+
+      // Promise разрешается, когда Custom Tab закрывается
+      // (либо юзером, либо программно из polling через dismissBrowser).
+      await WebBrowser.openBrowserAsync(session.url, {
+        dismissButtonStyle: 'cancel',
+        showTitle: true,
+      });
+      browserDismissed = true;
+      await pollPromise; // дождаться завершения polling-цикла
 
       if (finalStatus === 'paid') {
         const balanceData = await apiCall(`${getApiUrl()}/card/balance/${userId}`);
-        if (!balanceData.error) {
-          setCardBalance(balanceData.balance);
-        }
+        if (!balanceData.error) setCardBalance(balanceData.balance);
 
         const topupRecord = {
           id: `stripe_${session.topupId}`,
@@ -141,9 +150,12 @@ export const PaymentProvider = ({ children }) => {
         };
       }
 
+      // Юзер закрыл Tab до того, как пришёл webhook — считаем отменой.
+      // (если оплата всё же прошла, webhook отработает и зачислит на сервере,
+      // а пользователь увидит новый баланс при следующем обновлении карты)
       return {
         success: false,
-        status: browserResult.type === 'cancel' ? 'cancelled' : finalStatus,
+        status: finalStatus === 'failed' ? 'failed' : 'cancelled',
         sessionId: session.sessionId,
       };
     } catch (error) {
