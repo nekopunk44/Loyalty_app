@@ -133,26 +133,18 @@ export default function Rooms() {
           {cur.num}
         </div>
 
-        {/* Верхняя метка */}
-        <div style={{
-          position: 'relative', zIndex: 2,
-          padding: 'clamp(100px,13vh,130px) clamp(48px,5vw,80px) 0',
-          display: 'flex', alignItems: 'center', gap: 14,
-        }}>
-          <span style={{ fontSize: 9, letterSpacing: '0.38em', textTransform: 'uppercase', color: 'rgba(212,164,94,0.55)' }}>
-            Каталог
-          </span>
-          <div style={{ width: 22, height: 1, background: 'rgba(212,164,94,0.3)' }} />
-        </div>
-
         {/* Основной контент */}
         <div key={tKey} style={{
           position: 'relative', zIndex: 2, flex: 1,
-          padding: 'clamp(40px,5vh,72px) clamp(48px,5vw,80px) clamp(28px,3vh,36px)',
+          padding: 'clamp(100px,13vh,130px) clamp(48px,5vw,80px) clamp(28px,3vh,36px)',
           display: 'flex', flexDirection: 'column', justifyContent: 'center',
         }}>
 
+          {/* Верхняя метка: Каталог — STUDIO в одну строку */}
           <div className="fu d1" style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 22 }}>
+            <span style={{ fontSize: 9, letterSpacing: '0.38em', textTransform: 'uppercase', color: 'rgba(212,164,94,0.55)' }}>
+              Каталог
+            </span>
             <div className="line-draw" style={{ width: 20, height: 1, background: '#d4a45e', animationDelay: '0.15s' }} />
             <span style={{ fontSize: 9, letterSpacing: '0.38em', textTransform: 'uppercase', color: '#d4a45e' }}>
               {cur.tag}
