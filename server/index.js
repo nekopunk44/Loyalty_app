@@ -259,14 +259,18 @@ const seedDatabase = async () => {
     await LoyaltyCard.create({ userId: adminUser.userId,   balance: 0, totalSpent: 0, totalEarned: 0 });
     await LoyaltyCard.create({ userId: regularUser.userId, balance: 0, totalSpent: 0, totalEarned: 0 });
 
-    const propCount = await Property.count();
-    if (propCount === 0) {
-      await Property.bulkCreate([
-        { name: 'Villa Bonita',      description: 'Роскошная вилла с видом на море',         price: '150€', priceNumber: 150, rooms: 4, guests: 8,  amenities: ['WiFi', 'Бассейн', 'Кондиционер', 'Кухня'], image: 'villa1.jpg',     status: 'available' },
-        { name: 'Sunset Apartment',  description: 'Уютная квартира в центре города',          price: '80€',  priceNumber: 80,  rooms: 2, guests: 4,  amenities: ['WiFi', 'Паркинг', 'Балкон'],                image: 'apartment1.jpg', status: 'available' },
-        { name: 'Luxury Penthouse',  description: 'Премиум пентхаус с панорамным видом',      price: '250€', priceNumber: 250, rooms: 5, guests: 10, amenities: ['WiFi', 'СПА', 'Бассейн', 'Лифт', 'Консьерж'], image: 'penthouse.jpg',  status: 'available' },
-        { name: 'Cozy Studio',       description: 'Студия для одного или двух человек',       price: '50€',  priceNumber: 50,  rooms: 1, guests: 2,  amenities: ['WiFi', 'Душ'],                              image: 'studio.jpg',     status: 'available' },
-      ]);
+    // Идемпотентный sync номеров под клиентский src/constants/properties.js:
+    // id фиксированы (1=Люкс, 2=Стандарт, 3=Задний двор, 4=Вся территория),
+    // upsert обновляет имя/цену даже на уже существующих записях
+    // (исторический seed заводил Villa Bonita / Sunset Apartment и т.п.).
+    const REAL_PROPERTIES = [
+      { id: 1, name: 'Люкс апартамент', description: 'Полный комфорт, с видом на природу',         price: '200PRB/ночь', priceNumber: 200, rooms: 10,   guests: 20, amenities: ['WiFi','Кондиционер','TV','Кухня','Бассейн','Сауна (с доплатой)','Мангал','Парковочное место','Караоке','Большой зал'], image: 'luks.jpg',    status: 'available' },
+      { id: 2, name: 'Стандарт',         description: 'Студия с террасой и бассейном',              price: '150PRB/ночь', priceNumber: 150, rooms: 2,    guests: 10, amenities: ['WiFi','Кондиционер','TV','Бассейн','Сауна (с доплатой)','Мангал','Парковочное место'],                                                  image: 'standart.jpg', status: 'available' },
+      { id: 3, name: 'Задний двор',      description: 'Открытая местность с бассейном и беседкой',  price: '100PRB/день', priceNumber: 100, rooms: null, guests: 15, amenities: ['WiFi','Бассейн','Мангал','Парковочное место','Караоке','Холодильник','Беседка','Шезлонги','Зонты'],                              image: 'zad.jpg',      status: 'available' },
+      { id: 4, name: 'Вся территория',   description: 'Полный комплекс со всеми удобствами',        price: '500PRB/ночь', priceNumber: 500, rooms: 10,   guests: 30, amenities: ['WiFi','Кондиционер','TV','Кухня','Бассейн','Сауна (с доплатой)','Мангал','Парковочное место','Караоке','Большой зал','Беседка','Шезлонги','Зонты','Холодильник'], image: 'vsya.jpg', status: 'available' },
+    ];
+    for (const p of REAL_PROPERTIES) {
+      await Property.upsert(p);
     }
 
     logger.info('База данных инициализирована', {
