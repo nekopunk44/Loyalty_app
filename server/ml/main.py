@@ -7,6 +7,10 @@
     POST /rfm/recompute        — пересчёт уровней лояльности по RFM
     POST /churn/predict        — вероятность оттока для пользователя
     POST /recommend/events     — ранжированный список рекомендованных событий
+    POST /ltv/predict          — предсказанный годовой LTV для пользователя
+    GET  /ltv/top              — top-N клиентов по предсказанной ценности
+    GET  /forecast/revenue     — прогноз ежедневной выручки на горизонт
+    GET  /anomaly/transactions — последние транзакции с anomaly-score
     GET  /health               — health-check
 """
 from __future__ import annotations
@@ -24,41 +28,48 @@ from config import settings
 from data.loader import (
     load_active_events,
     load_churn_features,
+    load_daily_revenue,
+    load_recent_transactions,
     load_user_activity,
     load_user_event_matrix,
 )
+from models.anomaly import AnomalyDetector
 from models.churn import ChurnClassifier
+from models.forecast import forecast_revenue
+from models.ltv import LTVRegressor
 from models.recommender import HybridRecommender
 from models.rfm import recompute_segments
 
 logging.basicConfig(level=settings.log_level.upper())
 logger = logging.getLogger(__name__)
 
-CHURN_ARTIFACT = settings.artifacts_dir / "churn_v1.pkl"
-RECSYS_ARTIFACT = settings.artifacts_dir / "recsys_v1.pkl"
+CHURN_ARTIFACT   = settings.artifacts_dir / "churn_v1.pkl"
+RECSYS_ARTIFACT  = settings.artifacts_dir / "recsys_v1.pkl"
+LTV_ARTIFACT     = settings.artifacts_dir / "ltv_v1.pkl"
+ANOMALY_ARTIFACT = settings.artifacts_dir / "anomaly_v1.pkl"
 
-_state: Dict[str, object] = {"churn": None, "recsys": None}
+_state: Dict[str, object] = {
+    "churn": None, "recsys": None, "ltv": None, "anomaly": None,
+}
+
+
+def _try_load(name: str, loader_cls, path: Path):
+    if not path.exists():
+        logger.warning("Артефакт %s не найден. Запустите train.py.", name)
+        return
+    try:
+        _state[name] = loader_cls.load(path)
+        logger.info("Загружена модель %s из %s", name, path)
+    except Exception as exc:
+        logger.warning("Не удалось загрузить %s: %s", name, exc)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    if CHURN_ARTIFACT.exists():
-        try:
-            _state["churn"] = ChurnClassifier.load(CHURN_ARTIFACT)
-            logger.info("Загружена модель churn из %s", CHURN_ARTIFACT)
-        except Exception as exc:
-            logger.warning("Не удалось загрузить churn: %s", exc)
-    else:
-        logger.warning("Артефакт churn не найден. Запустите train.py.")
-
-    if RECSYS_ARTIFACT.exists():
-        try:
-            _state["recsys"] = HybridRecommender.load(RECSYS_ARTIFACT)
-            logger.info("Загружена модель recsys из %s", RECSYS_ARTIFACT)
-        except Exception as exc:
-            logger.warning("Не удалось загрузить recsys: %s", exc)
-    else:
-        logger.warning("Артефакт recsys не найден. Запустите train.py.")
+    _try_load("churn",   ChurnClassifier,   CHURN_ARTIFACT)
+    _try_load("recsys",  HybridRecommender, RECSYS_ARTIFACT)
+    _try_load("ltv",     LTVRegressor,      LTV_ARTIFACT)
+    _try_load("anomaly", AnomalyDetector,   ANOMALY_ARTIFACT)
     yield
 
 
@@ -96,6 +107,8 @@ class HealthResponse(BaseModel):
     status: str
     churn_loaded: bool
     recsys_loaded: bool
+    ltv_loaded: bool
+    anomaly_loaded: bool
 
 
 class RFMResponse(BaseModel):
@@ -132,6 +145,52 @@ class RecommendResponse(BaseModel):
     fallback_used: bool
 
 
+class LTVRequest(BaseModel):
+    user_id: str = Field(..., min_length=1, max_length=64)
+    features: Optional[Dict[str, float]] = None
+
+
+class LTVResponse(BaseModel):
+    user_id: str
+    predicted_ltv: float       # годовой ARPU в PRB
+    tier: str                  # 'low' | 'mid' | 'high'
+
+
+class LTVTopItem(BaseModel):
+    user_id: str
+    predicted_ltv: float
+    total_spent: float
+
+
+class LTVTopResponse(BaseModel):
+    n: int
+    items: List[LTVTopItem]
+
+
+class ForecastResponse(BaseModel):
+    horizon: int
+    total: float
+    daily: List[float]
+    lower: List[float]
+    upper: List[float]
+    method: str
+    history_days: int
+
+
+class AnomalyItem(BaseModel):
+    user_id: str
+    amount: float
+    created_at: str
+    anomaly_score: float
+    is_anomaly: bool
+
+
+class AnomalyResponse(BaseModel):
+    n_total: int
+    n_anomalies: int
+    items: List[AnomalyItem]
+
+
 # ============ Endpoints ============
 
 
@@ -141,6 +200,8 @@ async def health():
         status="ok",
         churn_loaded=_state["churn"] is not None,
         recsys_loaded=_state["recsys"] is not None,
+        ltv_loaded=_state["ltv"] is not None,
+        anomaly_loaded=_state["anomaly"] is not None,
     )
 
 
@@ -202,3 +263,124 @@ async def recommend_events(req: RecommendRequest):
     return RecommendResponse(
         user_id=req.user_id, recommendations=items, fallback_used=fallback
     )
+
+
+# ============ LTV ============
+
+
+def _ltv_tier(value: float, p_low: float, p_high: float) -> str:
+    if value >= p_high:
+        return "high"
+    if value >= p_low:
+        return "mid"
+    return "low"
+
+
+@app.post("/ltv/predict", response_model=LTVResponse, dependencies=[Depends(require_token)])
+async def ltv_predict(req: LTVRequest):
+    model: Optional[LTVRegressor] = _state["ltv"]
+    if model is None:
+        raise HTTPException(status_code=503, detail="Модель LTV не загружена")
+
+    if req.features:
+        prob = model.predict_one(req.features)
+    else:
+        df = load_churn_features()
+        row = df[df["user_id"] == req.user_id]
+        if row.empty:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Признаки для user_id={req.user_id} не найдены",
+            )
+        prob = float(model.predict(row)[0])
+
+    # пороги: 25 000 и 100 000 PRB годового ARPU (грубая бизнес-оценка)
+    tier = _ltv_tier(prob, p_low=25_000, p_high=100_000)
+    return LTVResponse(user_id=req.user_id, predicted_ltv=prob, tier=tier)
+
+
+@app.get("/ltv/top", response_model=LTVTopResponse, dependencies=[Depends(require_token)])
+async def ltv_top(n: int = 20):
+    model: Optional[LTVRegressor] = _state["ltv"]
+    if model is None:
+        raise HTTPException(status_code=503, detail="Модель LTV не загружена")
+
+    df = load_churn_features()
+    if df.empty:
+        return LTVTopResponse(n=0, items=[])
+
+    top_df = model.top_n(df, n=int(max(1, min(n, 100))))
+    items = [
+        LTVTopItem(
+            user_id=str(row["user_id"]),
+            predicted_ltv=float(row["predicted_ltv"]),
+            total_spent=float(row["total_spent"]),
+        )
+        for _, row in top_df.iterrows()
+    ]
+    return LTVTopResponse(n=len(items), items=items)
+
+
+# ============ Revenue forecast ============
+
+
+@app.get(
+    "/forecast/revenue",
+    response_model=ForecastResponse,
+    dependencies=[Depends(require_token)],
+)
+async def forecast_revenue_endpoint(horizon: int = 30, window_days: int = 180):
+    """Прогноз ежедневной выручки на horizon дней по window_days истории.
+
+    Модель Holt-Winters обучается на лету — ряд короткий, тренировка
+    укладывается в десятки миллисекунд.
+    """
+    series = load_daily_revenue(window_days=window_days)
+    result = forecast_revenue(series, horizon=horizon)
+    return ForecastResponse(
+        horizon=result.horizon,
+        total=result.total,
+        daily=result.daily,
+        lower=result.lower,
+        upper=result.upper,
+        method=result.method,
+        history_days=result.history_days,
+    )
+
+
+# ============ Anomaly detection ============
+
+
+@app.get(
+    "/anomaly/transactions",
+    response_model=AnomalyResponse,
+    dependencies=[Depends(require_token)],
+)
+async def anomaly_transactions(limit: int = 200, window_days: int = 30):
+    """Скорит последние `limit` транзакций. Возвращает все вместе с
+    anomaly_score, чтобы UI мог отметить флагом подозрительные.
+    """
+    model: Optional[AnomalyDetector] = _state["anomaly"]
+    if model is None:
+        raise HTTPException(status_code=503, detail="Модель anomaly не загружена")
+
+    tx = load_recent_transactions(limit=int(max(1, min(limit, 1000))),
+                                  window_days=int(window_days))
+    if tx.empty:
+        return AnomalyResponse(n_total=0, n_anomalies=0, items=[])
+
+    scored = model.score(tx)
+    # сортируем по anomaly_score DESC, чтобы первыми шли подозрительные
+    scored = scored.sort_values("anomaly_score", ascending=False)
+    items = [
+        AnomalyItem(
+            user_id=str(row["user_id"]),
+            amount=float(row["amount"]),
+            created_at=str(row["created_at"]),
+            anomaly_score=float(row["anomaly_score"]),
+            is_anomaly=bool(row["is_anomaly"]),
+        )
+        for _, row in scored.iterrows()
+    ]
+    n_anomalies = int(scored["is_anomaly"].sum())
+    return AnomalyResponse(n_total=len(items), n_anomalies=n_anomalies, items=items)

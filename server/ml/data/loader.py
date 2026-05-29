@@ -245,6 +245,75 @@ def load_user_event_matrix() -> pd.DataFrame:
 
 
 # ---------------------------------------------------------------------------
+# Daily revenue time series → Holt-Winters forecast
+# ---------------------------------------------------------------------------
+def load_daily_revenue(window_days: int = 365) -> pd.Series:
+    """Сумма выручки по дням за окно window_days.
+
+    Возвращает pd.Series с DatetimeIndex (ровно window_days точек,
+    пропущенные дни заполнены 0). Используется forecast-моделью.
+    """
+    if not _has_db():
+        return _fallback_or_raise("daily_revenue", days=window_days)
+
+    query = text(
+        """
+        SELECT
+            date_trunc('day', COALESCE(b."updatedAt", b."createdAt")) AS day,
+            SUM(b."totalPrice"::float)                                AS revenue
+        FROM bookings b
+        WHERE b.status IN ('confirmed', 'completed')
+          AND COALESCE(b."updatedAt", b."createdAt") >= NOW() - make_interval(days => :wd)
+        GROUP BY day
+        ORDER BY day
+        """
+    )
+    with get_engine().connect() as conn:
+        df = pd.read_sql(query, conn, params={"wd": int(window_days)})
+
+    if df.empty:
+        # пустая БД — возвращаем нулевую серию нужной длины
+        idx = pd.date_range(end=datetime.utcnow().date(), periods=window_days, freq="D")
+        return pd.Series(0.0, index=idx, name="revenue")
+
+    df["day"] = pd.to_datetime(df["day"])
+    series = df.set_index("day")["revenue"].astype(float)
+    # выравниваем на непрерывную дневную шкалу
+    full_idx = pd.date_range(end=series.index.max(), periods=window_days, freq="D")
+    return series.reindex(full_idx, fill_value=0.0)
+
+
+# ---------------------------------------------------------------------------
+# Recent transactions → anomaly detection
+# ---------------------------------------------------------------------------
+def load_recent_transactions(limit: int = 1000, window_days: int = 180) -> pd.DataFrame:
+    """user_id, amount, created_at — последние транзакции для anomaly-модели."""
+    if not _has_db():
+        return _fallback_or_raise("recent_transactions",
+                                  n_users=500, days=window_days)
+
+    query = text(
+        """
+        SELECT
+            "userId"::text       AS user_id,
+            "amount"::float      AS amount,
+            "createdAt"          AS created_at
+        FROM payments
+        WHERE status = 'completed'
+          AND "createdAt" >= NOW() - make_interval(days => :wd)
+        ORDER BY "createdAt" DESC
+        LIMIT :lim
+        """
+    )
+    with get_engine().connect() as conn:
+        df = pd.read_sql(query, conn, params={"wd": int(window_days), "lim": int(limit)})
+    if df.empty:
+        return pd.DataFrame(columns=["user_id", "amount", "created_at"])
+    df["created_at"] = pd.to_datetime(df["created_at"])
+    return df
+
+
+# ---------------------------------------------------------------------------
 # Active events catalogue
 # ---------------------------------------------------------------------------
 def load_active_events() -> pd.DataFrame:

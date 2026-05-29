@@ -4,3 +4,7 @@ __pycache__/
 .env
 .pytest_cache/
 .coverage
+
+# Артефакты генерируются train.py (локально или при сборке Docker)
+artifacts/*.pkl
+artifacts/metrics.json

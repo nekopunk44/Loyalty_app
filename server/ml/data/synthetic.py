@@ -26,9 +26,11 @@ SEG_PARAMS = {
 @dataclass
 class SyntheticDataset:
     activity: pd.DataFrame          # для RFM
-    churn_features: pd.DataFrame    # для churn-классификатора
+    churn_features: pd.DataFrame    # для churn-классификатора и LTV
     user_events: pd.DataFrame       # long: user × event × category
     events: pd.DataFrame            # каталог
+    daily_revenue: pd.Series        # для forecast (Holt-Winters)
+    recent_transactions: pd.DataFrame  # для anomaly-детектора
 
 
 def _draw_segment(rng: np.random.Generator, n: int) -> np.ndarray:
@@ -162,9 +164,58 @@ def generate_synthetic_dataset(
 
     user_events_df = pd.DataFrame(ue_rows).drop_duplicates(subset=["user_id", "event_id"])
 
+    # ---------- daily revenue (для Holt-Winters прогноза) ----------
+    if activity_df.empty:
+        idx = pd.date_range(end=today, periods=days, freq="D")
+        daily_rev = pd.Series(0.0, index=idx, name="revenue")
+    else:
+        rev_by_day = (
+            activity_df.assign(day=pd.to_datetime(activity_df["last_tx_date"]).dt.normalize())
+            .groupby("day")["total_price"].sum()
+        )
+        # сезонность недельная + лёгкий рост (≈+0.4% в день)
+        full_idx = pd.date_range(end=today, periods=days, freq="D")
+        rev_by_day = rev_by_day.reindex(full_idx, fill_value=0.0)
+        weekday_mult = np.array([0.85, 0.90, 0.95, 1.00, 1.20, 1.35, 1.10])  # сб/пт пик
+        trend = np.linspace(0.9, 1.15, num=days)
+        noise = rng.normal(1.0, 0.06, size=days)
+        seasonal = weekday_mult[full_idx.dayofweek]
+        daily_rev = (rev_by_day.to_numpy() * seasonal * trend * noise).clip(min=0)
+        daily_rev = pd.Series(daily_rev, index=full_idx, name="revenue")
+
+    # ---------- recent transactions (для anomaly) ----------
+    if activity_df.empty:
+        tx_df = pd.DataFrame(columns=["user_id", "amount", "created_at"])
+    else:
+        tx_df = activity_df[["user_id", "total_price", "last_tx_date"]].rename(
+            columns={"total_price": "amount", "last_tx_date": "created_at"}
+        ).copy()
+        # внедряем ~3% настоящих аномалий: ночные крупные платежи
+        n_anomalies = max(int(len(tx_df) * 0.03), 5) if len(tx_df) >= 50 else 0
+        if n_anomalies > 0:
+            anomaly_idx = rng.choice(tx_df.index, size=n_anomalies, replace=False)
+            tx_df.loc[anomaly_idx, "amount"] = tx_df.loc[anomaly_idx, "amount"] * rng.uniform(
+                5, 12, size=n_anomalies
+            )
+            tx_df.loc[anomaly_idx, "created_at"] = tx_df.loc[anomaly_idx, "created_at"].apply(
+                lambda d: d.replace(hour=int(rng.integers(2, 5)),
+                                    minute=int(rng.integers(0, 60)))
+            )
+        # обычные транзакции — равномерное время в течение дня
+        normal_mask = ~tx_df.index.isin(
+            anomaly_idx if n_anomalies > 0 else []
+        )
+        for i in tx_df[normal_mask].index:
+            tx_df.at[i, "created_at"] = tx_df.at[i, "created_at"].replace(
+                hour=int(rng.integers(8, 23)),
+                minute=int(rng.integers(0, 60)),
+            )
+
     return SyntheticDataset(
         activity=activity_df,
         churn_features=churn_df,
         user_events=user_events_df,
         events=events_df,
+        daily_revenue=daily_rev,
+        recent_transactions=tx_df,
     )

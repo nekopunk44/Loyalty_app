@@ -117,11 +117,63 @@ async function recommendEvents({ userId, k = 10 }) {
   });
 }
 
+/**
+ * Прогноз годового LTV (annual ARPU в PRB) для одного пользователя.
+ * Возвращает { user_id, predicted_ltv, tier: 'low'|'mid'|'high' }.
+ */
+async function ltvPredict({ userId, features = null }) {
+  if (!userId) {
+    return { ok: false, error: 'userId is required' };
+  }
+  const body = { user_id: String(userId) };
+  if (features) body.features = features;
+  return callWithRetry('/ltv/predict', { method: 'POST', body });
+}
+
+/**
+ * Топ-N клиентов по предсказанному LTV.
+ * Возвращает { n, items: [{user_id, predicted_ltv, total_spent}] }.
+ */
+async function ltvTop({ n = 20 } = {}) {
+  const safeN = Math.max(1, Math.min(parseInt(n, 10) || 20, 100));
+  return callWithRetry(`/ltv/top?n=${safeN}`, { method: 'GET' });
+}
+
+/**
+ * Прогноз ежедневной выручки на horizon дней по window_days истории.
+ * Возвращает { horizon, total, daily, lower, upper, method, history_days }.
+ */
+async function forecastRevenue({ horizon = 30, windowDays = 180 } = {}) {
+  const safeH = Math.max(1, Math.min(parseInt(horizon, 10) || 30, 180));
+  const safeW = Math.max(14, Math.min(parseInt(windowDays, 10) || 180, 730));
+  return callWithRetry(
+    `/forecast/revenue?horizon=${safeH}&window_days=${safeW}`,
+    { method: 'GET' },
+  );
+}
+
+/**
+ * Скоринг последних транзакций IsolationForest.
+ * Возвращает { n_total, n_anomalies, items: [{user_id, amount, created_at, anomaly_score, is_anomaly}] }.
+ */
+async function detectAnomalies({ limit = 200, windowDays = 30 } = {}) {
+  const safeL = Math.max(1, Math.min(parseInt(limit, 10) || 200, 1000));
+  const safeW = Math.max(1, Math.min(parseInt(windowDays, 10) || 30, 365));
+  return callWithRetry(
+    `/anomaly/transactions?limit=${safeL}&window_days=${safeW}`,
+    { method: 'GET' },
+  );
+}
+
 module.exports = {
   health,
   rfmRecompute,
   churnPredict,
   recommendEvents,
+  ltvPredict,
+  ltvTop,
+  forecastRevenue,
+  detectAnomalies,
   // экспортируем для тестов
   _internals: { BASE_URL, TIMEOUT_MS, RETRIES },
 };

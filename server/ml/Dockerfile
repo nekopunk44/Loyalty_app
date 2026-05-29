@@ -11,6 +11,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
+# Обучаем модели на синтетике при сборке. Артефакты пишутся в /app/artifacts.
+# Размер обучающей выборки задаётся ARG TRAIN_N_USERS (по умолчанию 1500).
+ARG TRAIN_N_USERS=1500
+RUN python train.py --synthetic --n-users ${TRAIN_N_USERS}
+
 ENV PYTHONUNBUFFERED=1
 EXPOSE 8001
 
