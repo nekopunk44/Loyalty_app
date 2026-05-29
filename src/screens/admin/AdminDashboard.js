@@ -212,13 +212,18 @@ export default function AdminDashboard({ navigation }) {
 
   // Индекс оттока: взвешенная доля high+medium от опрошенных клиентов.
   // Формула совпадает с AdminChurnRisk, чтобы цифра не «гуляла» между экранами.
+  //
+  // Три состояния (нужны, чтобы не путать админа лейблом «ML offline»):
+  //   offline — ML/сеть отказали, цифр нет в принципе
+  //   empty   — ML отвечает, но в окне нет активных клиентов для скоринга
+  //   ok      — есть прогнозы
   const churnSummary = useMemo(() => {
-    if (!churnMeta?.counts) return null;
+    if (!churnMeta?.counts) return { status: 'offline' };
     const { high = 0, medium = 0, low = 0 } = churnMeta.counts;
     const total = high + medium + low;
-    if (total === 0) return { index: 0, total: 0, high, medium, low, partial: churnMeta.partial };
+    if (total === 0) return { status: 'empty' };
     const index = Math.round(((high * 1.0 + medium * 0.5) / total) * 100);
-    return { index, total, high, medium, low, partial: churnMeta.partial };
+    return { status: 'ok', index, total, high, medium, low, partial: churnMeta.partial };
   }, [churnMeta]);
 
   const alerts = useMemo(() => {
@@ -498,8 +503,8 @@ function KpiPill({ label, value, color, theme, compact }) {
  * чтобы админу не нужно было лезть в отдельный отчёт ради цифры.
  */
 function ChurnRiskCard({ summary, theme, onPress }) {
-  // ML недоступен — показываем off-state, но всё равно даём пройти на детали
-  if (!summary) {
+  // ML действительно не отвечает
+  if (summary.status === 'offline') {
     return (
       <TouchableOpacity
         activeOpacity={0.85}
@@ -518,6 +523,33 @@ function ChurnRiskCard({ summary, theme, onPress }) {
           </Text>
           <Text style={[styles.alertSub, { color: theme.colors.textSecondary }]} numberOfLines={1}>
             Открыть отчёт вручную
+          </Text>
+        </View>
+        <MaterialIcons name="chevron-right" size={20} color={theme.colors.textSecondary} />
+      </TouchableOpacity>
+    );
+  }
+
+  // ML работает, но активных клиентов в окне нет — это нормальное состояние пустого dashboard
+  if (summary.status === 'empty') {
+    return (
+      <TouchableOpacity
+        activeOpacity={0.85}
+        onPress={onPress}
+        style={[styles.churnCard, {
+          backgroundColor: theme.colors.cardBg,
+          borderColor: theme.colors.border,
+        }]}
+      >
+        <View style={[styles.alertIcon, { backgroundColor: '#34D39918' }]}>
+          <MaterialIcons name="insights" size={20} color="#10B981" />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.alertTitle, { color: theme.colors.text }]}>
+            Риск оттока · нет активных клиентов
+          </Text>
+          <Text style={[styles.alertSub, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+            Нечего скорить за последние 90 дней
           </Text>
         </View>
         <MaterialIcons name="chevron-right" size={20} color={theme.colors.textSecondary} />
