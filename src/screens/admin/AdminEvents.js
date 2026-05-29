@@ -497,9 +497,11 @@ export default function AdminEvents() {
               const delay = isNewEvent ? 0 : (200 + index * 50);
               const eventColor = event.color || theme.colors.primary;
               const statusColor = getStatusColor(event.status);
-              const typeLabel = event.eventType
-                ? (eventTypes.find(t => t.value === event.eventType)?.label || event.eventType)
+              const typeInfo = event.eventType
+                ? eventTypes.find(t => t.value === event.eventType)
                 : null;
+              const typeLabel = typeInfo?.label || event.eventType;
+              const typeIcon = typeInfo?.icon || 'event';
               const isDone = event.status === 'completed';
 
               return (
@@ -512,27 +514,40 @@ export default function AdminEvents() {
                         borderColor: theme.colors.border,
                       },
                     ]}
-                    activeOpacity={0.85}
+                    activeOpacity={0.9}
                     onPress={() => handleOpenModal(event)}
                   >
-                    {/* Header: type chip + status dot + actions */}
-                    <View style={styles.eventHeader}>
-                      <View style={styles.eventHeaderLeft}>
-                        {typeLabel && (
-                          <View style={[
-                            styles.typeChip,
-                            { backgroundColor: `${eventColor}1A`, borderColor: `${eventColor}55` },
-                          ]}>
-                            <Text style={[styles.typeChipText, { color: eventColor }]} numberOfLines={1}>
+                    {/* Top row: type icon + title block + actions */}
+                    <View style={styles.eventTop}>
+                      <View style={[
+                        styles.typeIconCircle,
+                        { backgroundColor: `${eventColor}1F`, borderColor: `${eventColor}40` },
+                      ]}>
+                        <MaterialIcons name={typeIcon} size={18} color={eventColor} />
+                      </View>
+
+                      <View style={styles.titleBlock}>
+                        <Text
+                          style={[styles.eventTitle, { color: theme.colors.text }]}
+                          numberOfLines={1}
+                        >
+                          {event.title}
+                        </Text>
+                        <View style={styles.titleSubRow}>
+                          {!!typeLabel && (
+                            <Text style={[styles.typeLabel, { color: eventColor }]} numberOfLines={1}>
                               {typeLabel}
                             </Text>
+                          )}
+                          {!!typeLabel && (
+                            <Text style={[styles.dotSep, { color: theme.colors.textSecondary }]}>·</Text>
+                          )}
+                          <View style={styles.statusInline}>
+                            <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+                            <Text style={[styles.statusInlineText, { color: theme.colors.textSecondary }]}>
+                              {getStatusLabel(event.status)}
+                            </Text>
                           </View>
-                        )}
-                        <View style={styles.statusInline}>
-                          <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-                          <Text style={[styles.statusInlineText, { color: theme.colors.textSecondary }]}>
-                            {getStatusLabel(event.status)}
-                          </Text>
                         </View>
                       </View>
 
@@ -565,34 +580,51 @@ export default function AdminEvents() {
                       </View>
                     </View>
 
-                    {/* Title + description */}
-                    <View style={styles.eventContent}>
-                      <Text style={[styles.eventTitle, { color: theme.colors.text }]} numberOfLines={1}>
-                        {event.title}
+                    {/* Description */}
+                    {!!event.description && (
+                      <Text
+                        style={[styles.eventDescription, { color: theme.colors.textSecondary }]}
+                        numberOfLines={2}
+                      >
+                        {event.description}
                       </Text>
-                      {!!event.description && (
-                        <Text
-                          style={[styles.eventDescription, { color: theme.colors.textSecondary }]}
-                          numberOfLines={2}
-                        >
-                          {event.description}
-                        </Text>
-                      )}
-                    </View>
+                    )}
 
-                    {/* Meta line: participants · period · access */}
-                    <View style={styles.metaRow}>
+                    {/* Prize hero */}
+                    {!!event.prize && (
+                      <View style={[
+                        styles.prizeBanner,
+                        {
+                          backgroundColor: `${theme.colors.success}14`,
+                          borderColor: `${theme.colors.success}33`,
+                        },
+                      ]}>
+                        <View style={styles.prizeLeft}>
+                          <MaterialIcons name="emoji-events" size={16} color={theme.colors.success} />
+                          <Text style={[styles.prizeLabel, { color: theme.colors.textSecondary }]}>Приз</Text>
+                        </View>
+                        <Text
+                          style={[styles.prizeValue, { color: theme.colors.success }]}
+                          numberOfLines={1}
+                        >
+                          {event.prize}
+                        </Text>
+                      </View>
+                    )}
+
+                    {/* Meta footer */}
+                    <View style={[styles.metaFooter, { borderTopColor: theme.colors.border }]}>
                       <View style={styles.metaItem}>
                         <MaterialIcons name="group" size={13} color={theme.colors.textSecondary} />
                         <Text style={[styles.metaText, { color: theme.colors.text }]}>
                           {event.participants || event.participantsCount || 0}
                         </Text>
                       </View>
-                      <Text style={[styles.metaSep, { color: theme.colors.textSecondary }]}>·</Text>
-                      <View style={[styles.metaItem, { flexShrink: 1 }]}>
+                      <View style={[styles.metaDivider, { backgroundColor: theme.colors.border }]} />
+                      <View style={[styles.metaItem, { flex: 1, minWidth: 0 }]}>
                         <MaterialIcons name="calendar-today" size={13} color={theme.colors.textSecondary} />
                         <Text
-                          style={[styles.metaText, { color: theme.colors.text }]}
+                          style={[styles.metaText, { color: theme.colors.text, flexShrink: 1 }]}
                           numberOfLines={1}
                         >
                           {event.startDate && event.endDate
@@ -600,7 +632,7 @@ export default function AdminEvents() {
                             : (event.startDate || event.endDate || '—')}
                         </Text>
                       </View>
-                      <Text style={[styles.metaSep, { color: theme.colors.textSecondary }]}>·</Text>
+                      <View style={[styles.metaDivider, { backgroundColor: theme.colors.border }]} />
                       <View style={[styles.metaItem, { flexShrink: 1 }]}>
                         <MaterialIcons name="shield" size={13} color={theme.colors.textSecondary} />
                         <Text
@@ -611,19 +643,6 @@ export default function AdminEvents() {
                         </Text>
                       </View>
                     </View>
-
-                    {/* Prize footer */}
-                    {!!event.prize && (
-                      <View style={[styles.prizeSection, { borderTopColor: theme.colors.border }]}>
-                        <MaterialIcons name="card-giftcard" size={15} color={theme.colors.success} />
-                        <Text
-                          style={[styles.prizeText, { color: theme.colors.success }]}
-                          numberOfLines={1}
-                        >
-                          {event.prize}
-                        </Text>
-                      </View>
-                    )}
                   </TouchableOpacity>
                 </FadeInCard>
               );
@@ -651,180 +670,207 @@ export default function AdminEvents() {
       <Modal visible={modalVisible} animationType="slide" transparent>
         <View style={styles.modalContainer}>
           <View style={[styles.modalContent, { backgroundColor: theme.colors.cardBg }]}>
+            {/* Drag handle */}
+            <View style={styles.dragHandleWrap}>
+              <View style={[styles.dragHandle, { backgroundColor: theme.colors.border }]} />
+            </View>
+
             {/* Modal Header */}
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
-                {editingEvent ? 'Редактировать событие' : 'Новое событие'}
-              </Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
-                <MaterialIcons name="close" size={24} color={theme.colors.text} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
+                  {editingEvent ? 'Редактировать событие' : 'Новое событие'}
+                </Text>
+                <Text style={[styles.modalSubtitle, { color: theme.colors.textSecondary }]}>
+                  {editingEvent ? 'Изменение параметров события' : 'Заполните параметры для запуска'}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setModalVisible(false)}
+                hitSlop={8}
+                style={[styles.modalCloseBtn, { backgroundColor: theme.colors.background }]}
+              >
+                <MaterialIcons name="close" size={20} color={theme.colors.text} />
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalBody}>
-              {/* Название события */}
-              <Text style={[styles.inputLabel, { color: theme.colors.text }]}>Название события</Text>
-              <TextInput
-                style={[styles.input, { backgroundColor: theme.colors.background, color: theme.colors.text, borderColor: theme.colors.border }]}
-                placeholder="Например: Двойной кешбек"
-                placeholderTextColor={theme.colors.textSecondary}
-                value={formData.title}
-                onChangeText={(text) =>
-                  setFormData({ ...formData, title: text })
-                }
-              />
+            <ScrollView
+              style={styles.modalBody}
+              contentContainerStyle={{ paddingBottom: 24 }}
+              showsVerticalScrollIndicator={false}
+            >
+              {/* === Секция: Основное === */}
+              <Text style={[styles.sectionLabel, { color: theme.colors.textSecondary }]}>Основное</Text>
 
-              {/* Описание */}
-              <Text style={[styles.inputLabel, { color: theme.colors.text }]}>Описание события</Text>
-              <TextInput
-                style={[styles.input, { minHeight: 80, backgroundColor: theme.colors.background, color: theme.colors.text, borderColor: theme.colors.border }]}
-                placeholder="Напишите подробное описание..."
-                placeholderTextColor={theme.colors.textSecondary}
-                multiline
-                value={formData.description}
-                onChangeText={(text) =>
-                  setFormData({ ...formData, description: text })
-                }
-              />
-
-              {/* Приз */}
-              <Text style={[styles.inputLabel, { color: theme.colors.text }]}>Приз</Text>
-              <TextInput
-                style={[styles.input, { backgroundColor: theme.colors.background, color: theme.colors.text, borderColor: theme.colors.border }]}
-                placeholder="Например: 50 000 PRB"
-                placeholderTextColor={theme.colors.textSecondary}
-                value={formData.prize}
-                onChangeText={(text) =>
-                  setFormData({ ...formData, prize: text })
-                }
-              />
-
-              {/* Дата начала события */}
-              <Text style={[styles.inputLabel, { color: theme.colors.text }]}>Дата начала события</Text>
-              <TouchableOpacity 
-                style={[styles.datePickerButton, { backgroundColor: theme.colors.background, borderColor: theme.colors.border }]}
-                onPress={() => setStartDatePickerVisible(true)}
-              >
-                <MaterialIcons name="calendar-today" size={20} color={theme.colors.primary} />
-                <Text style={[
-                  styles.datePickerButtonText,
-                  !formData.startDate && { color: theme.colors.textSecondary },
-                  { color: theme.colors.text }
-                ]}>
-                  {formData.startDate || 'ДД.МММ.ГГГГ'}
-                </Text>
-              </TouchableOpacity>
-
-              {/* Дата окончания события */}
-              <Text style={[styles.inputLabel, { color: theme.colors.text }]}>Дата окончания события</Text>
-              <TouchableOpacity 
-                style={[styles.datePickerButton, { backgroundColor: theme.colors.background, borderColor: theme.colors.border }]}
-                onPress={() => setEndDatePickerVisible(true)}
-              >
-                <MaterialIcons name="calendar-today" size={20} color={theme.colors.primary} />
-                <Text style={[
-                  styles.datePickerButtonText,
-                  !formData.endDate && { color: theme.colors.textSecondary },
-                  { color: theme.colors.text }
-                ]}>
-                  {formData.endDate || 'ДД.МММ.ГГГГ'}
-                </Text>
-              </TouchableOpacity>
-
-              {/* Тип события */}
-              <Text style={[styles.inputLabel, { color: theme.colors.text }]}>Тип события</Text>
-              <View style={styles.eventTypesGrid}>
-                {eventTypes.map((type) => (
-                  <TouchableOpacity
-                    key={type.value}
-                    style={[
-                      styles.eventTypeButton,
-                      { backgroundColor: theme.colors.background, borderColor: theme.colors.border },
-                      formData.eventType === type.value && {
-                        ...styles.optionButtonActive,
-                        backgroundColor: type.color,
-                        borderColor: type.color,
-                      },
-                    ]}
-                    onPress={() =>
-                      setFormData({ ...formData, eventType: type.value })
-                    }
-                  >
-                    <MaterialIcons 
-                      name={type.icon} 
-                      size={18} 
-                      color={formData.eventType === type.value ? '#fff' : type.color}
-                    />
-                    <Text
-                      style={[
-                        styles.gridOptionButtonText,
-                        { color: theme.colors.text },
-                        formData.eventType === type.value && {
-                          ...styles.optionButtonTextActive,
-                        },
-                      ]}
-                      numberOfLines={2}
-                      textAlign="center"
-                    >
-                      {type.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+              <View style={styles.fieldGroup}>
+                <Text style={[styles.fieldLabel, { color: theme.colors.textSecondary }]}>Название</Text>
+                <TextInput
+                  style={[styles.input, { backgroundColor: theme.colors.background, color: theme.colors.text, borderColor: theme.colors.border }]}
+                  placeholder="Например: Двойной кешбек"
+                  placeholderTextColor={theme.colors.textSecondary}
+                  value={formData.title}
+                  onChangeText={(text) => setFormData({ ...formData, title: text })}
+                />
               </View>
 
-              {/* Доступно для */}
-              <Text style={[styles.inputLabel, { color: theme.colors.text }]}>Доступно для</Text>
-              <View style={styles.userAccessGrid}>
-                {userTypes.map((type, index) => (
-                  <TouchableOpacity
-                    key={type.value}
-                    style={[
-                      styles.userAccessButton,
-                      { backgroundColor: theme.colors.background, borderColor: theme.colors.border },
-                      index === userTypes.length - 1 && { marginLeft: 'auto', marginRight: 'auto' },
-                      formData.allowedUsers === type.value && {
-                        ...styles.optionButtonActive,
-                        backgroundColor: type.color,
-                        borderColor: type.color,
-                      },
-                    ]}
-                    onPress={() =>
-                      setFormData({ ...formData, allowedUsers: type.value })
-                    }
-                  >
-                    <MaterialIcons 
-                      name={type.icon} 
-                      size={18} 
-                      color={formData.allowedUsers === type.value ? '#fff' : type.color}
-                    />
-                    <Text
-                      style={[
-                        styles.gridOptionButtonText,
-                        { color: theme.colors.text },
-                        formData.allowedUsers === type.value && {
-                          ...styles.optionButtonTextActive,
-                        },
-                      ]}
-                      numberOfLines={2}
-                      textAlign="center"
-                    >
-                      {type.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+              <View style={styles.fieldGroup}>
+                <Text style={[styles.fieldLabel, { color: theme.colors.textSecondary }]}>Описание</Text>
+                <TextInput
+                  style={[styles.input, styles.inputMultiline, { backgroundColor: theme.colors.background, color: theme.colors.text, borderColor: theme.colors.border }]}
+                  placeholder="Краткое описание..."
+                  placeholderTextColor={theme.colors.textSecondary}
+                  multiline
+                  textAlignVertical="top"
+                  value={formData.description}
+                  onChangeText={(text) => setFormData({ ...formData, description: text })}
+                />
               </View>
 
-              {/* Сохранить кнопку */}
-              <TouchableOpacity
-                style={[styles.submitButton, { backgroundColor: theme.colors.primary }]}
-                onPress={handleSaveEvent}
-              >
-                <MaterialIcons name="check" size={20} color="#fff" />
-                <Text style={styles.submitButtonText}>
-                  {editingEvent ? 'Обновить' : 'Создать'} событие
-                </Text>
-              </TouchableOpacity>
+              <View style={styles.fieldGroup}>
+                <Text style={[styles.fieldLabel, { color: theme.colors.textSecondary }]}>Приз</Text>
+                <View style={[styles.input, styles.inputWithSuffix, { backgroundColor: theme.colors.background, borderColor: theme.colors.border }]}>
+                  <MaterialIcons name="emoji-events" size={18} color={theme.colors.success} />
+                  <TextInput
+                    style={[styles.inputInner, { color: theme.colors.text }]}
+                    placeholder="Например: 50 000 PRB"
+                    placeholderTextColor={theme.colors.textSecondary}
+                    value={formData.prize}
+                    onChangeText={(text) => setFormData({ ...formData, prize: text })}
+                  />
+                </View>
+              </View>
+
+              {/* === Секция: Сроки === */}
+              <Text style={[styles.sectionLabel, { color: theme.colors.textSecondary, marginTop: spacing.md }]}>Сроки</Text>
+
+              <View style={styles.dateRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.fieldLabel, { color: theme.colors.textSecondary }]}>Начало</Text>
+                  <TouchableOpacity
+                    style={[styles.datePickerButton, { backgroundColor: theme.colors.background, borderColor: theme.colors.border }]}
+                    onPress={() => setStartDatePickerVisible(true)}
+                  >
+                    <MaterialIcons name="calendar-today" size={16} color={theme.colors.primary} />
+                    <Text style={[
+                      styles.datePickerButtonText,
+                      { color: formData.startDate ? theme.colors.text : theme.colors.textSecondary },
+                    ]}>
+                      {formData.startDate || 'ДД.ММ.ГГГГ'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.fieldLabel, { color: theme.colors.textSecondary }]}>Окончание</Text>
+                  <TouchableOpacity
+                    style={[styles.datePickerButton, { backgroundColor: theme.colors.background, borderColor: theme.colors.border }]}
+                    onPress={() => setEndDatePickerVisible(true)}
+                  >
+                    <MaterialIcons name="event" size={16} color={theme.colors.accent} />
+                    <Text style={[
+                      styles.datePickerButtonText,
+                      { color: formData.endDate ? theme.colors.text : theme.colors.textSecondary },
+                    ]}>
+                      {formData.endDate || 'ДД.ММ.ГГГГ'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* === Секция: Тип === */}
+              <Text style={[styles.sectionLabel, { color: theme.colors.textSecondary, marginTop: spacing.md }]}>Тип события</Text>
+              <View style={styles.chipGrid}>
+                {eventTypes.map((type) => {
+                  const active = formData.eventType === type.value;
+                  return (
+                    <TouchableOpacity
+                      key={type.value}
+                      style={[
+                        styles.selectChip,
+                        {
+                          backgroundColor: active ? `${type.color}1F` : theme.colors.background,
+                          borderColor: active ? type.color : theme.colors.border,
+                        },
+                      ]}
+                      activeOpacity={0.85}
+                      onPress={() => setFormData({ ...formData, eventType: type.value })}
+                    >
+                      <MaterialIcons
+                        name={type.icon}
+                        size={14}
+                        color={active ? type.color : theme.colors.textSecondary}
+                      />
+                      <Text
+                        style={[
+                          styles.selectChipText,
+                          { color: active ? type.color : theme.colors.text },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {type.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* === Секция: Доступ === */}
+              <Text style={[styles.sectionLabel, { color: theme.colors.textSecondary, marginTop: spacing.md }]}>Доступ</Text>
+              <View style={styles.chipGrid}>
+                {userTypes.map((type) => {
+                  const active = formData.allowedUsers === type.value;
+                  return (
+                    <TouchableOpacity
+                      key={type.value}
+                      style={[
+                        styles.selectChip,
+                        {
+                          backgroundColor: active ? `${type.color}1F` : theme.colors.background,
+                          borderColor: active ? type.color : theme.colors.border,
+                        },
+                      ]}
+                      activeOpacity={0.85}
+                      onPress={() => setFormData({ ...formData, allowedUsers: type.value })}
+                    >
+                      <MaterialIcons
+                        name={type.icon}
+                        size={14}
+                        color={active ? type.color : theme.colors.textSecondary}
+                      />
+                      <Text
+                        style={[
+                          styles.selectChipText,
+                          { color: active ? type.color : theme.colors.text },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {type.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
             </ScrollView>
+
+            {/* Sticky footer */}
+            <View style={[styles.modalFooter, { borderTopColor: theme.colors.border, backgroundColor: theme.colors.cardBg }]}>
+              <TouchableOpacity
+                style={[styles.footerSecondary, { borderColor: theme.colors.border }]}
+                onPress={() => setModalVisible(false)}
+                activeOpacity={0.85}
+              >
+                <Text style={[styles.footerSecondaryText, { color: theme.colors.text }]}>Отмена</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.footerPrimary, { backgroundColor: theme.colors.primary }]}
+                onPress={handleSaveEvent}
+                activeOpacity={0.85}
+              >
+                <MaterialIcons name="check" size={18} color="#fff" />
+                <Text style={styles.footerPrimaryText}>
+                  {editingEvent ? 'Сохранить' : 'Создать'}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -953,36 +999,54 @@ const styles = StyleSheet.create({
     backgroundColor: colors.cardBg,
     borderRadius: borderRadius.lg,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
+    paddingTop: spacing.md,
+    paddingBottom: 0,
     marginBottom: 10,
     borderWidth: 1,
     borderColor: colors.border,
+    overflow: 'hidden',
   },
-  eventHeader: {
+  eventTop: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
+    gap: 10,
     marginBottom: 8,
-    gap: spacing.sm,
   },
-  eventHeaderLeft: {
-    flexDirection: 'row',
+  typeIconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: 1,
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'center',
+  },
+  titleBlock: {
     flex: 1,
     minWidth: 0,
+    paddingTop: 1,
   },
-  typeChip: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 999,
-    borderWidth: 1,
-    maxWidth: '60%',
+  eventTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 2,
   },
-  typeChipText: {
-    fontSize: 10,
+  titleSubRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    flexWrap: 'nowrap',
+  },
+  typeLabel: {
+    fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.2,
+    flexShrink: 0,
+  },
+  dotSep: {
+    fontSize: 11,
+    fontWeight: '700',
+    opacity: 0.6,
   },
   statusInline: {
     flexDirection: 'row',
@@ -1001,7 +1065,7 @@ const styles = StyleSheet.create({
   },
   eventActions: {
     flexDirection: 'row',
-    gap: 4,
+    gap: 2,
     alignItems: 'center',
   },
   iconAction: {
@@ -1011,25 +1075,45 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  eventContent: {
-    marginBottom: 8,
-  },
-  eventTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.text,
-  },
   eventDescription: {
     fontSize: 12,
     color: colors.textSecondary,
-    marginTop: 2,
+    marginBottom: 10,
     lineHeight: 16,
   },
-  metaRow: {
+  prizeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    marginBottom: 10,
+    gap: 10,
+  },
+  prizeLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    flexWrap: 'nowrap',
+  },
+  prizeLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.2,
+  },
+  prizeValue: {
+    fontSize: 14,
+    fontWeight: '800',
+    flexShrink: 1,
+    textAlign: 'right',
+  },
+  metaFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    gap: 8,
   },
   metaItem: {
     flexDirection: 'row',
@@ -1041,25 +1125,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.text,
   },
-  metaSep: {
-    fontSize: 11,
-    fontWeight: '700',
-    opacity: 0.5,
-  },
-  prizeSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingTop: 8,
-    marginTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  prizeText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.success,
-    flex: 1,
+  metaDivider: {
+    width: 1,
+    height: 12,
+    opacity: 0.6,
   },
   emptyState: {
     alignItems: 'center',
@@ -1085,59 +1154,162 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     backgroundColor: colors.cardBg,
-    borderTopLeftRadius: borderRadius.xl,
-    borderTopRightRadius: borderRadius.xl,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.lg,
-    maxHeight: '90%',
+    paddingTop: 6,
+    paddingBottom: 0,
+    maxHeight: '92%',
+  },
+  dragHandleWrap: {
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  dragHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    opacity: 0.6,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.lg,
+    alignItems: 'flex-start',
+    marginBottom: spacing.md,
+    gap: spacing.md,
   },
   modalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 19,
+    fontWeight: '800',
     color: colors.text,
+  },
+  modalSubtitle: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  modalCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   modalBody: {
-    marginBottom: spacing.md,
+    marginBottom: 0,
   },
-  inputLabel: {
-    fontSize: 14,
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+  },
+  fieldGroup: {
+    marginBottom: 10,
+  },
+  fieldLabel: {
+    fontSize: 12,
     fontWeight: '600',
-    color: colors.text,
-    marginBottom: spacing.md,
+    marginBottom: 6,
   },
   input: {
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: borderRadius.md,
-    padding: spacing.md,
-    marginBottom: spacing.md,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     fontSize: 14,
     color: colors.text,
     backgroundColor: colors.background,
+  },
+  inputMultiline: {
+    minHeight: 70,
+    paddingTop: 10,
+  },
+  inputWithSuffix: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 6,
+  },
+  inputInner: {
+    flex: 1,
+    fontSize: 14,
+    paddingVertical: 4,
+  },
+  dateRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
   },
   datePickerButton: {
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: borderRadius.md,
-    padding: spacing.md,
-    marginBottom: spacing.md,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.background,
-    gap: spacing.md,
+    gap: 8,
   },
   datePickerButtonText: {
-    fontSize: 14,
+    fontSize: 13,
     color: colors.text,
-    fontWeight: '500',
+    fontWeight: '600',
     flex: 1,
+  },
+  chipGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  selectChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  selectChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+    borderTopWidth: 1,
+  },
+  footerSecondary: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  footerSecondaryText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  footerPrimary: {
+    flex: 2,
+    flexDirection: 'row',
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  footerPrimaryText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '800',
   },
   optionsContainer: {
     flexDirection: 'column',
