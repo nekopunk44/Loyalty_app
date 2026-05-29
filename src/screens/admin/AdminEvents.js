@@ -9,7 +9,13 @@ import {
   Modal,
   Alert,
   Animated,
+  Easing,
+  Dimensions,
+  PanResponder,
 } from 'react-native';
+
+const SCREEN_H = Dimensions.get('window').height;
+const SHEET_H  = SCREEN_H * 0.92;
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { colors, spacing, borderRadius } from '../../constants/theme';
 import { FadeInCard, ScaleInCard } from '../../components/ui/AnimatedCard';
@@ -29,7 +35,57 @@ export default function AdminEvents() {
   const bgColorAnim = useRef(new Animated.Value(0)).current;
   const cardColorAnim = useRef(new Animated.Value(0)).current;
   
-  const [modalVisible, setModalVisible] = useState(false);
+  // Bottom-sheet анимация в стиле NotificationBell:
+  // sheetMounted держит Modal в дереве, пока проигрывается close-анимация,
+  // sheetTranslateY двигает контент от SHEET_H к 0 при открытии и обратно при закрытии.
+  const [sheetMounted, setSheetMounted] = useState(false);
+  const sheetTranslateY = useRef(new Animated.Value(SHEET_H)).current;
+
+  const openEventModal = () => {
+    sheetTranslateY.setValue(SHEET_H);
+    setSheetMounted(true);
+    Animated.timing(sheetTranslateY, {
+      toValue: 0,
+      duration: 360,
+      easing: Easing.bezier(0.22, 1, 0.36, 1),
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const closeEventModal = () => {
+    Animated.timing(sheetTranslateY, {
+      toValue: SHEET_H,
+      duration: 280,
+      easing: Easing.bezier(0.4, 0, 0.2, 1),
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished) setSheetMounted(false);
+    });
+  };
+
+  // PanResponder для свайпа-вниз по drag-handle — закрывает sheet, как в NotificationBell.
+  const sheetPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, g) => g.dy > 4 && Math.abs(g.dy) > Math.abs(g.dx),
+      onPanResponderMove: (_, g) => {
+        if (g.dy > 0) sheetTranslateY.setValue(g.dy);
+      },
+      onPanResponderRelease: (_, g) => {
+        if (g.dy > 110 || g.vy > 0.8) {
+          closeEventModal();
+        } else {
+          Animated.spring(sheetTranslateY, {
+            toValue: 0,
+            useNativeDriver: true,
+            tension: 80,
+            friction: 12,
+          }).start();
+        }
+      },
+    }),
+  ).current;
+
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [startDatePickerVisible, setStartDatePickerVisible] = useState(false);
@@ -199,7 +255,7 @@ export default function AdminEvents() {
         eventType: 'auction',
       });
     }
-    setModalVisible(true);
+    openEventModal();
   };
 
   const handleSaveEvent = async () => {
@@ -248,8 +304,8 @@ export default function AdminEvents() {
           eventType: 'auction',
         });
         setEditingEvent(null);
-        setModalVisible(false);
-        
+        closeEventModal();
+
         Alert.alert('✅ Успех', 'Событие обновлено!');
       } else {
         const newEvent = await addEvent({
@@ -282,8 +338,8 @@ export default function AdminEvents() {
             eventType: 'auction',
           });
           
-          setModalVisible(false);
-          
+          closeEventModal();
+
           // Показываем Alert
           Alert.alert('✅ Успех', 'Событие создано!');
         } else {
@@ -725,27 +781,49 @@ export default function AdminEvents() {
         )}
       </Animated.ScrollView>
 
-      {/* Modal для создания/редактирования события */}
-      <Modal visible={modalVisible} animationType="slide" transparent>
+      {/* Modal для создания/редактирования события — bottom-sheet в стиле NotificationBell */}
+      <Modal
+        visible={sheetMounted}
+        animationType="none"
+        transparent
+        statusBarTranslucent
+        onRequestClose={closeEventModal}
+      >
         <View style={styles.modalContainer}>
-          <View style={[styles.modalContent, { backgroundColor: theme.colors.cardBg }]}>
-            {/* Drag handle */}
-            <View style={styles.dragHandleWrap}>
+          {/* Tap по backdrop закрывает sheet */}
+          <TouchableOpacity
+            style={StyleSheet.absoluteFillObject}
+            activeOpacity={1}
+            onPress={closeEventModal}
+          />
+          <Animated.View
+            style={[
+              styles.modalContent,
+              {
+                backgroundColor: theme.colors.cardBg,
+                height: SHEET_H,
+                transform: [{ translateY: sheetTranslateY }],
+              },
+            ]}
+          >
+            {/* Drag handle — реагирует на свайп вниз */}
+            <View style={styles.dragHandleWrap} {...sheetPanResponder.panHandlers}>
               <View style={[styles.dragHandle, { backgroundColor: theme.colors.border }]} />
             </View>
 
-            {/* Modal Header */}
+            {/* Modal Header — заголовок по центру, close-кнопка справа */}
             <View style={styles.modalHeader}>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
+              <View style={styles.modalHeaderSpacer} />
+              <View style={styles.modalHeaderCenter} pointerEvents="none">
+                <Text style={[styles.modalTitle, { color: theme.colors.text }]} numberOfLines={1}>
                   {editingEvent ? 'Редактировать событие' : 'Новое событие'}
                 </Text>
-                <Text style={[styles.modalSubtitle, { color: theme.colors.textSecondary }]}>
+                <Text style={[styles.modalSubtitle, { color: theme.colors.textSecondary }]} numberOfLines={1}>
                   {editingEvent ? 'Изменение параметров события' : 'Заполните параметры для запуска'}
                 </Text>
               </View>
               <TouchableOpacity
-                onPress={() => setModalVisible(false)}
+                onPress={closeEventModal}
                 hitSlop={8}
                 style={[styles.modalCloseBtn, { backgroundColor: theme.colors.background }]}
               >
@@ -982,7 +1060,7 @@ export default function AdminEvents() {
             <View style={[styles.modalFooter, { borderTopColor: theme.colors.border, backgroundColor: theme.colors.cardBg }]}>
               <TouchableOpacity
                 style={[styles.footerSecondary, { borderColor: theme.colors.border }]}
-                onPress={() => setModalVisible(false)}
+                onPress={closeEventModal}
                 activeOpacity={0.85}
               >
                 <Text style={[styles.footerSecondaryText, { color: theme.colors.text }]}>Отмена</Text>
@@ -998,7 +1076,7 @@ export default function AdminEvents() {
                 </Text>
               </TouchableOpacity>
             </View>
-          </View>
+          </Animated.View>
         </View>
       </Modal>
 
@@ -1320,21 +1398,26 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(6, 18, 30, 0.46)',
     justifyContent: 'flex-end',
   },
   modalContent: {
     backgroundColor: colors.cardBg,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
     paddingHorizontal: spacing.md,
     paddingTop: 6,
     paddingBottom: 0,
-    maxHeight: '92%',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -10 },
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    elevation: 18,
   },
   dragHandleWrap: {
     alignItems: 'center',
-    paddingVertical: 6,
+    paddingVertical: 8,
   },
   dragHandle: {
     width: 40,
@@ -1344,21 +1427,26 @@ const styles = StyleSheet.create({
   },
   modalHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     marginBottom: spacing.md,
-    gap: spacing.md,
+    gap: spacing.sm,
   },
+  // Распорка слева той же ширины, что закрывающая кнопка справа —
+  // заголовок встаёт ровно по центру при flex-row раскладке.
+  modalHeaderSpacer: { width: 32 },
+  modalHeaderCenter: { flex: 1, alignItems: 'center', minWidth: 0 },
   modalTitle: {
     fontSize: 19,
     fontWeight: '800',
     color: colors.text,
+    textAlign: 'center',
   },
   modalSubtitle: {
     fontSize: 12,
     color: colors.textSecondary,
     marginTop: 2,
     fontWeight: '500',
+    textAlign: 'center',
   },
   modalCloseBtn: {
     width: 32,
