@@ -17,13 +17,13 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { apiCall } from '../../utils/api';
 import { getApiUrl } from '../../utils/apiUrl';
+import { properties as PROPERTY_CATALOG } from '../../constants/properties';
 
 const LEVEL_GRADIENT_TOP = {
   Platinum: '#7B2FF7', Gold: '#CC8800', Silver: '#606060', Bronze: '#7A5030',
 };
 
 const asNumber = value => Number(value || 0);
-const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const formatNumber = value => asNumber(value).toLocaleString('ru-RU');
 const formatMoney = value => `${Math.round(asNumber(value)).toLocaleString('ru-RU')} PRB`;
 
@@ -32,8 +32,62 @@ const TEAL  = '#14B8A6';
 const TEAL2 = '#0F766E';
 const AMBER = '#F59E0B';
 const NAVY2 = '#0B5C7A';
+const RED   = '#DC2626';
 
-const BAR_HEIGHT = 120;
+// Dark «command center» — те же значения, что в AdminFinanceDashboard,
+// чтобы ML-карточки на разных экранах визуально складывались в один язык.
+const HERO = {
+  bg:       '#0B1426',
+  bgLayer:  '#10203A',
+  cardLine: 'rgba(255,255,255,0.08)',
+  ink:      '#F8FAFC',
+  inkDim:   '#94A3B8',
+  inkFaint: '#64748B',
+};
+const HERO_INK_DIM = HERO.inkDim;
+
+const propertyNameById = (id) => {
+  if (id == null) return null;
+  const found = PROPERTY_CATALOG.find(p => String(p.id) === String(id));
+  return found?.name || null;
+};
+
+const getGreeting = () => {
+  const h = new Date().getHours();
+  if (h < 5)  return 'Доброй ночи';
+  if (h < 12) return 'Доброе утро';
+  if (h < 18) return 'Добрый день';
+  return 'Добрый вечер';
+};
+
+const formatTodayDate = () => {
+  const months = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+  const d = new Date();
+  return `${d.getDate()} ${months[d.getMonth()]}`;
+};
+
+const formatTimeAgo = (input) => {
+  if (!input) return '';
+  const d = new Date(input);
+  const diff = Date.now() - d.getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1)   return 'только что';
+  if (m < 60)  return `${m} мин назад`;
+  const h = Math.floor(m / 60);
+  if (h < 24)  return `${h} ч назад`;
+  const days = Math.floor(h / 24);
+  if (days === 1) return 'вчера';
+  if (days < 7)   return `${days} дн назад`;
+  return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+};
+
+const STATUS_META = {
+  pending:   { color: AMBER, label: 'Ожидает' },
+  confirmed: { color: NAVY2, label: 'Подтверждено' },
+  completed: { color: TEAL2, label: 'Завершено' },
+  cancelled: { color: RED,   label: 'Отменено' },
+  canceled:  { color: RED,   label: 'Отменено' },
+};
 
 export default function AdminDashboard({ navigation }) {
   const { user } = useAuth();
@@ -42,6 +96,7 @@ export default function AdminDashboard({ navigation }) {
   const [stats,      setStats]      = useState(null);
   const [bookings,   setBookings]   = useState([]);
   const [events,     setEvents]     = useState([]);
+  const [churnMeta,  setChurnMeta]  = useState(null); // { counts: {high, medium, low}, scanned, predicted, partial }
   const [loading,    setLoading]    = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -86,15 +141,28 @@ export default function AdminDashboard({ navigation }) {
 
   const load = useCallback(async () => {
     try {
-      const [statsRes, bookingsRes, eventsRes] = await Promise.all([
+      const [statsRes, bookingsRes, eventsRes, churnRes] = await Promise.all([
         apiCall(`${getApiUrl()}/admin/stats`),
         apiCall(`${getApiUrl()}/bookings`),
         apiCall(`${getApiUrl()}/events`),
+        // Только мета — счётчики high/medium/low. Сами имена клиентов нужны лишь на AdminChurnRisk.
+        apiCall(`${getApiUrl()}/admin/churn-risk?limit=200&windowDays=90`).catch(() => null),
       ]);
 
-      if (statsRes.success)   setStats(statsRes);
+      if (statsRes.success)    setStats(statsRes);
       if (bookingsRes.success) setBookings(bookingsRes.bookings || []);
       if (eventsRes.success)   setEvents(eventsRes.events || []);
+      // Принимаем и success-ответ, и partial-ответ от 503 (ML offline, но meta всё равно может прийти).
+      if (churnRes && (churnRes.success || churnRes.partial)) {
+        setChurnMeta({
+          counts:    churnRes.meta?.counts || null,
+          scanned:   churnRes.meta?.scanned ?? null,
+          predicted: churnRes.meta?.predicted ?? null,
+          partial:   !!churnRes.partial || !churnRes.success,
+        });
+      } else {
+        setChurnMeta(null);
+      }
     } catch (e) {
       console.error('AdminDashboard load error:', e);
     } finally {
@@ -108,74 +176,80 @@ export default function AdminDashboard({ navigation }) {
   const onRefresh = () => { setRefreshing(true); load(); };
 
   const dashboard = useMemo(() => {
-    const period = stats?.statsPerPeriod?.month || {};
-    const totalUsers    = asNumber(period.users);
-    const totalBookings = asNumber(period.purchases);
-    const totalRevenue  = asNumber(period.revenue);
-    const premiumUsers  = asNumber(period.premium);
+    const period       = stats?.statsPerPeriod?.month || {};
+    const totalUsers   = asNumber(period.users);
+    const premiumUsers = asNumber(period.premium);
 
-    const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000);
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const isToday  = (raw) => raw && new Date(raw) >= startOfDay;
+    const isPaid   = (b) => b.status === 'completed' || b.status === 'confirmed';
+
+    const todayBookings = bookings.filter(b => isToday(b.createdAt || b.date)).length;
+    const todayRevenue  = bookings
+      .filter(b => isToday(b.createdAt || b.date) && isPaid(b))
+      .reduce((sum, b) => sum + asNumber(b.totalPrice), 0);
 
     const pendingBookings = bookings.filter(b => b.status === 'pending').length;
-    const completedBookings = bookings.filter(b => b.status === 'completed').length;
-    const recentBookings = bookings.filter(b => new Date(b.createdAt || b.date) > twelveHoursAgo).length;
-
-    const conversionRate = totalBookings > 0 ? (completedBookings / totalBookings) * 100 : 0;
-    const averageBooking = totalBookings > 0 ? totalRevenue / totalBookings : 0;
 
     const activeEvents = events.filter(e => {
       const s = (e.status || '').toLowerCase();
       return s === 'active' || s === 'активный';
     }).length;
-    const activeEventsRate = events.length > 0 ? (activeEvents / events.length) * 100 : 0;
 
-    // Пульс бизнеса — оборот по объектам
-    const propertyRevMap = {};
-    bookings.forEach(b => {
-      if (b.status === 'completed' || b.status === 'confirmed') {
-        const key = b.propertyId || 'other';
-        propertyRevMap[key] = (propertyRevMap[key] || 0) + asNumber(b.totalPrice);
-      }
-    });
-    const barValues = stats?.properties?.length
-      ? stats.properties.map(p => asNumber(p.revenue))
-      : Object.values(propertyRevMap);
-    const chartValues = barValues.length > 0 ? barValues.slice(0, 7) : [0];
-    const chartMax = Math.max(...chartValues, 1);
-
-    const hasActivity = totalBookings > 0 || activeEvents > 0;
-    const healthScore = hasActivity
-      ? clamp(conversionRate * 0.55 + activeEventsRate * 0.25 + (totalRevenue > 0 ? 20 : 0) - pendingBookings * 2, 5, 96)
-      : null;
-
-    // AI рекомендации = количество реальных сигналов (ожидающие + нет событий)
-    let aiCount = 0;
-    if (pendingBookings > 0) aiCount++;
-    if (activeEvents === 0) aiCount++;
-    if (premiumUsers > 0 && totalBookings === 0) aiCount++;
+    const recentBookings = [...bookings]
+      .sort((a, b) => new Date(b.createdAt || b.date) - new Date(a.createdAt || a.date))
+      .slice(0, 6);
 
     return {
-      totalUsers, totalBookings, totalRevenue, premiumUsers,
-      averageBooking, conversionRate, activeEventsRate,
-      healthScore, pendingBookings, recentBookings,
-      activeEvents, chartValues, chartMax, aiCount,
+      totalUsers, premiumUsers,
+      todayBookings, todayRevenue,
+      pendingBookings, activeEvents,
+      recentBookings,
     };
   }, [stats, bookings, events]);
 
-  const focusItems = [
-    dashboard.pendingBookings > 0
-      ? { title: 'Бронирований на проверку', value: dashboard.pendingBookings, icon: 'priority-high', color: AMBER, route: 'AdminBooking' }
-      : { title: 'Платежи без критики', value: 'OK', icon: 'verified', color: TEAL2, route: 'AdminFinance' },
-    dashboard.activeEvents > 0
-      ? { title: 'Активных событий', value: dashboard.activeEvents, icon: 'local-fire-department', color: NAVY2, route: 'AdminEvents' }
-      : { title: 'Нет активных событий', value: '0', icon: 'campaign', color: NAVY2, route: 'AdminEvents' },
-    { title: 'AI сигналов', value: dashboard.aiCount, icon: 'auto-awesome', color: TEAL, route: 'AdminStats' },
-  ];
+  // Индекс оттока: взвешенная доля high+medium от опрошенных клиентов.
+  // Формула совпадает с AdminChurnRisk, чтобы цифра не «гуляла» между экранами.
+  const churnSummary = useMemo(() => {
+    if (!churnMeta?.counts) return null;
+    const { high = 0, medium = 0, low = 0 } = churnMeta.counts;
+    const total = high + medium + low;
+    if (total === 0) return { index: 0, total: 0, high, medium, low, partial: churnMeta.partial };
+    const index = Math.round(((high * 1.0 + medium * 0.5) / total) * 100);
+    return { index, total, high, medium, low, partial: churnMeta.partial };
+  }, [churnMeta]);
+
+  const alerts = useMemo(() => {
+    const list = [];
+    if (dashboard.pendingBookings > 0) {
+      list.push({
+        key: 'pending',
+        icon: 'pending-actions',
+        color: AMBER,
+        title: `${dashboard.pendingBookings} ${pluralRu(dashboard.pendingBookings, 'бронирование', 'бронирования', 'бронирований')} ждут подтверждения`,
+        sub: 'Проверьте и подтвердите оплату',
+        route: 'AdminFinance',
+      });
+    }
+    if (dashboard.activeEvents === 0 && events.length > 0) {
+      list.push({
+        key: 'no-events',
+        icon: 'campaign',
+        color: NAVY2,
+        title: 'Нет активных событий',
+        sub: 'Опубликуйте следующее, чтобы поддержать вовлечённость',
+        route: 'AdminEvents',
+      });
+    }
+    return list;
+  }, [dashboard, events]);
 
   if (loading) {
     return (
       <View style={[styles.centered, { backgroundColor: theme.colors.background }]}>
-        <ActivityIndicator size="large" color={TEAL} />
+        <ActivityIndicator size="large" color={theme.colors.primary} />
         <Text style={[styles.loadingText, { color: theme.colors.textSecondary }]}>Загрузка данных...</Text>
       </View>
     );
@@ -183,430 +257,490 @@ export default function AdminDashboard({ navigation }) {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
-    <ScrollView
-      style={styles.root}
-      contentContainerStyle={styles.container}
-      showsVerticalScrollIndicator={false}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[TEAL]} tintColor={TEAL} />}
-    >
-      {/* ── Hero command card ── */}
-      <View style={styles.commandCard}>
-        <View style={styles.commandTop}>
-          <View style={styles.commandText}>
-            <View style={styles.commandEyebrowRow}>
-              <View style={styles.eyebrowAccent} />
-              <Text style={styles.commandEyebrow}>Операционный центр</Text>
+      <ScrollView
+        style={styles.root}
+        contentContainerStyle={styles.container}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[theme.colors.primary]} tintColor={theme.colors.primary} />}
+      >
+        {/* ── Hero greeting ── */}
+        <View style={styles.heroCard}>
+          <View style={styles.heroTopRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.heroEyebrow}>
+                {getGreeting()}, {formatTodayDate()}
+              </Text>
+              <Text style={styles.heroName} numberOfLines={1}>
+                {user?.displayName || user?.name || 'Администратор'}
+              </Text>
             </View>
-            <Text style={styles.commandTitle}>{user?.displayName || 'Администратор'}</Text>
-            <Text style={styles.commandSubtitle}>Быстрый контроль продаж, событий и финансов</Text>
+            <View style={styles.heroBadge}>
+              <MaterialIcons name="shield" size={14} color="#fff" />
+              <Text style={styles.heroBadgeText}>ADMIN</Text>
+            </View>
           </View>
-          {dashboard.healthScore !== null && (
-            <View style={styles.commandScore}>
-              <Text style={styles.scoreValue}>{Math.round(dashboard.healthScore)}</Text>
-              <Text style={styles.scoreLabel}>SCORE</Text>
+          <Text style={styles.heroSubtitle}>
+            {dashboard.todayBookings > 0
+              ? `Сегодня уже ${dashboard.todayBookings} ${pluralRu(dashboard.todayBookings, 'бронирование', 'бронирования', 'бронирований')} · ${formatMoney(dashboard.todayRevenue)}`
+              : 'Сегодня пока без активности — самое время связаться с клиентами'}
+          </Text>
+        </View>
+
+        {/* ── Quick actions ── */}
+        <View style={styles.actionsRow}>
+          <ActionTile theme={theme} icon="qr-code-scanner" label="Сканировать" sub="QR клиента" color={TEAL}   onPress={openScanner} />
+          <ActionTile theme={theme} icon="payments"        label="Платёж"      sub="новый"     color={NAVY2}  onPress={() => navigation.navigate('AdminFinance')} />
+          <ActionTile theme={theme} icon="event-available" label="Событие"     sub="создать"   color={AMBER}  onPress={() => navigation.navigate('AdminEvents')} />
+          <ActionTile theme={theme} icon="person-search"   label="Клиент"      sub="найти"     color={TEAL2}  onPress={() => navigation.navigate('AdminUsers')} />
+        </View>
+
+        {/* ── KPI strip ── */}
+        <View style={styles.kpiStrip}>
+          <KpiPill label="Сегодня броней"   value={formatNumber(dashboard.todayBookings)} color={NAVY2} theme={theme} />
+          <KpiPill label="Сегодня оборот"   value={formatMoney(dashboard.todayRevenue)}   color={TEAL}  theme={theme} compact />
+          <KpiPill label="Всего клиентов"   value={formatNumber(dashboard.totalUsers)}    color={AMBER} theme={theme} />
+        </View>
+
+        {/* ── Alerts ── */}
+        {alerts.length > 0 && (
+          <View style={{ marginBottom: spacing.md, gap: spacing.sm }}>
+            {alerts.map(a => (
+              <TouchableOpacity
+                key={a.key}
+                activeOpacity={0.85}
+                onPress={() => navigation.navigate(a.route)}
+                style={[styles.alertCard, {
+                  backgroundColor: theme.colors.cardBg,
+                  borderColor: theme.colors.border,
+                  borderLeftColor: a.color,
+                }]}
+              >
+                <View style={[styles.alertIcon, { backgroundColor: `${a.color}18` }]}>
+                  <MaterialIcons name={a.icon} size={20} color={a.color} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.alertTitle, { color: theme.colors.text }]} numberOfLines={2}>{a.title}</Text>
+                  <Text style={[styles.alertSub, { color: theme.colors.textSecondary }]} numberOfLines={1}>{a.sub}</Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={20} color={theme.colors.textSecondary} />
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        {/* ── ML: Churn Risk Index (живой) ── */}
+        <ChurnRiskCard
+          summary={churnSummary}
+          theme={theme}
+          onPress={() => navigation.navigate('AdminChurnRisk')}
+        />
+
+        {/* ── Recent activity feed ── */}
+        <View style={[styles.panel, { backgroundColor: theme.colors.cardBg, borderColor: theme.colors.border }]}>
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Последние бронирования</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('AdminFinance')}>
+              <Text style={[styles.linkText, { color: TEAL }]}>Все →</Text>
+            </TouchableOpacity>
+          </View>
+
+          {dashboard.recentBookings.length === 0 ? (
+            <View style={styles.emptyState}>
+              <MaterialIcons name="inbox" size={40} color={theme.colors.textSecondary} />
+              <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>
+                Пока ничего не происходит
+              </Text>
             </View>
+          ) : (
+            dashboard.recentBookings.map((b, i) => (
+              <BookingItem
+                key={b.id || i}
+                booking={b}
+                theme={theme}
+                last={i === dashboard.recentBookings.length - 1}
+              />
+            ))
           )}
         </View>
 
-        <View style={styles.commandStatsDivider} />
-        <View style={styles.commandStats}>
-          <SmallStat label="Оборот"    value={formatMoney(dashboard.totalRevenue)} />
-          <View style={styles.commandStatDivider} />
-          <SmallStat label="Конверсия" value={`${dashboard.conversionRate.toFixed(1)}%`} />
-          <View style={styles.commandStatDivider} />
-          <SmallStat label="Событий"   value={`${dashboard.activeEvents}`} />
-        </View>
-      </View>
+        <View style={{ height: 20 }} />
+      </ScrollView>
 
-      {/* ── KPI grid ── */}
-      <View style={styles.kpiRow}>
-        <KpiCard icon="people"   label="Клиенты"       value={formatNumber(dashboard.totalUsers)}    color={NAVY2} theme={theme} />
-        <KpiCard icon="bookmark" label="Бронирования"  value={formatNumber(dashboard.totalBookings)} color={TEAL}  theme={theme} />
-      </View>
-      <View style={styles.kpiRow}>
-        <KpiCard icon="payments" label="Средний чек"   value={formatMoney(dashboard.averageBooking)} color={TEAL2} theme={theme} />
-        <KpiCard icon="workspace-premium" label="Премиум клиентов" value={formatNumber(dashboard.premiumUsers)} color={AMBER} theme={theme} />
-      </View>
+      {/* ── QR Scanner Modal ── */}
+      <Modal visible={scannerVisible} animationType="slide" onRequestClose={() => setScannerVisible(false)}>
+        <View style={styles.scanScreen}>
+          {!scannedUser ? (
+            <>
+              <CameraView
+                style={StyleSheet.absoluteFill}
+                facing="back"
+                onBarcodeScanned={scanned ? undefined : handleQrScanned}
+                barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+              />
+              <View style={styles.scanVignette} pointerEvents="none" />
 
-      {/* ── Focus panel ── */}
-      <View style={[styles.panel, { backgroundColor: theme.colors.cardBg, borderColor: theme.colors.border }]}>
-        <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Фокус администратора</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('AdminStats')}>
-            <View style={[styles.aiChip, { backgroundColor: `${TEAL}18`, borderColor: `${TEAL}40` }]}>
-              <MaterialIcons name="auto-awesome" size={14} color={TEAL} />
-              <Text style={[styles.aiChipText, { color: TEAL }]}>AI</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
-        <View style={styles.focusGrid}>
-          {focusItems.map(item => (
-            <TouchableOpacity
-              key={item.title}
-              style={[styles.focusCard, { backgroundColor: `${item.color}10`, borderColor: `${item.color}30` }]}
-              onPress={() => navigation.navigate(item.route)}
-            >
-              <View style={[styles.focusIcon, { backgroundColor: item.color }]}>
-                <MaterialIcons name={item.icon} size={20} color="#fff" />
+              <View style={styles.scanReticleWrap} pointerEvents="none">
+                <Animated.View style={[styles.scanReticle, { transform: [{ scale: pulseAnim }] }]}>
+                  <View style={[styles.scanCorner, styles.scanCornerTL]} />
+                  <View style={[styles.scanCorner, styles.scanCornerTR]} />
+                  <View style={[styles.scanCorner, styles.scanCornerBL]} />
+                  <View style={[styles.scanCorner, styles.scanCornerBR]} />
+                </Animated.View>
+                <Text style={styles.scanHint}>Наведите камеру на QR-код клиента</Text>
               </View>
-              <Text style={[styles.focusValue, { color: item.color }]}>{item.value}</Text>
-              <Text style={[styles.focusTitle, { color: theme.colors.text }]}>{item.title}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
 
-      {/* ── ML: панель риска оттока ── */}
-      <TouchableOpacity
-        activeOpacity={0.85}
-        onPress={() => navigation.navigate('AdminChurnRisk')}
-        style={[styles.panel, {
-          backgroundColor: theme.colors.cardBg,
-          borderColor: `${AMBER}50`,
-          borderLeftWidth: 4,
-          borderLeftColor: AMBER,
-        }]}
-      >
-        <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Риск оттока клиентов</Text>
-          <View style={[styles.aiChip, { backgroundColor: `${AMBER}20`, borderColor: `${AMBER}50` }]}>
-            <MaterialIcons name="auto-awesome" size={14} color={AMBER} />
-            <Text style={[styles.aiChipText, { color: AMBER }]}>ML</Text>
-          </View>
-        </View>
-        <Text style={[styles.sectionHint, { color: theme.colors.textSecondary, marginTop: 2 }]}>
-          Прогноз ухода клиентов от градиентного бустинга. Откройте таблицу — отправьте ретеншн-предложение по группе риска.
-        </Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10, gap: 6 }}>
-          <Text style={{ fontSize: 12, fontWeight: '700', color: AMBER }}>Открыть панель</Text>
-          <MaterialIcons name="arrow-forward" size={14} color={AMBER} />
-        </View>
-      </TouchableOpacity>
-
-      {/* ── Business pulse panel ── */}
-      <View style={[styles.panel, { backgroundColor: theme.colors.cardBg, borderColor: theme.colors.border }]}>
-        <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Пульс бизнеса</Text>
-          <Text style={[styles.sectionHint, { color: theme.colors.textSecondary }]}>по объектам</Text>
-        </View>
-
-        {/* Bar chart — pixel heights, no string % */}
-        <View style={[styles.chart, { height: BAR_HEIGHT }]}>
-          {dashboard.chartValues.map((value, index) => {
-            const barH = Math.max(
-              Math.round((value / dashboard.chartMax) * (BAR_HEIGHT - 8)),
-              value > 0 ? 10 : 4
-            );
-            const isLast = index === dashboard.chartValues.length - 1;
-            const label = stats?.properties?.[index]?.name
-              ? stats.properties[index].name.slice(0, 5)
-              : `#${index + 1}`;
-            return (
-              <View key={index} style={styles.chartColumn}>
-                <View style={[
-                  styles.chartBar,
-                  {
-                    height: barH,
-                    backgroundColor: isLast ? AMBER : TEAL,
-                    opacity: isLast ? 1 : 0.75,
-                  },
-                ]} />
-                <Text style={[styles.chartLabel, { color: theme.colors.textSecondary }]} numberOfLines={1}>
-                  {label}
-                </Text>
-              </View>
-            );
-          })}
-        </View>
-
-        <MetricRow
-          label="Активность событий"
-          value={`${dashboard.activeEventsRate.toFixed(1)}%`}
-          progress={dashboard.activeEventsRate}
-          color={TEAL2}
-          theme={theme}
-        />
-        <MetricRow
-          label="Конверсия бронирований"
-          value={`${dashboard.conversionRate.toFixed(1)}%`}
-          progress={dashboard.conversionRate}
-          color={NAVY2}
-          theme={theme}
-        />
-      </View>
-
-      {/* ── Recent activity ── */}
-      <View style={[styles.panel, { backgroundColor: theme.colors.cardBg, borderColor: theme.colors.border }]}>
-        <Text style={[styles.sectionTitle, { color: theme.colors.text, marginBottom: spacing.md }]}>
-          Последняя активность
-        </Text>
-        <ActivityRow
-          color={NAVY2}
-          title={`${dashboard.recentBookings} бронирований`}
-          subtitle="за последние 12 часов"
-          theme={theme}
-        />
-        <ActivityRow
-          color={AMBER}
-          title={`${dashboard.pendingBookings} ожидают подтверждения`}
-          subtitle="требуют внимания"
-          theme={theme}
-        />
-        <ActivityRow
-          color={TEAL2}
-          title={`${dashboard.activeEvents} активных событий`}
-          subtitle="проводятся сейчас"
-          theme={theme}
-          last
-        />
-      </View>
-
-      <View style={{ height: 90 }} />
-    </ScrollView>
-
-    {/* ── Floating scan button ── */}
-    <TouchableOpacity style={styles.scanFab} onPress={openScanner} activeOpacity={0.85}>
-      <MaterialIcons name="qr-code-scanner" size={22} color="#fff" />
-      <Text style={styles.scanFabText}>Сканировать QR</Text>
-    </TouchableOpacity>
-
-    {/* ── QR Scanner Modal ── */}
-    <Modal visible={scannerVisible} animationType="slide" onRequestClose={() => setScannerVisible(false)}>
-      <View style={styles.scanScreen}>
-        {!scannedUser ? (
-          <>
-            <CameraView
-              style={StyleSheet.absoluteFill}
-              facing="back"
-              onBarcodeScanned={scanned ? undefined : handleQrScanned}
-              barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-            />
-            {/* Dark vignette overlay */}
-            <View style={styles.scanVignette} pointerEvents="none" />
-
-            {/* Reticle */}
-            <View style={styles.scanReticleWrap} pointerEvents="none">
-              <Animated.View style={[styles.scanReticle, { transform: [{ scale: pulseAnim }] }]}>
-                <View style={[styles.scanCorner, styles.scanCornerTL]} />
-                <View style={[styles.scanCorner, styles.scanCornerTR]} />
-                <View style={[styles.scanCorner, styles.scanCornerBL]} />
-                <View style={[styles.scanCorner, styles.scanCornerBR]} />
-              </Animated.View>
-              <Text style={styles.scanHint}>Наведите камеру на QR-код клиента</Text>
-            </View>
-
-            {/* Close */}
-            <TouchableOpacity style={styles.scanCloseBtn} onPress={() => setScannerVisible(false)}>
-              <MaterialIcons name="close" size={22} color="#fff" />
-            </TouchableOpacity>
-          </>
-        ) : (
-          /* ── Scan result ── */
-          <View style={styles.scanResult}>
-            <View style={[styles.scanResultHeader, { backgroundColor: LEVEL_GRADIENT_TOP[scannedUser.level] || LEVEL_GRADIENT_TOP.Bronze }]}>
-              <View style={styles.scanResultDecor1} />
-              <View style={styles.scanResultDecor2} />
-              <View style={styles.scanResultCheckRow}>
-                <View style={styles.scanResultCheck}>
-                  <MaterialIcons name="check" size={22} color="#fff" />
-                </View>
-                <Text style={styles.scanResultVerified}>Клиент идентифицирован</Text>
-              </View>
-              <Text style={styles.scanResultName}>{scannedUser.name || 'Пользователь'}</Text>
-              <Text style={styles.scanResultId}>ID: {scannedUser.userId}</Text>
-              <View style={styles.scanResultLevelRow}>
-                <Text style={styles.scanResultLevelText}>{(scannedUser.level || 'Bronze').toUpperCase()}</Text>
-              </View>
-            </View>
-
-            <View style={styles.scanResultBody}>
-              <View style={styles.scanResultStats}>
-                {[
-                  { label: 'Бронирований', value: scannedUser.bookings ?? '—', icon: 'event-note',           color: '#FF6B35' },
-                  { label: 'Баланс PRB',   value: scannedUser.balance  != null ? Number(scannedUser.balance).toLocaleString('ru-RU') : '—', icon: 'account-balance-wallet', color: TEAL },
-                ].map((s, i, arr) => (
-                  <View key={s.label} style={[styles.scanResultStatBox, i < arr.length - 1 && { borderRightWidth: 1, borderRightColor: '#eee' }]}>
-                    <View style={[styles.scanResultStatIcon, { backgroundColor: `${s.color}15` }]}>
-                      <MaterialIcons name={s.icon} size={22} color={s.color} />
-                    </View>
-                    <Text style={[styles.scanResultStatValue, { color: '#1a1a2e' }]}>{s.value}</Text>
-                    <Text style={styles.scanResultStatLabel}>{s.label}</Text>
+              <TouchableOpacity style={styles.scanCloseBtn} onPress={() => setScannerVisible(false)}>
+                <MaterialIcons name="close" size={22} color="#fff" />
+              </TouchableOpacity>
+            </>
+          ) : (
+            <View style={styles.scanResult}>
+              <View style={[styles.scanResultHeader, { backgroundColor: LEVEL_GRADIENT_TOP[scannedUser.level] || LEVEL_GRADIENT_TOP.Bronze }]}>
+                <View style={styles.scanResultDecor1} />
+                <View style={styles.scanResultDecor2} />
+                <View style={styles.scanResultCheckRow}>
+                  <View style={styles.scanResultCheck}>
+                    <MaterialIcons name="check" size={22} color="#fff" />
                   </View>
-                ))}
+                  <Text style={styles.scanResultVerified}>Клиент идентифицирован</Text>
+                </View>
+                <Text style={styles.scanResultName}>{scannedUser.name || 'Пользователь'}</Text>
+                <Text style={styles.scanResultId}>ID: {scannedUser.userId}</Text>
+                <View style={styles.scanResultLevelRow}>
+                  <Text style={styles.scanResultLevelText}>{(scannedUser.level || 'Bronze').toUpperCase()}</Text>
+                </View>
               </View>
 
-              <TouchableOpacity
-                style={[styles.scanResultBtn, { backgroundColor: TEAL }]}
-                onPress={() => { setScannedUser(null); setScanned(false); }}
-              >
-                <MaterialIcons name="qr-code-scanner" size={18} color="#fff" />
-                <Text style={styles.scanResultBtnText}>Сканировать следующего</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.scanResultClose}
-                onPress={() => setScannerVisible(false)}
-              >
-                <Text style={styles.scanResultCloseText}>Закрыть</Text>
-              </TouchableOpacity>
+              <View style={styles.scanResultBody}>
+                <View style={styles.scanResultStats}>
+                  {[
+                    { label: 'Бронирований', value: scannedUser.bookings ?? '—', icon: 'event-note',           color: '#FF6B35' },
+                    { label: 'Баланс PRB',   value: scannedUser.balance  != null ? Number(scannedUser.balance).toLocaleString('ru-RU') : '—', icon: 'account-balance-wallet', color: TEAL },
+                  ].map((s, i, arr) => (
+                    <View key={s.label} style={[styles.scanResultStatBox, i < arr.length - 1 && { borderRightWidth: 1, borderRightColor: '#eee' }]}>
+                      <View style={[styles.scanResultStatIcon, { backgroundColor: `${s.color}15` }]}>
+                        <MaterialIcons name={s.icon} size={22} color={s.color} />
+                      </View>
+                      <Text style={[styles.scanResultStatValue, { color: '#1a1a2e' }]}>{s.value}</Text>
+                      <Text style={styles.scanResultStatLabel}>{s.label}</Text>
+                    </View>
+                  ))}
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.scanResultBtn, { backgroundColor: TEAL }]}
+                  onPress={() => { setScannedUser(null); setScanned(false); }}
+                >
+                  <MaterialIcons name="qr-code-scanner" size={18} color="#fff" />
+                  <Text style={styles.scanResultBtnText}>Сканировать следующего</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.scanResultClose}
+                  onPress={() => setScannerVisible(false)}
+                >
+                  <Text style={styles.scanResultCloseText}>Закрыть</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
-        )}
+          )}
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
+function pluralRu(n, one, few, many) {
+  const m10 = n % 10, m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return one;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return few;
+  return many;
+}
+
+function ActionTile({ icon, label, sub, color, onPress, theme }) {
+  return (
+    <TouchableOpacity
+      activeOpacity={0.85}
+      onPress={onPress}
+      style={[styles.actionTile, {
+        backgroundColor: theme.colors.cardBg,
+        borderColor: theme.colors.border,
+      }]}
+    >
+      <View style={[styles.actionIcon, { backgroundColor: color }]}>
+        <MaterialIcons name={icon} size={22} color="#fff" />
       </View>
-    </Modal>
-    </View>
+      <Text style={[styles.actionLabel, { color: theme.colors.text }]} numberOfLines={1}>{label}</Text>
+      <Text style={[styles.actionSub, { color: theme.colors.textSecondary }]} numberOfLines={1}>{sub}</Text>
+    </TouchableOpacity>
   );
 }
 
-function SmallStat({ label, value }) {
+function KpiPill({ label, value, color, theme, compact }) {
   return (
-    <View style={styles.commandStat}>
-      <Text style={styles.commandStatValue}>{value}</Text>
-      <Text style={styles.commandStatLabel}>{label}</Text>
-    </View>
-  );
-}
-
-function KpiCard({ icon, label, value, color, theme }) {
-  return (
-    <View style={[styles.kpiCard, {
+    <View style={[styles.kpiPill, {
       backgroundColor: theme.colors.cardBg,
       borderColor: theme.colors.border,
-      borderBottomColor: color,
-      borderBottomWidth: 3,
     }]}>
-      <View style={[styles.kpiIconCircle, { backgroundColor: `${color}18` }]}>
-        <MaterialIcons name={icon} size={24} color={color} />
-      </View>
-      <Text style={[styles.kpiValue, { color: theme.colors.text }]}>{value}</Text>
-      <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>{label}</Text>
+      <View style={[styles.kpiBar, { backgroundColor: color }]} />
+      <Text style={[styles.kpiPillValue, { color: theme.colors.text, fontSize: compact ? 14 : 16 }]} numberOfLines={1}>
+        {value}
+      </Text>
+      <Text style={[styles.kpiPillLabel, { color: theme.colors.textSecondary }]} numberOfLines={2}>
+        {label}
+      </Text>
     </View>
   );
 }
 
-function MetricRow({ label, value, progress, color, theme }) {
+/**
+ * Карточка ML-индекса оттока. Принимает уже посчитанный summary, считает цвет по
+ * текущему значению и показывает разбивку high/medium/low прямо на главном экране,
+ * чтобы админу не нужно было лезть в отдельный отчёт ради цифры.
+ */
+function ChurnRiskCard({ summary, theme, onPress }) {
+  // ML недоступен — показываем off-state, но всё равно даём пройти на детали
+  if (!summary) {
+    return (
+      <TouchableOpacity
+        activeOpacity={0.85}
+        onPress={onPress}
+        style={[styles.churnCard, {
+          backgroundColor: theme.colors.cardBg,
+          borderColor: theme.colors.border,
+        }]}
+      >
+        <View style={[styles.alertIcon, { backgroundColor: `${theme.colors.textSecondary}18` }]}>
+          <MaterialIcons name="cloud-off" size={20} color={theme.colors.textSecondary} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.alertTitle, { color: theme.colors.text }]}>
+            Риск оттока · ML offline
+          </Text>
+          <Text style={[styles.alertSub, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+            Открыть отчёт вручную
+          </Text>
+        </View>
+        <MaterialIcons name="chevron-right" size={20} color={theme.colors.textSecondary} />
+      </TouchableOpacity>
+    );
+  }
+
+  // Цвет индикатора по индексу: >=50 опасно, >=25 пограничный, иначе спокойно
+  const idx = summary.index;
+  const accent =
+    idx >= 50 ? '#F87171' :
+    idx >= 25 ? '#FBBF24' :
+                '#34D399';
+  const label =
+    idx >= 50 ? 'высокий риск' :
+    idx >= 25 ? 'умеренный риск' :
+                'низкий риск';
+
   return (
-    <View style={styles.metricRow}>
-      <View style={styles.metricHeader}>
-        <Text style={[styles.metricLabel, { color: theme.colors.text }]}>{label}</Text>
-        <Text style={[styles.metricValue, { color }]}>{value}</Text>
+    <TouchableOpacity
+      activeOpacity={0.88}
+      onPress={onPress}
+      style={[styles.churnCardPremium, { borderColor: HERO.cardLine }]}
+    >
+      <View style={styles.churnLeft}>
+        <Text style={styles.churnEyebrow}>ML · CHURN INDEX</Text>
+        <View style={styles.churnValueRow}>
+          <Text style={[styles.churnValue, { color: accent }]}>{idx}</Text>
+          <Text style={styles.churnValueUnit}>/100</Text>
+        </View>
+        <Text style={[styles.churnLabel, { color: accent }]}>{label}</Text>
+        {summary.partial && (
+          <Text style={styles.churnPartial}>
+            данные частичные · ML отвечал не на всех
+          </Text>
+        )}
       </View>
-      <View style={[styles.progressTrack, { backgroundColor: theme.colors.border }]}>
-        <View style={[styles.progressFill, { width: `${clamp(progress, 0, 100)}%`, backgroundColor: color }]} />
+
+      <View style={styles.churnRight}>
+        <ChurnBucket count={summary.high}   color="#F87171" letter="H" theme={theme} />
+        <ChurnBucket count={summary.medium} color="#FBBF24" letter="M" theme={theme} />
+        <ChurnBucket count={summary.low}    color="#34D399" letter="L" theme={theme} />
       </View>
+
+      <MaterialIcons name="chevron-right" size={20} color={HERO_INK_DIM} style={{ marginLeft: 4 }} />
+    </TouchableOpacity>
+  );
+}
+
+function ChurnBucket({ count, color, letter }) {
+  return (
+    <View style={styles.churnBucket}>
+      <Text style={[styles.churnBucketCount, { color }]}>{count}</Text>
+      <Text style={styles.churnBucketLetter}>{letter}</Text>
     </View>
   );
 }
 
-function ActivityRow({ color, title, subtitle, theme, last }) {
+function BookingItem({ booking, theme, last }) {
+  const meta = STATUS_META[booking.status] || { color: NAVY2, label: booking.status || 'Бронь' };
+  const propertyName = booking.property || propertyNameById(booking.propertyId) || (booking.propertyId ? `Объект #${booking.propertyId}` : 'Объект');
+  const clientName   = booking.userName || booking.user?.name || booking.guestName || booking.name || 'Гость';
+  const amount       = asNumber(booking.totalPrice);
+
   return (
-    <View style={[
-      styles.activityRow,
-      { borderLeftColor: color, backgroundColor: `${color}0D` },
-      !last && { marginBottom: spacing.sm },
-    ]}>
-      <Text style={[styles.activityTitle, { color: theme.colors.text }]}>{title}</Text>
-      <Text style={[styles.activitySubtitle, { color: theme.colors.textSecondary }]}>{subtitle}</Text>
+    <View style={[styles.bookingItem, !last && { borderBottomWidth: 1, borderBottomColor: theme.colors.border }]}>
+      <View style={[styles.bookingDot, { backgroundColor: meta.color }]} />
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <View style={styles.bookingTopRow}>
+          <Text style={[styles.bookingClient, { color: theme.colors.text }]} numberOfLines={1}>
+            {clientName}
+          </Text>
+          <Text style={[styles.bookingAmount, { color: theme.colors.text }]} numberOfLines={1}>
+            {amount > 0 ? formatMoney(amount) : '—'}
+          </Text>
+        </View>
+        <View style={styles.bookingBottomRow}>
+          <Text style={[styles.bookingProp, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+            {propertyName}
+          </Text>
+          <View style={styles.bookingMetaRight}>
+            <View style={[styles.statusChip, { backgroundColor: `${meta.color}18` }]}>
+              <Text style={[styles.statusChipText, { color: meta.color }]}>{meta.label}</Text>
+            </View>
+            <Text style={[styles.bookingTime, { color: theme.colors.textSecondary }]}>
+              {formatTimeAgo(booking.createdAt || booking.date)}
+            </Text>
+          </View>
+        </View>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  container: { padding: spacing.md, paddingBottom: spacing.xl },
+  container: { padding: spacing.md, paddingBottom: 130 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   loadingText: { marginTop: 12, fontSize: 14 },
 
-  commandCard: {
+  // Hero
+  heroCard: {
     backgroundColor: NAVY,
     borderRadius: borderRadius.lg,
-    borderTopWidth: 4,
-    borderTopColor: TEAL,
     padding: spacing.lg,
     marginBottom: spacing.md,
-    elevation: 6,
+    elevation: 4,
     shadowColor: NAVY,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
+    shadowOpacity: 0.25,
     shadowRadius: 8,
   },
-  commandTop: { flexDirection: 'row', alignItems: 'flex-start' },
-  commandText: { flex: 1, paddingRight: spacing.md },
-  commandEyebrowRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
-  eyebrowAccent: { width: 18, height: 2, backgroundColor: TEAL, borderRadius: 1, marginRight: spacing.sm },
-  commandEyebrow: { color: AMBER, fontSize: 11, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0.8 },
-  commandTitle: { color: '#fff', fontSize: 24, fontWeight: '900', marginTop: spacing.xs },
-  commandSubtitle: { color: 'rgba(255,255,255,0.65)', fontSize: 13, lineHeight: 18, marginTop: spacing.sm },
-  commandScore: {
-    width: 72, borderRadius: borderRadius.md, backgroundColor: AMBER,
-    alignItems: 'center', paddingVertical: spacing.sm, paddingHorizontal: spacing.sm,
-    elevation: 2, shadowColor: AMBER, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.4, shadowRadius: 4,
+  heroTopRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: spacing.sm },
+  heroEyebrow: { color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: '600', marginBottom: 4 },
+  heroName: { color: '#fff', fontSize: 22, fontWeight: '900' },
+  heroBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: TEAL, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12,
   },
-  scoreValue: { color: '#fff', fontSize: 26, fontWeight: '900' },
-  scoreLabel: { color: 'rgba(255,255,255,0.88)', fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
-  commandStatsDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.12)', marginVertical: spacing.md },
-  commandStats: { flexDirection: 'row', alignItems: 'center' },
-  commandStat: { flex: 1 },
-  commandStatDivider: { width: 1, height: 28, backgroundColor: 'rgba(255,255,255,0.18)', marginHorizontal: spacing.sm },
-  commandStatValue: { color: '#fff', fontSize: 13, fontWeight: '900' },
-  commandStatLabel: { color: 'rgba(255,255,255,0.55)', fontSize: 11, marginTop: 2 },
+  heroBadgeText: { color: '#fff', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+  heroSubtitle: { color: 'rgba(255,255,255,0.75)', fontSize: 13, lineHeight: 18 },
 
-  kpiRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm },
-  kpiCard: {
+  // Quick actions
+  actionsRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md },
+  actionTile: {
+    flex: 1, alignItems: 'center', paddingVertical: spacing.md, paddingHorizontal: 4,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+  },
+  actionIcon: {
+    width: 44, height: 44, borderRadius: 22,
+    alignItems: 'center', justifyContent: 'center', marginBottom: 6,
+  },
+  actionLabel: { fontSize: 12, fontWeight: '800', textAlign: 'center' },
+  actionSub: { fontSize: 10, fontWeight: '600', textAlign: 'center', marginTop: 1 },
+
+  // KPI strip
+  kpiStrip: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md },
+  kpiPill: {
     flex: 1, borderWidth: 1, borderRadius: borderRadius.lg,
-    paddingVertical: spacing.lg, paddingHorizontal: spacing.sm, alignItems: 'center',
+    paddingVertical: spacing.md, paddingHorizontal: spacing.sm,
+    overflow: 'hidden', position: 'relative',
   },
-  kpiIconCircle: { width: 50, height: 50, borderRadius: 25, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.sm },
-  kpiValue: { fontSize: 17, fontWeight: '900', textAlign: 'center' },
-  kpiLabel: { fontSize: 11, fontWeight: '600', textAlign: 'center', marginTop: 3 },
+  kpiBar: { position: 'absolute', top: 0, left: 0, right: 0, height: 3 },
+  kpiPillValue: { fontWeight: '900', marginTop: 4 },
+  kpiPillLabel: { fontSize: 10, fontWeight: '600', marginTop: 4, lineHeight: 13 },
 
+  // Alerts
+  alertCard: {
+    flexDirection: 'row', alignItems: 'center',
+    borderWidth: 1, borderLeftWidth: 4,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md, gap: spacing.sm,
+  },
+  alertIcon: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
+  alertTitle: { fontSize: 13, fontWeight: '800' },
+  alertSub: { fontSize: 11, marginTop: 2 },
+
+  // Churn ML card (off-state)
+  churnCard: {
+    flexDirection: 'row', alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md, gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+
+  // Churn ML card (premium — тёмный «command center»)
+  churnCardPremium: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: HERO.bg,
+    borderWidth: 1,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    gap: spacing.md,
+  },
+  churnLeft: { flex: 1, minWidth: 0 },
+  churnEyebrow: {
+    color: HERO.inkDim, fontSize: 9, fontWeight: '900', letterSpacing: 1.4,
+  },
+  churnValueRow: { flexDirection: 'row', alignItems: 'baseline', gap: 4, marginTop: 4 },
+  churnValue: { fontSize: 30, fontWeight: '900', lineHeight: 32 },
+  churnValueUnit: { color: HERO.inkFaint, fontSize: 12, fontWeight: '800' },
+  churnLabel: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.6, marginTop: 2 },
+  churnPartial: { color: HERO.inkFaint, fontSize: 10, marginTop: 6 },
+
+  churnRight: { flexDirection: 'row', gap: 6 },
+  churnBucket: {
+    backgroundColor: HERO.bgLayer,
+    borderWidth: 1, borderColor: HERO.cardLine,
+    borderRadius: 10,
+    paddingVertical: 6, paddingHorizontal: 9,
+    alignItems: 'center',
+    minWidth: 36,
+  },
+  churnBucketCount: { fontSize: 14, fontWeight: '900' },
+  churnBucketLetter: { color: HERO.inkFaint, fontSize: 9, fontWeight: '800', letterSpacing: 0.8, marginTop: 1 },
+
+  // Activity panel
   panel: { borderWidth: 1, borderRadius: borderRadius.lg, padding: spacing.md, marginBottom: spacing.md },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md },
-  sectionTitle: { fontSize: 16, fontWeight: '900' },
-  sectionHint: { fontSize: 12 },
-  aiChip: {
-    flexDirection: 'row', alignItems: 'center', borderWidth: 1,
-    borderRadius: borderRadius.md, paddingHorizontal: spacing.sm, paddingVertical: 4, gap: 4,
-  },
-  aiChipText: { fontSize: 12, fontWeight: '900' },
+  sectionTitle: { fontSize: 15, fontWeight: '900' },
+  linkText: { fontSize: 12, fontWeight: '800' },
+  emptyState: { alignItems: 'center', paddingVertical: spacing.lg, gap: 8 },
+  emptyText: { fontSize: 13, fontWeight: '600' },
 
-  focusGrid: { flexDirection: 'row', gap: spacing.sm },
-  focusCard: { flex: 1, borderWidth: 1, borderRadius: borderRadius.lg, padding: spacing.md, minHeight: 120 },
-  focusIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.sm },
-  focusValue: { fontSize: 22, fontWeight: '900' },
-  focusTitle: { fontSize: 11, fontWeight: '700', lineHeight: 15, marginTop: spacing.xs },
-
-  chart: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm, marginBottom: spacing.md },
-  chartColumn: { flex: 1, alignItems: 'center', justifyContent: 'flex-end' },
-  chartBar: { width: '100%', borderRadius: borderRadius.sm },
-  chartLabel: { fontSize: 9, marginTop: 3, fontWeight: '600' },
-
-  metricRow: { marginTop: spacing.sm },
-  metricHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.sm },
-  metricLabel: { fontSize: 13, fontWeight: '700' },
-  metricValue: { fontSize: 13, fontWeight: '900' },
-  progressTrack: { height: 8, borderRadius: 4, overflow: 'hidden' },
-  progressFill: { height: '100%', borderRadius: 4 },
-
-  activityRow: { borderRadius: borderRadius.sm, padding: spacing.md, borderLeftWidth: 4, marginBottom: spacing.sm },
-  activityTitle: { fontSize: 13, fontWeight: '800' },
-  activitySubtitle: { fontSize: 11, marginTop: spacing.xs },
-
-  // Floating scan button
-  scanFab: {
-    position: 'absolute', bottom: 20, left: 16, right: 16,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
-    backgroundColor: TEAL, paddingVertical: 15, borderRadius: 16,
-    shadowColor: TEAL, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.45, shadowRadius: 12, elevation: 8,
-  },
-  scanFabText: { color: '#fff', fontSize: 15, fontWeight: '800' },
+  // Booking row
+  bookingItem: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: spacing.sm, gap: spacing.sm },
+  bookingDot: { width: 8, height: 8, borderRadius: 4, marginTop: 6 },
+  bookingTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
+  bookingClient: { flex: 1, fontSize: 14, fontWeight: '800' },
+  bookingAmount: { fontSize: 13, fontWeight: '900' },
+  bookingBottomRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 3, gap: spacing.sm },
+  bookingProp: { flex: 1, fontSize: 12, fontWeight: '500' },
+  bookingMetaRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  statusChip: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
+  statusChipText: { fontSize: 10, fontWeight: '800' },
+  bookingTime: { fontSize: 11, fontWeight: '500' },
 
   // Scanner screen
   scanScreen: { flex: 1, backgroundColor: '#000' },
-  scanVignette: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'transparent',
-    shadowColor: '#000',
-  },
+  scanVignette: { ...StyleSheet.absoluteFillObject, backgroundColor: 'transparent', shadowColor: '#000' },
   scanReticleWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   scanReticle: { width: 240, height: 240, alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
   scanCorner: { position: 'absolute', width: 36, height: 36, borderColor: TEAL, borderWidth: 3 },
@@ -632,7 +766,6 @@ const styles = StyleSheet.create({
   scanResultName: { color: '#fff', fontSize: 28, fontWeight: '900', marginBottom: 4 },
   scanResultId: { color: 'rgba(255,255,255,0.55)', fontSize: 12, fontWeight: '500', marginBottom: 14 },
   scanResultLevelRow: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(0,0,0,0.2)', alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 12 },
-  scanResultLevelEmoji: { fontSize: 18 },
   scanResultLevelText: { color: '#fff', fontSize: 11, fontWeight: '900', letterSpacing: 1.5 },
   scanResultBody: { flex: 1, padding: 24 },
   scanResultStats: { flexDirection: 'row', borderRadius: 16, backgroundColor: '#f8f8f8', overflow: 'hidden', marginBottom: 24 },

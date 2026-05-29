@@ -460,7 +460,10 @@ export default function AdminStats() {
             <MaterialIcons name="auto-awesome" size={26} color="#fff" />
           </View>
           <View style={styles.aiTitleBlock}>
-            <Text style={[styles.aiTitle, { color: theme.colors.text }]}>AI market analyst</Text>
+            <View style={styles.aiTitleRow}>
+              <Text style={[styles.aiTitle, { color: theme.colors.text }]}>AI market analyst</Text>
+              <LiveBadge color="#10B981" />
+            </View>
             <Text style={[styles.aiSubtitle, { color: theme.colors.textSecondary }]}>
               {allBookings.length} бронирований · {properties.length} номеров · {metrics.users} клиентов
             </Text>
@@ -613,7 +616,10 @@ export default function AdminStats() {
       <View style={[styles.panel, { backgroundColor: theme.colors.cardBg, borderColor: theme.colors.border, marginBottom: spacing.md }]}>
         <View style={styles.ltvHeader}>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>AI-прогноз LTV</Text>
+            <View style={styles.aiTitleRow}>
+              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>AI-прогноз LTV</Text>
+              {ltvTop !== null && <LiveBadge color="#8B5CF6" />}
+            </View>
             <Text style={[styles.ltvHint, { color: theme.colors.textSecondary }]}>
               Топ клиентов по предсказанной годовой ценности
             </Text>
@@ -771,6 +777,31 @@ export default function AdminStats() {
 }
 
 // ── Shared sub-components ──────────────────────────────────────────────────
+
+/**
+ * Маленький бейдж «LIVE» с пульсирующей точкой — сигнализирует, что данные
+ * в карточке тянутся из живого ML-сервиса. Используется в шапке AI-блока и LTV-блока,
+ * чтобы визуально объединить ML-секции с такими же индикаторами на других экранах.
+ */
+function LiveBadge({ color = '#10B981' }) {
+  const opacity = useRef(new Animated.Value(0.5)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 0.2, duration: 900, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.9, duration: 900, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [opacity]);
+  return (
+    <View style={[styles.liveBadge, { backgroundColor: `${color}18`, borderColor: `${color}40` }]}>
+      <Animated.View style={[styles.liveDot, { backgroundColor: color, opacity }]} />
+      <Text style={[styles.liveText, { color }]}>LIVE</Text>
+    </View>
+  );
+}
 
 function AnimatedTabButton({ tab, active, onPress, theme }) {
   const scale = useRef(new Animated.Value(1)).current;
@@ -1001,6 +1032,14 @@ const styles = StyleSheet.create({
 
   aiPanel:    { borderWidth: 1, borderRadius: borderRadius.lg, padding: spacing.lg, marginBottom: spacing.md },
   aiHeader:   { flexDirection: 'row', alignItems: 'center' },
+  aiTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  liveBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8,
+    borderWidth: 1,
+  },
+  liveDot: { width: 5, height: 5, borderRadius: 3 },
+  liveText: { fontSize: 9, fontWeight: '900', letterSpacing: 0.8 },
   aiIcon:     { width: 52, height: 52, borderRadius: borderRadius.lg, alignItems: 'center', justifyContent: 'center', marginRight: spacing.md },
   aiTitleBlock: { flex: 1 },
   aiTitle:    { fontSize: 18, fontWeight: '900' },
