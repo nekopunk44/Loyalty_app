@@ -4,14 +4,30 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
+  Pressable,
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-import { GradientView } from '../ui/GradientView';
 import { colors, spacing, borderRadius } from '../../constants/theme';
 
-/**
- * Компонент карточки пользователя для списка администратора
- */
+const LEVEL_COLORS = {
+  platinum: '#A78BFA',
+  gold:     '#F5B301',
+  silver:   '#9CA3AF',
+  bronze:   '#B97A45',
+};
+
+const LEVEL_LABELS = {
+  platinum: 'Platinum',
+  gold:     'Gold',
+  silver:   'Silver',
+  bronze:   'Bronze',
+};
+
+const ADMIN_BLUE   = '#3B82F6';
+const ONLINE_GREEN = '#10B981';
+const ICON_MUTED   = '#6B7280';
+const DELETE_RED   = '#EF4444';
+
 export const AdminUserListCard = ({
   user,
   onPress,
@@ -20,184 +36,120 @@ export const AdminUserListCard = ({
   onQuickBalance,
   theme,
 }) => {
-  const getLevelColor = (level, role) => {
-    if (role === 'admin') return '#007AFF';
-    // Проверяем оба варианта поля (membershipLevel или level)
-    const userLevel = level?.toLowerCase() || 'bronze';
-    switch (userLevel) {
-      case 'platinum':
-        return '#E5D4FF';
-      case 'gold':
-        return '#FFD700';
-      case 'silver':
-        return '#C0C0C0';
-      case 'bronze':
-        return '#CD7F32';
-      default:
-        return colors.border;
-    }
-  };
-
-  const getLevelLabel = (level, role) => {
-    if (role === 'admin') return 'Admin';
-    const userLevel = level?.toLowerCase() || 'bronze';
-    const labels = {
-      platinum: 'Platinum',
-      gold: 'Gold',
-      silver: 'Silver',
-      bronze: 'Bronze',
-    };
-    return labels[userLevel] || 'Bronze';
-  };
-
-  // Используем membershipLevel если есть, иначе level
-  const levelColor = getLevelColor(user.membershipLevel || user.level, user.role);
   const isAdmin = user.role === 'admin';
+  const isOnline = user.status === 'online';
+  const levelKey = (user.membershipLevel || user.level || 'bronze').toLowerCase();
+  const levelColor = isAdmin ? ADMIN_BLUE : (LEVEL_COLORS[levelKey] || colors.border);
+  const levelLabel = isAdmin ? 'Admin' : (LEVEL_LABELS[levelKey] || 'Bronze');
+
+  const initials = String(user.name || '?')
+    .split(' ')
+    .map(w => w[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
 
   return (
     <TouchableOpacity
+      activeOpacity={0.85}
+      onPress={onPress}
       style={[
-        styles.container,
+        styles.card,
         {
-          borderLeftColor: levelColor,
           backgroundColor: theme.colors.cardBg,
+          borderColor: theme.colors.border,
         },
       ]}
-      onPress={onPress}
-      activeOpacity={0.6}
     >
-      {/* Фоновый градиент для админов - отключен для темной темы */}
-      {false && (
-        <GradientView
-          colors={[theme.isDark ? '#1E3A8A' : '#E3F2FD', theme.isDark ? '#1E293B' : '#F5FBFF']}
-          style={StyleSheet.absoluteFill}
-        />
-      )}
-
-      {/* Top Accent Bar */}
-      <View
-        style={[
-          styles.topBar,
-          { backgroundColor: levelColor },
-        ]}
-      />
-
-      {/* Content Container */}
-      <View style={styles.content}>
-        {/* Left - Avatar */}
-        <View
-          style={[
-            styles.avatar,
-            { backgroundColor: levelColor },
-          ]}
-        >
-          <Text style={styles.avatarText}>
-            {user.name.split(' ').map(w => w[0]).join('').toUpperCase()}
-          </Text>
-          {user.status === 'online' && (
-            <View
-              style={[
-                styles.onlineIndicator,
-                { borderColor: theme.colors.cardBg },
-              ]}
-            />
+      <View style={styles.row}>
+        <View style={[styles.avatar, { backgroundColor: levelColor }]}>
+          <Text style={styles.avatarText}>{initials}</Text>
+          {isOnline && (
+            <View style={[styles.onlineDot, { borderColor: theme.colors.cardBg }]} />
           )}
         </View>
 
-        {/* Center - User Info */}
-        <View style={styles.userInfo}>
-          {/* Name and Badge Row */}
+        <View style={styles.info}>
           <View style={styles.nameRow}>
             <Text
-              style={[
-                styles.userName,
-                { color: theme.colors.text },
-              ]}
+              style={[styles.name, { color: theme.colors.text }]}
               numberOfLines={1}
             >
               {user.name}
             </Text>
-            {isAdmin && (
-              <View style={styles.adminBadge}>
-                <MaterialIcons name="shield" size={13} color="#fff" />
-              </View>
-            )}
+            <View style={[
+              styles.levelChip,
+              { backgroundColor: `${levelColor}1A`, borderColor: `${levelColor}55` },
+            ]}>
+              {isAdmin && (
+                <MaterialIcons name="shield" size={10} color={levelColor} style={{ marginRight: 3 }} />
+              )}
+              <Text style={[styles.levelChipText, { color: levelColor }]} numberOfLines={1}>
+                {levelLabel}
+              </Text>
+            </View>
           </View>
 
-          {/* Email */}
           <Text
-            style={[
-              styles.userEmail,
-              { color: theme.colors.textSecondary },
-            ]}
+            style={[styles.email, { color: theme.colors.textSecondary }]}
             numberOfLines={1}
           >
             {user.email}
           </Text>
 
-          {/* Meta Info Row */}
           <View style={styles.metaRow}>
-            {/* Role/Level Badge */}
-            <View style={[styles.badge, { backgroundColor: isAdmin ? '#007AFF' : 'transparent', borderColor: levelColor, borderWidth: isAdmin ? 0 : 1 }]}>
-              <Text
-                style={[
-                  styles.badgeText,
-                  {
-                    color: isAdmin ? '#fff' : levelColor,
-                    fontWeight: isAdmin ? '600' : '500',
-                  },
-                ]}
-              >
-                {getLevelLabel(user.membershipLevel || user.level, user.role)}
-              </Text>
-            </View>
-
-            {/* Status Badge - Always Show */}
-            <View style={[
-              styles.statusBadge,
-              { backgroundColor: user.status === 'online' ? '#4CAF50' : '#9E9E9E' }
-            ]}>
-              <Text style={styles.statusText}>
-                {user.status === 'online' ? 'Online' : 'Offline'}
-              </Text>
-            </View>
-
-            {/* Balance */}
+            {isOnline && (
+              <View style={styles.metaItem}>
+                <View style={styles.metaDot} />
+                <Text style={[styles.metaText, { color: theme.colors.textSecondary }]}>
+                  online
+                </Text>
+              </View>
+            )}
             {user.balance != null && (
-              <View style={[styles.balanceBadge, { borderColor: levelColor }]}>
-                <Text style={[styles.balanceText, { color: levelColor }]}>
-                  {Number(user.balance).toFixed(0)} PRB
+              <View style={styles.metaItem}>
+                <MaterialIcons name="account-balance-wallet" size={12} color={theme.colors.textSecondary} />
+                <Text style={[styles.metaText, { color: theme.colors.text, fontWeight: '700' }]}>
+                  {Number(user.balance).toFixed(0)} <Text style={{ color: theme.colors.textSecondary, fontWeight: '600' }}>PRB</Text>
                 </Text>
               </View>
             )}
           </View>
         </View>
 
-        {/* Right - Actions */}
-        <View style={styles.actions}>
+        <View style={styles.actionsCol}>
           {onQuickBalance && (
-            <TouchableOpacity
-              style={[styles.quickBalanceButton, { backgroundColor: levelColor }]}
+            <Pressable
               onPress={onQuickBalance}
-              activeOpacity={0.8}
+              hitSlop={8}
+              style={({ pressed }) => [
+                styles.iconBtn,
+                { backgroundColor: pressed ? `${levelColor}26` : `${levelColor}14` },
+              ]}
             >
-              <MaterialIcons name="add" size={16} color="#fff" />
-            </TouchableOpacity>
+              <MaterialIcons name="add" size={18} color={levelColor} />
+            </Pressable>
           )}
-          <TouchableOpacity
-            style={styles.editButton}
+          <Pressable
             onPress={onEdit}
-            activeOpacity={0.8}
+            hitSlop={8}
+            style={({ pressed }) => [
+              styles.iconBtn,
+              { backgroundColor: pressed ? `${ICON_MUTED}26` : 'transparent' },
+            ]}
           >
-            <MaterialIcons name="edit" size={18} color="#fff" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.deleteButton}
+            <MaterialIcons name="edit" size={18} color={ICON_MUTED} />
+          </Pressable>
+          <Pressable
             onPress={onDelete}
-            activeOpacity={0.8}
+            hitSlop={8}
+            style={({ pressed }) => [
+              styles.iconBtn,
+              { backgroundColor: pressed ? `${DELETE_RED}22` : 'transparent' },
+            ]}
           >
-            <MaterialIcons name="delete" size={18} color="#fff" />
-          </TouchableOpacity>
+            <MaterialIcons name="delete-outline" size={18} color={DELETE_RED} />
+          </Pressable>
         </View>
       </View>
     </TouchableOpacity>
@@ -205,182 +157,103 @@ export const AdminUserListCard = ({
 };
 
 const styles = StyleSheet.create({
-  container: {
-    marginHorizontal: 0,
-    marginBottom: spacing.md,
-    borderRadius: borderRadius.xl,
-    borderLeftWidth: 5,
-    overflow: 'hidden',
-    backgroundColor: colors.cardBg,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowOffset: { width: 0, height: 3 },
-    shadowRadius: 8,
+  card: {
+    marginBottom: 10,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
   },
-  topBar: {
-    height: 3,
-  },
-  content: {
+  row: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.sm + 2,
+    gap: spacing.md,
   },
   avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    justifyContent: 'center',
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     alignItems: 'center',
-    marginRight: spacing.md,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 4,
+    justifyContent: 'center',
   },
   avatarText: {
-    fontSize: 16,
-    fontWeight: '700',
     color: '#fff',
+    fontSize: 15,
+    fontWeight: '800',
   },
-  onlineIndicator: {
+  onlineDot: {
     position: 'absolute',
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: '#10B981',
-    bottom: -2,
-    right: -2,
-    borderWidth: 2.5,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: ONLINE_GREEN,
+    bottom: -1,
+    right: -1,
+    borderWidth: 2,
   },
-  userInfo: {
+  info: {
     flex: 1,
+    minWidth: 0,
   },
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: 4,
+    gap: 6,
+    marginBottom: 2,
   },
-  userName: {
-    fontSize: 16,
+  name: {
+    fontSize: 15,
     fontWeight: '700',
-    flex: 1,
+    flexShrink: 1,
   },
-  adminBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#007AFF',
-    justifyContent: 'center',
+  levelChip: {
+    flexDirection: 'row',
     alignItems: 'center',
-    elevation: 2,
-    shadowColor: '#007AFF',
-    shadowOpacity: 0.3,
-    shadowOffset: { width: 0, height: 1 },
-    shadowRadius: 2,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 999,
+    borderWidth: 1,
   },
-  userEmail: {
-    fontSize: 13,
-    marginBottom: 6,
+  levelChipText: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  email: {
+    fontSize: 12,
+    marginBottom: 4,
   },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: 10,
   },
-  badge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: borderRadius.md,
-  },
-  badgeText: {
-    fontSize: 11,
-    fontWeight: '500',
-  },
-  ratingBadge: {
+  metaItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-    backgroundColor: 'rgba(255, 184, 0, 0.12)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: borderRadius.md,
-  },
-  ratingText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#FFB800',
-  },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
     gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: borderRadius.md,
   },
-  statusDot: {
+  metaDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
+    backgroundColor: ONLINE_GREEN,
   },
-  statusText: {
+  metaText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#fff',
   },
-  balanceBadge: {
-    borderWidth: 1,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 8,
-  },
-  balanceText: {
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  quickBalanceButton: {
-    width: 36,
-    height: 36,
-    borderRadius: borderRadius.md,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 2,
-  },
-  actions: {
+  actionsCol: {
     flexDirection: 'row',
-    gap: spacing.sm,
-    marginLeft: spacing.md,
-  },
-  editButton: {
-    width: 44,
-    height: 44,
-    borderRadius: borderRadius.lg,
-    backgroundColor: '#FF6B35',
-    justifyContent: 'center',
     alignItems: 'center',
-    elevation: 3,
-    shadowColor: '#FF6B35',
-    shadowOpacity: 0.25,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 4,
+    gap: 2,
   },
-  deleteButton: {
-    width: 44,
-    height: 44,
-    borderRadius: borderRadius.lg,
-    backgroundColor: '#FF6B6B',
-    justifyContent: 'center',
+  iconBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
-    elevation: 3,
-    shadowColor: '#FF6B6B',
-    shadowOpacity: 0.25,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 4,
+    justifyContent: 'center',
   },
 });
 
