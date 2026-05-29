@@ -19,6 +19,7 @@ import {
 } from 'react-native';
 import Svg, { Defs, LinearGradient, Stop, Path, Circle } from 'react-native-svg';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
 import { apiCall } from '../../utils/api';
 import { getApiUrl } from '../../utils/apiUrl';
@@ -173,6 +174,7 @@ function ProbStrip({ prob, height = 4 }) {
 export default function AdminChurnRisk({ navigation }) {
   const { theme } = useTheme();
   const colors = theme.colors;
+  const insets = useSafeAreaInsets();
 
   const riskHue = (risk) => RISK_HUES[risk] || RISK_HUES.low;
   const riskLabel = (risk) =>
@@ -299,7 +301,7 @@ export default function AdminChurnRisk({ navigation }) {
   return (
     <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         {navigation && (
           <TouchableOpacity
             style={[styles.backBtn, { backgroundColor: colors.cardBg, borderColor: colors.border }]}
@@ -377,22 +379,29 @@ export default function AdminChurnRisk({ navigation }) {
                 </View>
               </View>
 
-              {/* Risk chips */}
+              {/* Risk chips — вертикальная компоновка: значение крупно, лейбл подписью.
+                  Горизонтальная не помещается на узких экранах (letter-spacing съедает место). */}
               <View style={styles.heroChipsRow}>
                 <View style={[styles.heroChip, { borderColor: `${RISK_HUES.high}66`, backgroundColor: `${RISK_HUES.high}1A` }]}>
-                  <View style={[styles.chipDot, { backgroundColor: RISK_HUES.high }]} />
+                  <View style={styles.chipHeader}>
+                    <View style={[styles.chipDot, { backgroundColor: RISK_HUES.high }]} />
+                    <Text style={[styles.chipLabel, { color: HERO.inkDim }]} numberOfLines={1}>высокий</Text>
+                  </View>
                   <Text style={[styles.chipValue, { color: HERO.ink }]}>{counts.high}</Text>
-                  <Text style={[styles.chipLabel, { color: HERO.inkDim }]}>высокий</Text>
                 </View>
                 <View style={[styles.heroChip, { borderColor: `${RISK_HUES.medium}66`, backgroundColor: `${RISK_HUES.medium}1A` }]}>
-                  <View style={[styles.chipDot, { backgroundColor: RISK_HUES.medium }]} />
+                  <View style={styles.chipHeader}>
+                    <View style={[styles.chipDot, { backgroundColor: RISK_HUES.medium }]} />
+                    <Text style={[styles.chipLabel, { color: HERO.inkDim }]} numberOfLines={1}>средний</Text>
+                  </View>
                   <Text style={[styles.chipValue, { color: HERO.ink }]}>{counts.medium}</Text>
-                  <Text style={[styles.chipLabel, { color: HERO.inkDim }]}>средний</Text>
                 </View>
                 <View style={[styles.heroChip, { borderColor: `${RISK_HUES.low}66`, backgroundColor: `${RISK_HUES.low}1A` }]}>
-                  <View style={[styles.chipDot, { backgroundColor: RISK_HUES.low }]} />
+                  <View style={styles.chipHeader}>
+                    <View style={[styles.chipDot, { backgroundColor: RISK_HUES.low }]} />
+                    <Text style={[styles.chipLabel, { color: HERO.inkDim }]} numberOfLines={1}>низкий</Text>
+                  </View>
                   <Text style={[styles.chipValue, { color: HERO.ink }]}>{counts.low}</Text>
-                  <Text style={[styles.chipLabel, { color: HERO.inkDim }]}>низкий</Text>
                 </View>
               </View>
             </View>
@@ -677,22 +686,25 @@ const makeStyles = (colors) => StyleSheet.create({
   },
   heroChip: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: 10,
     borderWidth: 1,
-    gap: 8,
+  },
+  chipHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
   },
   chipDot: { width: 6, height: 6, borderRadius: 3 },
-  chipValue: { fontSize: 16, fontWeight: '800', letterSpacing: -0.4 },
+  chipValue: { fontSize: 20, fontWeight: '900', letterSpacing: -0.6 },
   chipLabel: {
-    fontSize: 10,
-    fontWeight: '700',
+    fontSize: 9,
+    fontWeight: '800',
     textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    marginLeft: 'auto',
+    letterSpacing: 0.4,
+    flex: 1,
   },
 
   /* === SPOTLIGHT === */
