@@ -410,7 +410,7 @@ export default function AdminEvents() {
         </Animated.View>
       )}
       
-      <Animated.ScrollView 
+      <Animated.ScrollView
         contentContainerStyle={[
           styles.content,
           {
@@ -419,67 +419,126 @@ export default function AdminEvents() {
         ]}
         style={{ backgroundColor: theme.colors.background }}
       >
-        {/* Header */}
-        <ScaleInCard delay={100}>
-          <View 
-            style={[
-              styles.header,
-              {
-                backgroundColor: theme.colors.cardBg,
-                paddingVertical: spacing.md,
-                paddingHorizontal: spacing.md,
-                borderRadius: 12,
-                marginBottom: 0,
-              }
-            ]}
-          >
-            <View>
-              <Text style={[styles.title, { color: theme.colors.text }]}>Управление событиями</Text>
-              <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>Всего событий: {events.length}</Text>
-            </View>
-            <TouchableOpacity
-              style={styles.createButton}
-              onPress={() => handleOpenModal()}
-            >
-              <MaterialIcons name="add" size={24} color="#fff" />
-            </TouchableOpacity>
-          </View>
-        </ScaleInCard>
+        {(() => {
+          const isActive = (s) => {
+            const v = (s || '').toLowerCase();
+            return v === 'active' || v === 'активный' || v === 'активно';
+          };
+          const isUpcoming = (s) => {
+            const v = (s || '').toLowerCase();
+            return v === 'upcoming' || v === 'скоро';
+          };
+          const isEnded = (s) => {
+            const v = (s || '').toLowerCase();
+            return v === 'ended' || v === 'completed' || v === 'завершён' || v === 'завершен' || v === 'завершено';
+          };
+          const activeCount   = events.filter(e => isActive(e.status)).length;
+          const upcomingCount = events.filter(e => isUpcoming(e.status)).length;
+          const endedCount    = events.filter(e => isEnded(e.status)).length;
+          const participantsTotal = events.reduce(
+            (sum, e) => sum + (e.participants || e.participantsCount || 0),
+            0
+          );
 
-        {/* Статистика */}
-        <ScaleInCard delay={150}>
-          <View 
-            style={[
-              styles.statsContainer,
-              {
-                backgroundColor: theme.colors.background,
-                paddingHorizontal: spacing.md,
-                paddingVertical: spacing.md,
-                borderRadius: borderRadius.lg,
-                marginBottom: 0,
-              }
-            ]}
-          >
-            <View style={[styles.statBox, { backgroundColor: theme.colors.background }]}>
-              <View style={{ alignItems: 'center' }}>
-                <MaterialIcons name="check-circle" size={32} color={theme.colors.primary} />
-                <Text style={[styles.statNumber, { color: theme.colors.primary, marginTop: spacing.sm }]}>
-                  {events.filter((e) => e.status === 'Активный' || e.status === 'active').length}
-                </Text>
+          return (
+            <ScaleInCard delay={100}>
+              <View style={[
+                styles.headerCard,
+                { backgroundColor: theme.colors.cardBg, borderColor: theme.colors.border },
+              ]}>
+                {/* Title row */}
+                <View style={styles.headerTopRow}>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text
+                      style={[styles.headerTitle, { color: theme.colors.text }]}
+                      numberOfLines={1}
+                    >
+                      Управление событиями
+                    </Text>
+                    <Text
+                      style={[styles.headerSubtitle, { color: theme.colors.textSecondary }]}
+                      numberOfLines={1}
+                    >
+                      Всего: {events.length} {(() => {
+                        const n = events.length % 100;
+                        const n1 = events.length % 10;
+                        if (n > 10 && n < 20) return 'событий';
+                        if (n1 > 1 && n1 < 5) return 'события';
+                        if (n1 === 1) return 'событие';
+                        return 'событий';
+                      })()}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.createBtn, { backgroundColor: theme.colors.primary }]}
+                    onPress={() => handleOpenModal()}
+                    activeOpacity={0.85}
+                  >
+                    <MaterialIcons name="add" size={20} color="#fff" />
+                    <Text style={styles.createBtnText}>Создать</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Stats strip */}
+                <View style={[styles.statsStrip, { borderTopColor: theme.colors.border }]}>
+                  <View style={styles.statsCell}>
+                    <View style={styles.statsValueRow}>
+                      <View style={[styles.statsDot, { backgroundColor: theme.colors.success }]} />
+                      <Text style={[styles.statsValue, { color: theme.colors.text }]}>
+                        {activeCount}
+                      </Text>
+                    </View>
+                    <Text style={[styles.statsLabel, { color: theme.colors.textSecondary }]}>
+                      Активные
+                    </Text>
+                  </View>
+
+                  <View style={[styles.statsDivider, { backgroundColor: theme.colors.border }]} />
+
+                  <View style={styles.statsCell}>
+                    <View style={styles.statsValueRow}>
+                      <View style={[styles.statsDot, { backgroundColor: theme.colors.accent }]} />
+                      <Text style={[styles.statsValue, { color: theme.colors.text }]}>
+                        {upcomingCount}
+                      </Text>
+                    </View>
+                    <Text style={[styles.statsLabel, { color: theme.colors.textSecondary }]}>
+                      Скоро
+                    </Text>
+                  </View>
+
+                  <View style={[styles.statsDivider, { backgroundColor: theme.colors.border }]} />
+
+                  <View style={styles.statsCell}>
+                    <View style={styles.statsValueRow}>
+                      <View style={[styles.statsDot, { backgroundColor: theme.colors.textSecondary }]} />
+                      <Text style={[styles.statsValue, { color: theme.colors.text }]}>
+                        {endedCount}
+                      </Text>
+                    </View>
+                    <Text style={[styles.statsLabel, { color: theme.colors.textSecondary }]}>
+                      Завершено
+                    </Text>
+                  </View>
+
+                  <View style={[styles.statsDivider, { backgroundColor: theme.colors.border }]} />
+
+                  <View style={styles.statsCell}>
+                    <View style={styles.statsValueRow}>
+                      <MaterialIcons name="group" size={13} color={theme.colors.primary} />
+                      <Text style={[styles.statsValue, { color: theme.colors.text }]}>
+                        {participantsTotal}
+                      </Text>
+                    </View>
+                    <Text style={[styles.statsLabel, { color: theme.colors.textSecondary }]}>
+                      Участников
+                    </Text>
+                  </View>
+                </View>
               </View>
-              <Text style={[styles.statBoxLabel, { color: theme.colors.textSecondary }]}>Активные</Text>
-            </View>
-            <View style={[styles.statBox, { backgroundColor: theme.colors.background }]}>
-              <View style={{ alignItems: 'center' }}>
-                <MaterialIcons name="group" size={32} color={theme.colors.accent} />
-                <Text style={[styles.statNumber, { color: theme.colors.accent, marginTop: spacing.sm }]}>
-                  {events.reduce((sum, e) => sum + (e.participants || e.participantsCount || 0), 0)}
-                </Text>
-              </View>
-              <Text style={[styles.statBoxLabel, { color: theme.colors.textSecondary }]}>Участников</Text>
-            </View>
-          </View>
-        </ScaleInCard>
+            </ScaleInCard>
+          );
+        })()}
 
         {/* События */}
         {events.length > 0 ? (
@@ -943,32 +1002,76 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingBottom: 130,
   },
-  header: {
+  headerCard: {
+    borderWidth: 1,
+    borderRadius: borderRadius.lg,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+    paddingBottom: 0,
+    marginBottom: spacing.md,
+  },
+  headerTopRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: spacing.lg,
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: colors.text,
-    marginTop: spacing.xs,
-    fontWeight: '500',
-  },
-  createButton: {
-    backgroundColor: colors.primary,
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
     alignItems: 'center',
-    elevation: 3,
-    shadowOpacity: 0.2,
+    gap: spacing.md,
+    marginBottom: spacing.md,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  createBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+  },
+  createBtnText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  statsStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderTopWidth: 1,
+  },
+  statsCell: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  statsValueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  statsDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  statsValue: {
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  statsLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    marginTop: 2,
+    letterSpacing: 0.2,
+  },
+  statsDivider: {
+    width: 1,
+    height: 24,
+    opacity: 0.6,
   },
   statsContainer: {
     flexDirection: 'row',
