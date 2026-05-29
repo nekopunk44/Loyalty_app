@@ -755,43 +755,53 @@ export default function AdminEvents() {
 
             <ScrollView
               style={styles.modalBody}
-              contentContainerStyle={{ paddingBottom: 24 }}
+              contentContainerStyle={{ paddingBottom: 20 }}
               showsVerticalScrollIndicator={false}
             >
               {/* === Секция: Основное === */}
               <Text style={[styles.sectionLabel, { color: theme.colors.textSecondary }]}>Основное</Text>
-
-              <View style={styles.fieldGroup}>
-                <Text style={[styles.fieldLabel, { color: theme.colors.textSecondary }]}>Название</Text>
-                <TextInput
-                  style={[styles.input, { backgroundColor: theme.colors.background, color: theme.colors.text, borderColor: theme.colors.border }]}
-                  placeholder="Например: Двойной кешбек"
-                  placeholderTextColor={theme.colors.textSecondary}
-                  value={formData.title}
-                  onChangeText={(text) => setFormData({ ...formData, title: text })}
-                />
-              </View>
-
-              <View style={styles.fieldGroup}>
-                <Text style={[styles.fieldLabel, { color: theme.colors.textSecondary }]}>Описание</Text>
-                <TextInput
-                  style={[styles.input, styles.inputMultiline, { backgroundColor: theme.colors.background, color: theme.colors.text, borderColor: theme.colors.border }]}
-                  placeholder="Краткое описание..."
-                  placeholderTextColor={theme.colors.textSecondary}
-                  multiline
-                  textAlignVertical="top"
-                  value={formData.description}
-                  onChangeText={(text) => setFormData({ ...formData, description: text })}
-                />
-              </View>
-
-              <View style={styles.fieldGroup}>
-                <Text style={[styles.fieldLabel, { color: theme.colors.textSecondary }]}>Приз</Text>
-                <View style={[styles.input, styles.inputWithSuffix, { backgroundColor: theme.colors.background, borderColor: theme.colors.border }]}>
-                  <MaterialIcons name="emoji-events" size={18} color={theme.colors.success} />
+              <View style={[styles.groupCard, { backgroundColor: theme.colors.background, borderColor: theme.colors.border }]}>
+                {/* Название */}
+                <View style={styles.groupRow}>
+                  <Text style={[styles.rowLabel, { color: theme.colors.textSecondary }]}>Название</Text>
                   <TextInput
-                    style={[styles.inputInner, { color: theme.colors.text }]}
-                    placeholder="Например: 50 000 PRB"
+                    style={[styles.rowInput, { color: theme.colors.text }]}
+                    placeholder="Например: Двойной кешбек"
+                    placeholderTextColor={theme.colors.textSecondary}
+                    value={formData.title}
+                    onChangeText={(text) => setFormData({ ...formData, title: text })}
+                  />
+                </View>
+
+                <View style={[styles.hairline, { backgroundColor: theme.colors.border }]} />
+
+                {/* Описание */}
+                <View style={[styles.groupRow, { paddingBottom: 10 }]}>
+                  <Text style={[styles.rowLabel, { color: theme.colors.textSecondary }]}>Описание</Text>
+                  <TextInput
+                    style={[styles.rowInputMultiline, { color: theme.colors.text }]}
+                    placeholder="Краткое описание..."
+                    placeholderTextColor={theme.colors.textSecondary}
+                    multiline
+                    textAlignVertical="top"
+                    value={formData.description}
+                    onChangeText={(text) => setFormData({ ...formData, description: text })}
+                  />
+                </View>
+
+                <View style={[styles.hairline, { backgroundColor: theme.colors.border }]} />
+
+                {/* Приз */}
+                <View style={[styles.groupRow, styles.prizeRow]}>
+                  <View style={styles.prizeLeftBlock}>
+                    <View style={[styles.prizeIconWrap, { backgroundColor: `${theme.colors.success}22` }]}>
+                      <MaterialIcons name="emoji-events" size={16} color={theme.colors.success} />
+                    </View>
+                    <Text style={[styles.rowLabelInline, { color: theme.colors.text }]}>Приз</Text>
+                  </View>
+                  <TextInput
+                    style={[styles.prizeInput, { color: theme.colors.success }]}
+                    placeholder="50 000 PRB"
                     placeholderTextColor={theme.colors.textSecondary}
                     value={formData.prize}
                     onChangeText={(text) => setFormData({ ...formData, prize: text })}
@@ -800,43 +810,57 @@ export default function AdminEvents() {
               </View>
 
               {/* === Секция: Сроки === */}
-              <Text style={[styles.sectionLabel, { color: theme.colors.textSecondary, marginTop: spacing.md }]}>Сроки</Text>
-
-              <View style={styles.dateRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.fieldLabel, { color: theme.colors.textSecondary }]}>Начало</Text>
-                  <TouchableOpacity
-                    style={[styles.datePickerButton, { backgroundColor: theme.colors.background, borderColor: theme.colors.border }]}
-                    onPress={() => setStartDatePickerVisible(true)}
-                  >
-                    <MaterialIcons name="calendar-today" size={16} color={theme.colors.primary} />
+              <Text style={[styles.sectionLabel, { color: theme.colors.textSecondary, marginTop: 18 }]}>Сроки</Text>
+              <View style={[styles.groupCard, { backgroundColor: theme.colors.background, borderColor: theme.colors.border }]}>
+                <TouchableOpacity
+                  style={styles.groupRowInline}
+                  activeOpacity={0.7}
+                  onPress={() => setStartDatePickerVisible(true)}
+                >
+                  <View style={styles.dateRowLeft}>
+                    <View style={[styles.dateIconWrap, { backgroundColor: `${theme.colors.primary}22` }]}>
+                      <MaterialIcons name="calendar-today" size={14} color={theme.colors.primary} />
+                    </View>
+                    <Text style={[styles.rowLabelInline, { color: theme.colors.text }]}>Начало</Text>
+                  </View>
+                  <View style={styles.dateRowRight}>
                     <Text style={[
-                      styles.datePickerButtonText,
+                      styles.dateRowValue,
                       { color: formData.startDate ? theme.colors.text : theme.colors.textSecondary },
                     ]}>
-                      {formData.startDate || 'ДД.ММ.ГГГГ'}
+                      {formData.startDate || 'выбрать'}
                     </Text>
-                  </TouchableOpacity>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.fieldLabel, { color: theme.colors.textSecondary }]}>Окончание</Text>
-                  <TouchableOpacity
-                    style={[styles.datePickerButton, { backgroundColor: theme.colors.background, borderColor: theme.colors.border }]}
-                    onPress={() => setEndDatePickerVisible(true)}
-                  >
-                    <MaterialIcons name="event" size={16} color={theme.colors.accent} />
+                    <MaterialIcons name="chevron-right" size={18} color={theme.colors.textSecondary} />
+                  </View>
+                </TouchableOpacity>
+
+                <View style={[styles.hairline, { backgroundColor: theme.colors.border }]} />
+
+                <TouchableOpacity
+                  style={styles.groupRowInline}
+                  activeOpacity={0.7}
+                  onPress={() => setEndDatePickerVisible(true)}
+                >
+                  <View style={styles.dateRowLeft}>
+                    <View style={[styles.dateIconWrap, { backgroundColor: `${theme.colors.accent}22` }]}>
+                      <MaterialIcons name="event" size={14} color={theme.colors.accent} />
+                    </View>
+                    <Text style={[styles.rowLabelInline, { color: theme.colors.text }]}>Окончание</Text>
+                  </View>
+                  <View style={styles.dateRowRight}>
                     <Text style={[
-                      styles.datePickerButtonText,
+                      styles.dateRowValue,
                       { color: formData.endDate ? theme.colors.text : theme.colors.textSecondary },
                     ]}>
-                      {formData.endDate || 'ДД.ММ.ГГГГ'}
+                      {formData.endDate || 'выбрать'}
                     </Text>
-                  </TouchableOpacity>
-                </View>
+                    <MaterialIcons name="chevron-right" size={18} color={theme.colors.textSecondary} />
+                  </View>
+                </TouchableOpacity>
               </View>
 
               {/* === Секция: Тип === */}
-              <Text style={[styles.sectionLabel, { color: theme.colors.textSecondary, marginTop: spacing.md }]}>Тип события</Text>
+              <Text style={[styles.sectionLabel, { color: theme.colors.textSecondary, marginTop: 18 }]}>Тип события</Text>
               <View style={styles.chipGrid}>
                 {eventTypes.map((type) => {
                   const active = formData.eventType === type.value;
@@ -873,7 +897,7 @@ export default function AdminEvents() {
               </View>
 
               {/* === Секция: Доступ === */}
-              <Text style={[styles.sectionLabel, { color: theme.colors.textSecondary, marginTop: spacing.md }]}>Доступ</Text>
+              <Text style={[styles.sectionLabel, { color: theme.colors.textSecondary, marginTop: 18 }]}>Доступ</Text>
               <View style={styles.chipGrid}>
                 {userTypes.map((type) => {
                   const active = formData.allowedUsers === type.value;
@@ -1308,60 +1332,101 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
     textTransform: 'uppercase',
     marginBottom: 8,
+    marginLeft: 4,
   },
-  fieldGroup: {
-    marginBottom: 10,
-  },
-  fieldLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginBottom: 6,
-  },
-  input: {
+  groupCard: {
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: colors.text,
-    backgroundColor: colors.background,
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
   },
-  inputMultiline: {
-    minHeight: 70,
+  groupRow: {
+    paddingHorizontal: 14,
     paddingTop: 10,
+    paddingBottom: 12,
   },
-  inputWithSuffix: {
+  groupRowInline: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingVertical: 6,
+    justifyContent: 'space-between',
+    gap: 10,
   },
-  inputInner: {
-    flex: 1,
+  hairline: {
+    height: StyleSheet.hairlineWidth,
+    marginLeft: 14,
+    opacity: 0.8,
+  },
+  rowLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+  rowLabelInline: {
     fontSize: 14,
-    paddingVertical: 4,
+    fontWeight: '600',
   },
-  dateRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
+  rowInput: {
+    fontSize: 15,
+    fontWeight: '500',
+    padding: 0,
   },
-  datePickerButton: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: 10,
-    paddingVertical: 10,
+  rowInputMultiline: {
+    fontSize: 14,
+    fontWeight: '500',
+    padding: 0,
+    minHeight: 48,
+    lineHeight: 18,
+  },
+  prizeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.background,
-    gap: 8,
+    justifyContent: 'space-between',
+    paddingTop: 12,
+    paddingBottom: 12,
+    gap: 10,
   },
-  datePickerButtonText: {
-    fontSize: 13,
-    color: colors.text,
-    fontWeight: '600',
+  prizeLeftBlock: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  prizeIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  prizeInput: {
     flex: 1,
+    textAlign: 'right',
+    fontSize: 15,
+    fontWeight: '800',
+    padding: 0,
+  },
+  dateRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  dateRowRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  dateRowValue: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  dateIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   chipGrid: {
     flexDirection: 'row',
