@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   Animated,
+  Easing,
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { spacing, borderRadius } from '../../constants/theme';
@@ -26,9 +27,8 @@ const PERIODS = [
 const TABS = [
   { id: 'overview',    label: 'Обзор',    icon: 'dashboard'    },
   { id: 'ai',          label: 'AI рынок', icon: 'auto-awesome' },
-  { id: 'revenue',     label: 'Оборот',   icon: 'trending-up'  },
   { id: 'users',       label: 'Клиенты',  icon: 'people'       },
-  { id: 'properties',  label: 'Объекты',  icon: 'location-city'},
+  { id: 'properties',  label: 'Номера',   icon: 'bed'          },
 ];
 
 const clamp    = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -130,6 +130,7 @@ export default function AdminStats() {
   const [refreshing,      setRefreshing]       = useState(false);
   const [aiAnalysis,      setAiAnalysis]       = useState('');
   const [aiLoading,       setAiLoading]        = useState(false);
+  const [ltvTop,          setLtvTop]           = useState(null); // {items, total} | null
   const { theme } = useTheme();
 
   const contentOpacity = useRef(new Animated.Value(1)).current;
@@ -162,12 +163,14 @@ export default function AdminStats() {
   const load = useCallback(async () => {
     try {
       if (!refreshing) setIsLoading(true);
-      const [statsRes, bookingsRes] = await Promise.all([
+      const [statsRes, bookingsRes, ltvRes] = await Promise.all([
         apiCall(`${getApiUrl()}/admin/stats`),
         apiCall(`${getApiUrl()}/bookings`),
+        apiCall(`${getApiUrl()}/admin/ltv-top?n=10`).catch(() => null),
       ]);
       if (statsRes.success)    setStatsData(statsRes);
       if (bookingsRes.success) setAllBookings(bookingsRes.bookings || []);
+      setLtvTop(ltvRes && ltvRes.success ? ltvRes : null);
     } catch (e) {
       console.error('AdminStats load error:', e);
     } finally {
@@ -302,10 +305,10 @@ export default function AdminStats() {
         color: pendingCount > 0 ? '#F59E0B' : '#06B6D4',
       },
       {
-        title: concentration > 45 ? 'Снизить зависимость от одного объекта' : 'Масштабировать лучшие объекты',
+        title: concentration > 45 ? 'Снизить зависимость от одного номера' : 'Масштабировать лучшие номера',
         body: concentration > 45
-          ? `${fmtPct(concentration)} дохода — один объект. Выведи 2-3 похожих в промо, чтобы снизить риск.`
-          : `Доход распределён нормально. Усиль карточки объектов с лучшей конверсией и отзывами.`,
+          ? `${fmtPct(concentration)} дохода — один номер. Выведи 2-3 похожих в промо, чтобы снизить риск.`
+          : `Доход распределён нормально. Усиль карточки номеров с лучшей конверсией и отзывами.`,
         impact: concentration > 45 ? 'ниже операционный риск' : '+5-9% к продажам',
         icon: 'hub',
         color: '#06B6D4',
@@ -330,6 +333,25 @@ export default function AdminStats() {
     buildChartBuckets(allBookings, selectedPeriod),
   [allBookings, selectedPeriod]);
 
+  // Сравнение с предыдущим эквивалентным периодом (для дельта-бейджа)
+  const revenueDelta = useMemo(() => {
+    const periodDays = PERIODS.find(p => p.id === selectedPeriod)?.days || 30;
+    const now = Date.now();
+    const currStart = now - periodDays * 86400000;
+    const prevStart = now - 2 * periodDays * 86400000;
+
+    let curr = 0, prev = 0;
+    allBookings.forEach(b => {
+      if (b.status !== 'confirmed' && b.status !== 'completed') return;
+      const t = new Date(b.createdAt || b.date).getTime();
+      const price = asNumber(b.totalPrice);
+      if (t >= currStart && t <= now) curr += price;
+      else if (t >= prevStart && t < currStart) prev += price;
+    });
+    const pct = prev > 0 ? ((curr - prev) / prev) * 100 : (curr > 0 ? 100 : 0);
+    return { curr, prev, pct };
+  }, [allBookings, selectedPeriod]);
+
   const periodLabel = PERIODS.find(p => p.id === selectedPeriod)?.label || 'Период';
 
   if (isLoading) {
@@ -347,16 +369,26 @@ export default function AdminStats() {
     <View style={[styles.statCard, {
       backgroundColor: theme.colors.cardBg,
       borderColor: theme.colors.border,
-      borderLeftColor: color,
-      borderLeftWidth: 3,
     }]}>
-      <View style={[styles.iconBox, { backgroundColor: `${color}18` }]}>
-        <MaterialIcons name={icon} size={22} color={color} />
+      <View style={[styles.iconBox, { backgroundColor: `${color}1A` }]}>
+        <MaterialIcons name={icon} size={16} color={color} />
       </View>
       <View style={styles.statCardText}>
-        <Text style={[styles.statValue, { color: theme.colors.text }]}>{value}</Text>
-        <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>{label}</Text>
-        {!!hint && <Text style={[styles.statHint, { color }]}>{hint}</Text>}
+        <Text
+          style={[styles.statValue, { color: theme.colors.text }]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.7}
+        >
+          {value}
+        </Text>
+        <Text
+          style={[styles.statLabel, { color: theme.colors.textSecondary }]}
+          numberOfLines={1}
+        >
+          {label}
+        </Text>
+        {!!hint && <Text style={[styles.statHint, { color }]} numberOfLines={1}>{hint}</Text>}
       </View>
     </View>
   );
@@ -381,41 +413,41 @@ export default function AdminStats() {
       <View style={[styles.hero, {
         backgroundColor: theme.colors.cardBg,
         borderColor: theme.colors.border,
-        borderLeftColor: theme.colors.primary,
-        borderLeftWidth: 4,
       }]}>
         <View style={styles.heroTop}>
-          <View>
-            <Text style={[styles.heroEyebrow, { color: theme.colors.primary }]}>Аналитика за период</Text>
-            <Text style={[styles.heroTitle, { color: theme.colors.text }]}>{periodLabel}</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.heroEyebrow, { color: theme.colors.primary }]}>Сводка · {periodLabel.toLowerCase()}</Text>
+            <Text style={[styles.heroMood, { color: theme.colors.text }]}>{model.marketMood}</Text>
           </View>
           {model.demandScore !== null && (
-            <View style={[styles.scoreBadge, { backgroundColor: '#10B98118', borderWidth: 1, borderColor: '#10B98140' }]}>
-              <Text style={[styles.scoreBadgeText, { color: '#10B981' }]}>
-                {Math.round(model.demandScore)}/100
-              </Text>
+            <View style={[styles.scoreBadge, { backgroundColor: '#10B98118', borderColor: '#10B98140' }]}>
+              <Text style={[styles.scoreBadgeText, { color: '#10B981' }]}>{Math.round(model.demandScore)}</Text>
+              <Text style={[styles.scoreBadgeUnit, { color: '#10B981' }]}>/100</Text>
             </View>
           )}
         </View>
-        <Text style={[styles.heroText, { color: theme.colors.textSecondary }]}>
-          AI оценивает спрос как: <Text style={{ fontWeight: '700', color: theme.colors.text }}>{model.marketMood}</Text>.
-          {model.demandScore !== null ? ` Главный сигнал: ${model.priceSignal}.` : ' Добавьте бронирования для анализа.'}
-        </Text>
+        {model.demandScore !== null && (
+          <Text style={[styles.heroText, { color: theme.colors.textSecondary }]}>
+            Сигнал: {model.priceSignal}
+          </Text>
+        )}
       </View>
 
       <View style={styles.statGrid}>
-        <StatCard icon="people"             label="Клиентов"     value={fmtNum(metrics.users)}    color={theme.colors.primary} />
+        <StatCard icon="people"             label="Клиентов"     value={fmtNum(metrics.users)}     color={theme.colors.primary} />
         <StatCard icon="shopping-bag"       label="Бронирований" value={fmtNum(metrics.purchases)} color="#06B6D4" />
         <StatCard icon="payments"           label="Оборот"       value={fmtMoney(metrics.revenue)} color="#10B981" />
         <StatCard icon="workspace-premium"  label="Premium"      value={fmtNum(metrics.premium)}   color="#8B5CF6" />
       </View>
+
+      {renderRevenueChart()}
 
       <View style={[styles.panel, { backgroundColor: theme.colors.cardBg, borderColor: theme.colors.border }]}>
         <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Эффективность</Text>
         <MetricRow label="Средний чек"       value={fmtMoney(model.avgBooking)}  progress={clamp(model.avgBooking / 50000 * 100, 3, 100)} color={theme.colors.primary} theme={theme} />
         <MetricRow label="Доход на клиента"  value={fmtMoney(model.revPerUser)}  progress={clamp(model.revPerUser / 12000 * 100, 3, 100)}  color="#06B6D4" theme={theme} />
         <MetricRow label="Доля Premium"      value={fmtPct(model.premiumShare)}  progress={clamp(model.premiumShare, 3, 100)}              color="#8B5CF6" theme={theme} />
-        <MetricRow label="Загрузка объектов" value={fmtPct(model.utilization)}   progress={model.utilization}                              color="#10B981" theme={theme} />
+        <MetricRow label="Загрузка номеров"  value={fmtPct(model.utilization)}   progress={model.utilization}                              color="#10B981" theme={theme} />
       </View>
     </>
   );
@@ -430,7 +462,7 @@ export default function AdminStats() {
           <View style={styles.aiTitleBlock}>
             <Text style={[styles.aiTitle, { color: theme.colors.text }]}>AI market analyst</Text>
             <Text style={[styles.aiSubtitle, { color: theme.colors.textSecondary }]}>
-              {allBookings.length} бронирований · {properties.length} объектов · {metrics.users} клиентов
+              {allBookings.length} бронирований · {properties.length} номеров · {metrics.users} клиентов
             </Text>
           </View>
         </View>
@@ -518,16 +550,33 @@ export default function AdminStats() {
     </>
   );
 
-  const renderRevenue = () => {
+  const renderRevenueChart = () => {
     const { values, labels } = revenueChart;
-    const maxVal = Math.max(...values, 1);
     const hasData = values.some(v => v > 0);
+    const deltaPositive = revenueDelta.pct >= 0;
+    const deltaColor = deltaPositive ? '#10B981' : '#EF4444';
+    const deltaIcon  = deltaPositive ? 'trending-up' : 'trending-down';
 
     return (
       <View style={[styles.panel, { backgroundColor: theme.colors.cardBg, borderColor: theme.colors.border }]}>
-        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-          Динамика оборота — {periodLabel}
-        </Text>
+        <View style={styles.chartHeader}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.chartLabel, { color: theme.colors.textSecondary }]}>
+              Оборот · {periodLabel.toLowerCase()}
+            </Text>
+            <Text style={[styles.chartHero, { color: theme.colors.text }]} numberOfLines={1} adjustsFontSizeToFit>
+              {fmtMoney(revenueDelta.curr)}
+            </Text>
+          </View>
+          {hasData && (
+            <View style={[styles.deltaBadge, { backgroundColor: `${deltaColor}1A`, borderColor: `${deltaColor}40` }]}>
+              <MaterialIcons name={deltaIcon} size={14} color={deltaColor} />
+              <Text style={[styles.deltaText, { color: deltaColor }]}>
+                {deltaPositive ? '+' : ''}{Math.round(revenueDelta.pct)}%
+              </Text>
+            </View>
+          )}
+        </View>
 
         {!hasData ? (
           <View style={styles.emptyState}>
@@ -537,74 +586,121 @@ export default function AdminStats() {
             </Text>
           </View>
         ) : (
-          <View style={[styles.barChart, { height: BAR_CHART_H }]}>
-            {values.map((val, index) => {
-              const barH = val > 0
-                ? Math.max(Math.round((val / maxVal) * (BAR_CHART_H - 28)), 6)
-                : 4;
-              const isLast = index === values.length - 1;
-              return (
-                <View key={index} style={styles.barColumn}>
-                  <Text style={[styles.barTopLabel, { color: theme.colors.textSecondary }]}>
-                    {val > 0 ? fmtNum(Math.round(val / 1000)) + 'k' : ''}
-                  </Text>
-                  <View style={[styles.bar, {
-                    height: barH,
-                    backgroundColor: isLast ? theme.colors.primary : '#06B6D4',
-                    opacity: isLast ? 1 : val === 0 ? 0.2 : 0.75,
-                  }]} />
-                  <Text style={[styles.barLabel, { color: theme.colors.textSecondary }]}>{labels[index]}</Text>
-                </View>
-              );
-            })}
-          </View>
+          <AnimatedBarChart
+            values={values}
+            labels={labels}
+            theme={theme}
+            primary={theme.colors.primary}
+          />
         )}
 
-        <MetricRow label="Прогноз роста (AI)"   value={metrics.revenue > 0 ? '+11%' : 'нет данных'}                              progress={metrics.revenue > 0 ? 66 : 0}               color="#10B981" theme={theme} />
-        <MetricRow label="Риск просадки (AI)"   value={model.riskScore !== null ? fmtPct(model.riskScore) : 'нет данных'}       progress={model.riskScore ?? 0}                       color="#F59E0B" theme={theme} />
+        {hasData && revenueDelta.prev > 0 && (
+          <Text style={[styles.chartFootnote, { color: theme.colors.textSecondary }]}>
+            Предыдущий {periodLabel.toLowerCase()}: {fmtMoney(revenueDelta.prev)}
+          </Text>
+        )}
+
+        <View style={styles.chartMetrics}>
+          <MetricRow label="Прогноз роста (AI)"   value={metrics.revenue > 0 ? '+11%' : 'нет данных'}                              progress={metrics.revenue > 0 ? 66 : 0}               color="#10B981" theme={theme} />
+          <MetricRow label="Риск просадки (AI)"   value={model.riskScore !== null ? fmtPct(model.riskScore) : 'нет данных'}       progress={model.riskScore ?? 0}                       color="#F59E0B" theme={theme} />
+        </View>
       </View>
     );
   };
 
   const renderUsers = () => (
-    <View style={[styles.panel, { backgroundColor: theme.colors.cardBg, borderColor: theme.colors.border }]}>
-      <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Топ активных клиентов</Text>
-      <FlatList
-        data={topUsers}
-        keyExtractor={item => String(item.id)}
-        scrollEnabled={false}
-        ListEmptyComponent={<EmptyState text="Пока нет данных по клиентам" theme={theme} />}
-        renderItem={({ item }) => (
-          <View style={[styles.listRow, { borderBottomColor: theme.colors.border }]}>
-            <View style={[styles.avatar, { backgroundColor: theme.colors.primary }]}>
-              <Text style={styles.avatarText}>{String(item.name || '?').charAt(0).toUpperCase()}</Text>
-            </View>
-            <View style={styles.listContent}>
-              <Text style={[styles.listTitle,    { color: theme.colors.text }]}>{item.name}</Text>
-              <Text style={[styles.listSubtitle, { color: theme.colors.textSecondary }]}>{item.status} · {item.purchases} броней</Text>
-            </View>
-            <Text style={[styles.listValue, { color: theme.colors.primary }]}>{fmtMoney(item.spent)}</Text>
+    <>
+      <View style={[styles.panel, { backgroundColor: theme.colors.cardBg, borderColor: theme.colors.border, marginBottom: spacing.md }]}>
+        <View style={styles.ltvHeader}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>AI-прогноз LTV</Text>
+            <Text style={[styles.ltvHint, { color: theme.colors.textSecondary }]}>
+              Топ клиентов по предсказанной годовой ценности (gradient boosting)
+            </Text>
+          </View>
+          <View style={[styles.ltvBadge, { backgroundColor: '#8B5CF615' }]}>
+            <MaterialIcons name="trending-up" size={14} color="#8B5CF6" />
+            <Text style={[styles.ltvBadgeText, { color: '#8B5CF6' }]}>ML</Text>
+          </View>
+        </View>
+
+        {ltvTop === null && (
+          <View style={styles.ltvUnavailable}>
+            <MaterialIcons name="cloud-off" size={18} color={theme.colors.textSecondary} />
+            <Text style={[styles.ltvUnavailableText, { color: theme.colors.textSecondary }]}>
+              ML-сервис недоступен. Запустите server/ml и переобучите модели.
+            </Text>
           </View>
         )}
-      />
-    </View>
+
+        {ltvTop !== null && (ltvTop.items || []).length === 0 && (
+          <EmptyState text="Недостаточно данных для прогноза LTV" theme={theme} />
+        )}
+
+        {ltvTop !== null && (ltvTop.items || []).length > 0 && ltvTop.items.map((it, i) => {
+          const tierColor = it.predictedLtv >= 100000 ? '#10B981'
+            : it.predictedLtv >= 25000 ? '#F59E0B'
+            : '#94A3B8';
+          const name = it.displayName || it.email || it.userId;
+          return (
+            <View key={it.userId} style={[styles.ltvRow, { borderBottomColor: theme.colors.border, borderBottomWidth: i < ltvTop.items.length - 1 ? 1 : 0 }]}>
+              <View style={[styles.ltvRank, { backgroundColor: tierColor + '22' }]}>
+                <Text style={[styles.ltvRankText, { color: tierColor }]}>{i + 1}</Text>
+              </View>
+              <View style={styles.listContent}>
+                <Text style={[styles.listTitle, { color: theme.colors.text }]} numberOfLines={1}>{name}</Text>
+                <Text style={[styles.listSubtitle, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+                  {it.membershipLevel || '—'} · потрачено {fmtMoney(it.totalSpent)}
+                </Text>
+              </View>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={[styles.ltvValue, { color: tierColor }]}>{fmtMoney(it.predictedLtv)}</Text>
+                <Text style={[styles.ltvValueLabel, { color: theme.colors.textSecondary }]}>прогноз/год</Text>
+              </View>
+            </View>
+          );
+        })}
+      </View>
+
+      <View style={[styles.panel, { backgroundColor: theme.colors.cardBg, borderColor: theme.colors.border }]}>
+        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Топ активных клиентов</Text>
+        <FlatList
+          data={topUsers}
+          keyExtractor={item => String(item.id)}
+          scrollEnabled={false}
+          ListEmptyComponent={<EmptyState text="Пока нет данных по клиентам" theme={theme} />}
+          renderItem={({ item }) => (
+            <View style={[styles.listRow, { borderBottomColor: theme.colors.border }]}>
+              <View style={[styles.avatar, { backgroundColor: theme.colors.primary }]}>
+                <Text style={styles.avatarText}>{String(item.name || '?').charAt(0).toUpperCase()}</Text>
+              </View>
+              <View style={styles.listContent}>
+                <Text style={[styles.listTitle,    { color: theme.colors.text }]}>{item.name}</Text>
+                <Text style={[styles.listSubtitle, { color: theme.colors.textSecondary }]}>{item.status} · {item.purchases} броней</Text>
+              </View>
+              <Text style={[styles.listValue, { color: theme.colors.primary }]}>{fmtMoney(item.spent)}</Text>
+            </View>
+          )}
+        />
+      </View>
+    </>
   );
 
   const renderProperties = () => (
     <View style={[styles.panel, { backgroundColor: theme.colors.cardBg, borderColor: theme.colors.border }]}>
-      <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Объекты и рыночный потенциал</Text>
+      <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Номера и их выручка</Text>
       <FlatList
         data={properties}
         keyExtractor={item => String(item.id)}
         scrollEnabled={false}
-        ListEmptyComponent={<EmptyState text="Пока нет данных по объектам" theme={theme} />}
+        ListEmptyComponent={<EmptyState text="Пока нет данных по номерам" theme={theme} />}
         renderItem={({ item }) => {
           const totalRev = properties.reduce((s, p) => s + asNumber(p.revenue), 0);
           const share = totalRev > 0 ? (asNumber(item.revenue) / totalRev) * 100 : 0;
           return (
             <View style={[styles.propertyRow, { borderBottomColor: theme.colors.border }]}>
               <View style={[styles.propertyIcon, { backgroundColor: '#06B6D430' }]}>
-                <MaterialIcons name="apartment" size={20} color="#06B6D4" />
+                <MaterialIcons name="bed" size={20} color="#06B6D4" />
               </View>
               <View style={styles.listContent}>
                 <Text style={[styles.listTitle,    { color: theme.colors.text }]}>{item.name}</Text>
@@ -623,7 +719,6 @@ export default function AdminStats() {
   const renderContent = () => {
     switch (activeTab) {
       case 'ai':         return renderAi();
-      case 'revenue':    return renderRevenue();
       case 'users':      return renderUsers();
       case 'properties': return renderProperties();
       default:           return renderOverview();
@@ -709,6 +804,94 @@ function AnimatedTabButton({ tab, active, onPress, theme }) {
   );
 }
 
+function AnimatedBarChart({ values, labels, theme, primary }) {
+  const maxVal = Math.max(...values, 1);
+  const maxIdx = values.reduce((bi, v, i, arr) => v > arr[bi] ? i : bi, 0);
+  const trackH = BAR_CHART_H - 30;
+
+  // Пересоздаём массив Animated.Value при смене длины (week→month→year — разное N)
+  const anims = useMemo(
+    () => values.map(() => new Animated.Value(0)),
+    [values.length] // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
+  useEffect(() => {
+    anims.forEach(a => a.setValue(0));
+    Animated.stagger(
+      35,
+      anims.map((a, i) => {
+        const v = values[i] || 0;
+        const target = v > 0 ? Math.max((v / maxVal) * trackH, 8) : 3;
+        return Animated.timing(a, {
+          toValue: target,
+          duration: 420,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: false,
+        });
+      })
+    ).start();
+  }, [values, maxVal, trackH, anims]);
+
+  const isDense = values.length > 6;
+  const gap = isDense ? 3 : 6;
+  const labelFontSize = isDense ? 9 : 10;
+  const topLabelFontSize = isDense ? 8 : 9;
+
+  return (
+    <View style={[styles.barChart, { height: BAR_CHART_H, gap }]}>
+      {values.map((val, i) => {
+        const isMax     = i === maxIdx && val > 0;
+        const isCurrent = i === values.length - 1;
+        const barColor  = isMax ? primary : `${primary}80`;
+
+        return (
+          <View key={i} style={styles.barColumn}>
+            <Text
+              style={[styles.barTopLabel, {
+                color: isMax ? primary : theme.colors.textSecondary,
+                fontWeight: isMax ? '900' : '600',
+                fontSize: topLabelFontSize,
+              }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.7}
+            >
+              {val > 0 ? fmtNum(Math.round(val / 1000)) + 'k' : ''}
+            </Text>
+            <View style={[styles.barTrack, { height: trackH, backgroundColor: `${theme.colors.border}60` }]}>
+              <Animated.View
+                style={[
+                  styles.barFill,
+                  {
+                    height: anims[i],
+                    backgroundColor: barColor,
+                    opacity: val === 0 ? 0.25 : 1,
+                  },
+                ]}
+              />
+              {isMax && (
+                <View style={[styles.barCap, { backgroundColor: primary }]} />
+              )}
+            </View>
+            <Text
+              style={[styles.barLabel, {
+                color: isCurrent ? theme.colors.text : theme.colors.textSecondary,
+                fontWeight: isCurrent ? '800' : '600',
+                fontSize: labelFontSize,
+              }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.6}
+            >
+              {labels[i]}
+            </Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
 function MetricRow({ label, value, progress, color, theme }) {
   return (
     <View style={styles.metricRow}>
@@ -726,8 +909,22 @@ function MetricRow({ label, value, progress, color, theme }) {
 function SignalPill({ label, value, color, theme }) {
   return (
     <View style={[styles.signalPill, { backgroundColor: `${color}12`, borderColor: `${color}40`, borderWidth: 1 }]}>
-      <Text style={[styles.signalValue, { color }]}>{value}</Text>
-      <Text style={[styles.signalLabel, { color: theme.colors.textSecondary }]}>{label}</Text>
+      <Text
+        style={[styles.signalValue, { color }]}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.6}
+      >
+        {value}
+      </Text>
+      <Text
+        style={[styles.signalLabel, { color: theme.colors.textSecondary }]}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.7}
+      >
+        {label}
+      </Text>
     </View>
   );
 }
@@ -744,7 +941,7 @@ function EmptyState({ text, theme }) {
 const styles = StyleSheet.create({
   screen:    { flex: 1 },
   header:    { paddingHorizontal: spacing.md, paddingTop: spacing.md },
-  container: { paddingHorizontal: spacing.md, paddingBottom: spacing.lg },
+  container: { paddingHorizontal: spacing.md, paddingBottom: 130 },
   loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   loadingText: { marginTop: 12, fontSize: 14 },
 
@@ -762,24 +959,35 @@ const styles = StyleSheet.create({
   },
   tabText: { fontSize: 13, fontWeight: '700' },
 
-  hero: { borderWidth: 1, borderRadius: borderRadius.lg, padding: spacing.lg, marginBottom: spacing.md },
-  heroTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  heroEyebrow: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.8 },
-  heroTitle:   { fontSize: 28, fontWeight: '900', marginTop: spacing.xs },
-  heroText:    { fontSize: 14, lineHeight: 21, marginTop: spacing.md },
-  scoreBadge:  { borderRadius: borderRadius.lg, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
-  scoreBadgeText: { fontSize: 15, fontWeight: '900' },
+  hero: { borderWidth: 1, borderRadius: borderRadius.lg, padding: spacing.md, marginBottom: spacing.md },
+  heroTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
+  heroEyebrow: { fontSize: 10, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.6 },
+  heroMood:    { fontSize: 18, fontWeight: '900', marginTop: 4, textTransform: 'capitalize' },
+  heroText:    { fontSize: 12, lineHeight: 17, marginTop: spacing.sm },
+  scoreBadge:  { flexDirection: 'row', alignItems: 'baseline', borderWidth: 1, borderRadius: borderRadius.md, paddingHorizontal: 10, paddingVertical: 6 },
+  scoreBadgeText: { fontSize: 18, fontWeight: '900' },
+  scoreBadgeUnit: { fontSize: 11, fontWeight: '700', opacity: 0.7, marginLeft: 1 },
+
+  chartHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.md, marginBottom: spacing.lg },
+  chartLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.6 },
+  chartHero:  { fontSize: 24, fontWeight: '900', letterSpacing: -0.5, marginTop: 4 },
+  deltaBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderRadius: borderRadius.md, paddingHorizontal: 8, paddingVertical: 5 },
+  deltaText:  { fontSize: 12, fontWeight: '900' },
+  chartFootnote: { fontSize: 11, fontWeight: '500', marginTop: spacing.xs, marginBottom: spacing.md },
+  chartMetrics: { marginTop: spacing.md },
 
   statGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: spacing.sm },
   statCard: {
-    width: '48.5%', borderWidth: 1, borderRadius: borderRadius.lg,
-    padding: spacing.md, marginBottom: spacing.sm, flexDirection: 'row', alignItems: 'center',
+    width: '48.5%', borderWidth: 1, borderRadius: borderRadius.md,
+    paddingHorizontal: 10, paddingVertical: 10,
+    marginBottom: spacing.sm,
+    flexDirection: 'row', alignItems: 'center', gap: 10,
   },
-  iconBox:     { width: 42, height: 42, borderRadius: borderRadius.md, alignItems: 'center', justifyContent: 'center', marginRight: spacing.sm, flexShrink: 0 },
-  statCardText: { flex: 1 },
-  statValue:   { fontSize: 16, fontWeight: '900' },
-  statLabel:   { fontSize: 11, marginTop: 2 },
-  statHint:    { fontSize: 11, fontWeight: '700', marginTop: spacing.xs },
+  iconBox:     { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  statCardText:{ flex: 1, minWidth: 0 },
+  statValue:   { fontSize: 16, fontWeight: '900', letterSpacing: -0.3 },
+  statLabel:   { fontSize: 11, fontWeight: '600', marginTop: 1 },
+  statHint:    { fontSize: 10, fontWeight: '700', marginTop: 1 },
 
   panel: { borderWidth: 1, borderRadius: borderRadius.lg, padding: spacing.lg, marginBottom: spacing.md },
   sectionTitle: { fontSize: 17, fontWeight: '900', marginBottom: spacing.md },
@@ -809,10 +1017,10 @@ const styles = StyleSheet.create({
   aiModelTag: { fontSize: 10, fontWeight: '700', letterSpacing: 0.5, marginBottom: 6, textTransform: 'uppercase' },
   aiResponseText: { fontSize: 14, lineHeight: 22 },
 
-  signalGrid: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg },
-  signalPill: { flex: 1, borderRadius: borderRadius.lg, padding: spacing.md, alignItems: 'center' },
-  signalValue: { fontSize: 20, fontWeight: '900' },
-  signalLabel: { fontSize: 11, marginTop: spacing.xs },
+  signalGrid: { flexDirection: 'row', gap: 6, marginTop: spacing.lg },
+  signalPill: { flex: 1, borderRadius: borderRadius.md, paddingVertical: spacing.sm, paddingHorizontal: 4, alignItems: 'center', minWidth: 0 },
+  signalValue: { fontSize: 18, fontWeight: '900', letterSpacing: -0.3 },
+  signalLabel: { fontSize: 10, fontWeight: '600', marginTop: 3, textAlign: 'center' },
 
   insightCard: { flexDirection: 'row', borderWidth: 1, borderRadius: borderRadius.lg, padding: spacing.md, marginBottom: spacing.md },
   insightIcon: { width: 44, height: 44, borderRadius: borderRadius.lg, alignItems: 'center', justifyContent: 'center', marginRight: spacing.md, flexShrink: 0 },
@@ -828,11 +1036,13 @@ const styles = StyleSheet.create({
   scenarioNote: { fontSize: 12, marginTop: spacing.xs },
   scenarioValue: { fontSize: 14, fontWeight: '800' },
 
-  barChart: { flexDirection: 'row', alignItems: 'flex-end', gap: 4, marginBottom: spacing.lg },
+  barChart: { flexDirection: 'row', alignItems: 'flex-end', gap: 6, marginBottom: spacing.sm },
   barColumn: { flex: 1, alignItems: 'center', justifyContent: 'flex-end' },
-  barTopLabel: { fontSize: 8, marginBottom: 2 },
-  bar:       { width: '100%', borderRadius: borderRadius.sm },
-  barLabel:  { marginTop: 4, fontSize: 10, fontWeight: '600' },
+  barTopLabel: { fontSize: 9, marginBottom: 4 },
+  barTrack:    { width: '100%', borderRadius: 6, overflow: 'hidden', justifyContent: 'flex-end' },
+  barFill:     { width: '100%', borderTopLeftRadius: 6, borderTopRightRadius: 6 },
+  barCap:      { position: 'absolute', top: 0, left: 0, right: 0, height: 3, borderTopLeftRadius: 6, borderTopRightRadius: 6, opacity: 0.85 },
+  barLabel:    { marginTop: 6, fontSize: 10 },
 
   listRow:    { flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, paddingVertical: spacing.md },
   avatar:     { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginRight: spacing.md },
@@ -844,6 +1054,18 @@ const styles = StyleSheet.create({
 
   propertyRow: { flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, paddingVertical: spacing.md },
   propertyIcon: { width: 40, height: 40, borderRadius: borderRadius.md, alignItems: 'center', justifyContent: 'center', marginRight: spacing.md },
+
+  ltvHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginBottom: spacing.sm },
+  ltvHint:   { fontSize: 11, marginTop: 2 },
+  ltvBadge:  { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: borderRadius.sm },
+  ltvBadgeText: { fontSize: 11, fontWeight: '900' },
+  ltvUnavailable: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingVertical: spacing.md },
+  ltvUnavailableText: { fontSize: 12, flex: 1 },
+  ltvRow:    { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.md },
+  ltvRank:   { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginRight: spacing.md },
+  ltvRankText: { fontSize: 13, fontWeight: '900' },
+  ltvValue:  { fontSize: 13, fontWeight: '900' },
+  ltvValueLabel: { fontSize: 10, marginTop: 2 },
 
   emptyState: { alignItems: 'center', paddingVertical: spacing.xl },
   emptyText:  { marginTop: spacing.sm, fontSize: 14, textAlign: 'center' },
