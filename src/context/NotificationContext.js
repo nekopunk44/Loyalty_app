@@ -297,10 +297,13 @@ export const NotificationProvider = ({ children }) => {
       });
 
       if (data.notification) {
-        const newNotification = data.notification;
-        const updated = [newNotification, ...notifications];
-        setNotifications(updated);
-        await AsyncStorage.setItem('@notifications', JSON.stringify(updated));
+        // Функциональный апдейт — не теряем уведомления, прилетевшие через SSE
+        // между моментом отправки POST и получением ответа.
+        setNotifications((prev) => {
+          const updated = [data.notification, ...prev];
+          AsyncStorage.setItem('@notifications', JSON.stringify(updated)).catch(() => {});
+          return updated;
+        });
       } else {
         console.error('Ошибка при сохранении уведомления:', data.error);
       }
@@ -482,45 +485,64 @@ export const NotificationProvider = ({ children }) => {
     try {
       if (!user?.id) return;
 
-      const data = await apiCall(`${getApiUrl()}/notifications/${user.id}/${notificationId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({}),
-      });
-
-      if (!data.error) {
-        const updated = notifications.map(n =>
+      // Оптимистично обновляем UI; сервер дёргаем фоном.
+      setNotifications((prev) => {
+        const updated = prev.map((n) =>
           n.id === notificationId ? { ...n, read: true } : n
         );
-        setNotifications(updated);
-        await AsyncStorage.setItem('@notifications', JSON.stringify(updated));
-      }
+        AsyncStorage.setItem('@notifications', JSON.stringify(updated)).catch(() => {});
+        return updated;
+      });
+
+      apiCall(`${getApiUrl()}/notifications/${user.id}/${notificationId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({}),
+      }).catch((error) => {
+        console.error('Ошибка при отметке уведомления как прочитанного:', error);
+      });
     } catch (error) {
       console.error('Ошибка при отметке уведомления как прочитанного:', error);
+    }
+  };
+
+  // Пометить ВСЕ непрочитанные как прочитанные (один запрос на сервер).
+  const markAllAsRead = async () => {
+    try {
+      if (!user?.id) return;
+
+      setNotifications((prev) => {
+        const updated = prev.map((n) => (n.read ? n : { ...n, read: true }));
+        AsyncStorage.setItem('@notifications', JSON.stringify(updated)).catch(() => {});
+        return updated;
+      });
+
+      apiCall(`${getApiUrl()}/notifications/${user.id}/read-all`, {
+        method: 'PATCH',
+        body: JSON.stringify({}),
+      }).catch((error) => {
+        console.error('Ошибка при отметке всех уведомлений:', error);
+      });
+    } catch (error) {
+      console.error('Ошибка при отметке всех уведомлений:', error);
     }
   };
 
   // Удалить уведомление
   const deleteNotification = async (notificationId) => {
     try {
-      if (!user?.id) {
-        const updated = notifications.filter(n => n.id !== notificationId);
-        setNotifications(updated);
-        await AsyncStorage.setItem('@notifications', JSON.stringify(updated));
-        return;
-      }
+      // Локально удаляем сразу — без блокировки на сервер.
+      setNotifications((prev) => {
+        const updated = prev.filter((n) => n.id !== notificationId);
+        AsyncStorage.setItem('@notifications', JSON.stringify(updated)).catch(() => {});
+        return updated;
+      });
 
-      try {
-        await apiCall(`${getApiUrl()}/notifications/${user.id}/${notificationId}`, {
-          method: 'DELETE',
-          body: JSON.stringify({}),
-        });
-      } catch (serverError) {
-        // Удаляем локально даже при ошибке сервера
-      }
+      if (!user?.id) return;
 
-      const updated = notifications.filter(n => n.id !== notificationId);
-      setNotifications(updated);
-      await AsyncStorage.setItem('@notifications', JSON.stringify(updated));
+      apiCall(`${getApiUrl()}/notifications/${user.id}/${notificationId}`, {
+        method: 'DELETE',
+        body: JSON.stringify({}),
+      }).catch(() => { /* удаление осталось локально */ });
     } catch (error) {
       console.error('Ошибка при удалении уведомления:', error);
     }
@@ -589,6 +611,7 @@ export const NotificationProvider = ({ children }) => {
         notifyUserDeleted,
         notifyUserUpdated,
         markAsRead,
+        markAllAsRead,
         deleteNotification,
         clearAllNotifications,
         getUnreadCount,
