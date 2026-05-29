@@ -22,6 +22,7 @@ jest.mock('../models', () => ({
   },
   User: {
     findByPk: jest.fn().mockResolvedValue(null),
+    findOne:  jest.fn().mockResolvedValue(null),
     update:   jest.fn().mockResolvedValue([1]),
   },
 }));
