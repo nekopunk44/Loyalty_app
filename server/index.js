@@ -259,20 +259,6 @@ const seedDatabase = async () => {
     await LoyaltyCard.create({ userId: adminUser.userId,   balance: 0, totalSpent: 0, totalEarned: 0 });
     await LoyaltyCard.create({ userId: regularUser.userId, balance: 0, totalSpent: 0, totalEarned: 0 });
 
-    // Идемпотентный sync номеров под клиентский src/constants/properties.js:
-    // id фиксированы (1=Люкс, 2=Стандарт, 3=Задний двор, 4=Вся территория),
-    // upsert обновляет имя/цену даже на уже существующих записях
-    // (исторический seed заводил Villa Bonita / Sunset Apartment и т.п.).
-    const REAL_PROPERTIES = [
-      { id: 1, name: 'Люкс апартамент', description: 'Полный комфорт, с видом на природу',         price: '200PRB/ночь', priceNumber: 200, rooms: 10,   guests: 20, amenities: ['WiFi','Кондиционер','TV','Кухня','Бассейн','Сауна (с доплатой)','Мангал','Парковочное место','Караоке','Большой зал'], image: 'luks.jpg',    status: 'available' },
-      { id: 2, name: 'Стандарт',         description: 'Студия с террасой и бассейном',              price: '150PRB/ночь', priceNumber: 150, rooms: 2,    guests: 10, amenities: ['WiFi','Кондиционер','TV','Бассейн','Сауна (с доплатой)','Мангал','Парковочное место'],                                                  image: 'standart.jpg', status: 'available' },
-      { id: 3, name: 'Задний двор',      description: 'Открытая местность с бассейном и беседкой',  price: '100PRB/день', priceNumber: 100, rooms: null, guests: 15, amenities: ['WiFi','Бассейн','Мангал','Парковочное место','Караоке','Холодильник','Беседка','Шезлонги','Зонты'],                              image: 'zad.jpg',      status: 'available' },
-      { id: 4, name: 'Вся территория',   description: 'Полный комплекс со всеми удобствами',        price: '500PRB/ночь', priceNumber: 500, rooms: 10,   guests: 30, amenities: ['WiFi','Кондиционер','TV','Кухня','Бассейн','Сауна (с доплатой)','Мангал','Парковочное место','Караоке','Большой зал','Беседка','Шезлонги','Зонты','Холодильник'], image: 'vsya.jpg', status: 'available' },
-    ];
-    for (const p of REAL_PROPERTIES) {
-      await Property.upsert(p);
-    }
-
     logger.info('База данных инициализирована', {
       admin: 'admin@villajaconda.ru',
       user:  'guest@villajaconda.ru',
@@ -307,6 +293,21 @@ const connectDB = async () => {
         ADD COLUMN IF NOT EXISTS "pushToken"             VARCHAR(512);
     `);
     logger.info('Миграции схемы применены');
+
+    // Идемпотентный sync номеров под клиентский src/constants/properties.js.
+    // Запускается при КАЖДОМ старте (не зависит от seedDatabase, который
+    // отрабатывает только при пустой БД). upsert по фиксированным id 1..4
+    // перетирает исторический seed (Villa Bonita / Sunset Apartment / ...).
+    const REAL_PROPERTIES = [
+      { id: 1, name: 'Люкс апартамент', description: 'Полный комфорт, с видом на природу',         price: '200PRB/ночь', priceNumber: 200, rooms: 10,   guests: 20, amenities: ['WiFi','Кондиционер','TV','Кухня','Бассейн','Сауна (с доплатой)','Мангал','Парковочное место','Караоке','Большой зал'], image: 'luks.jpg',    status: 'available' },
+      { id: 2, name: 'Стандарт',         description: 'Студия с террасой и бассейном',              price: '150PRB/ночь', priceNumber: 150, rooms: 2,    guests: 10, amenities: ['WiFi','Кондиционер','TV','Бассейн','Сауна (с доплатой)','Мангал','Парковочное место'],                                                  image: 'standart.jpg', status: 'available' },
+      { id: 3, name: 'Задний двор',      description: 'Открытая местность с бассейном и беседкой',  price: '100PRB/день', priceNumber: 100, rooms: null, guests: 15, amenities: ['WiFi','Бассейн','Мангал','Парковочное место','Караоке','Холодильник','Беседка','Шезлонги','Зонты'],                              image: 'zad.jpg',      status: 'available' },
+      { id: 4, name: 'Вся территория',   description: 'Полный комплекс со всеми удобствами',        price: '500PRB/ночь', priceNumber: 500, rooms: 10,   guests: 30, amenities: ['WiFi','Кондиционер','TV','Кухня','Бассейн','Сауна (с доплатой)','Мангал','Парковочное место','Караоке','Большой зал','Беседка','Шезлонги','Зонты','Холодильник'], image: 'vsya.jpg', status: 'available' },
+    ];
+    for (const p of REAL_PROPERTIES) {
+      await Property.upsert(p);
+    }
+    logger.info('Номера синхронизированы с client constants', { count: REAL_PROPERTIES.length });
 
     // Seed только при первом запуске на пустой БД — не при каждом рестарте.
     const userCount = await User.count();
