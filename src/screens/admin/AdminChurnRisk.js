@@ -126,24 +126,32 @@ function GaugeArc({ percent, size = 220 }) {
  */
 function ProbStrip({ prob, height = 4 }) {
   const safe = Math.min(1, Math.max(0, prob));
+  // SVG-атрибут d принимает только числовые координаты — проценты ломают парсер
+  // ("Invalid number formating character '%'"). Поэтому замеряем ширину через onLayout.
+  const [width, setWidth] = useState(0);
   return (
-    <View style={{ width: '100%', height, justifyContent: 'center' }}>
-      <Svg width="100%" height={height}>
-        <Defs>
-          <LinearGradient id="stripGrad" x1="0" y1="0" x2="1" y2="0">
-            <Stop offset="0"   stopColor={RISK_HUES.low}    stopOpacity="0.3" />
-            <Stop offset="0.5" stopColor={RISK_HUES.medium} stopOpacity="0.3" />
-            <Stop offset="1"   stopColor={RISK_HUES.high}   stopOpacity="0.3" />
-          </LinearGradient>
-        </Defs>
-        <Path
-          d={`M 0 ${height / 2} L 100% ${height / 2}`}
-          stroke="url(#stripGrad)"
-          strokeWidth={height}
-          strokeLinecap="round"
-          fill="none"
-        />
-      </Svg>
+    <View
+      style={{ width: '100%', height, justifyContent: 'center' }}
+      onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
+    >
+      {width > 0 && (
+        <Svg width={width} height={height}>
+          <Defs>
+            <LinearGradient id="stripGrad" x1="0" y1="0" x2="1" y2="0">
+              <Stop offset="0"   stopColor={RISK_HUES.low}    stopOpacity="0.3" />
+              <Stop offset="0.5" stopColor={RISK_HUES.medium} stopOpacity="0.3" />
+              <Stop offset="1"   stopColor={RISK_HUES.high}   stopOpacity="0.3" />
+            </LinearGradient>
+          </Defs>
+          <Path
+            d={`M 0 ${height / 2} L ${width} ${height / 2}`}
+            stroke="url(#stripGrad)"
+            strokeWidth={height}
+            strokeLinecap="round"
+            fill="none"
+          />
+        </Svg>
+      )}
       {/* Position marker */}
       <View
         pointerEvents="none"
