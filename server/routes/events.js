@@ -19,6 +19,8 @@ const { verifyAdmin, verifyToken } = require('../middleware/auth');
 const { isoToRu } = require('../utils/dates');
 const mlClient = require('../services/mlClient');
 const { LEVEL_ORDER } = require('../config/loyalty');
+const { placeBid, closeAuction, BidError } = require('../services/auctionService');
+const { AuctionBid } = require('../models');
 
 const EVENT_LEVEL_ORDER = { all: 0, bronze: 0, silver: 1, gold: 2, platinum: 3 };
 
@@ -64,7 +66,25 @@ const formatEvent = (e) => ({
   allowedUsers: e.allowedUsers,
   participants: e.participants,
   participantIds: e.participantIds,
+  cashbackBoostPercent: e.cashbackBoostPercent ? parseFloat(e.cashbackBoostPercent) : 0,
+  discountPercent: e.discountPercent ? parseFloat(e.discountPercent) : 0,
+  targetUserIds: Array.isArray(e.targetUserIds) ? e.targetUserIds : [],
+  // Auction state (для не-аукционов будут null/дефолты)
+  startBid:         e.startBid         != null ? parseFloat(e.startBid)         : null,
+  minBidIncrement:  e.minBidIncrement  != null ? parseFloat(e.minBidIncrement)  : 100,
+  currentBid:       e.currentBid       != null ? parseFloat(e.currentBid)       : null,
+  currentBidUserId: e.currentBidUserId || null,
+  winnerUserId:     e.winnerUserId     || null,
+  closedAt:         e.closedAt         ? new Date(e.closedAt).toISOString()     : null,
 });
+
+// Безопасный парс процента из тела запроса. Кэп — защита от человеческой ошибки
+// "100" вместо "10". Возвращает число с двумя знаками.
+const clampPercent = (raw, max) => {
+  const n = parseFloat(raw);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return parseFloat(Math.min(n, max).toFixed(2));
+};
 
 module.exports = function createEventsRouter({ isDbConnected }) {
   const router = express.Router();
@@ -179,8 +199,11 @@ module.exports = function createEventsRouter({ isDbConnected }) {
         return res.status(503).json({ success: false, error: 'База данных не подключена' });
       }
 
-      const { title, description, prize, startDate, endDate, allowedUsers, status, eventType } =
-        req.body;
+      const {
+        title, description, prize, startDate, endDate, allowedUsers, status, eventType,
+        cashbackBoostPercent, discountPercent, targetUserIds,
+        startBid, minBidIncrement,
+      } = req.body;
 
       if (!title) {
         return res.status(400).json({ success: false, error: 'Название события обязательно' });
@@ -195,6 +218,17 @@ module.exports = function createEventsRouter({ isDbConnected }) {
         allowedUsers: allowedUsers || 'all',
         status: status || 'active',
         eventType: eventType || 'cashback',
+        // Кэпы (20pp boost, 80% discount) — анти-fat-finger для админа.
+        // 100% скидка превратила бы любую бронь в бесплатную.
+        cashbackBoostPercent: clampPercent(cashbackBoostPercent, 20),
+        discountPercent: clampPercent(discountPercent, 80),
+        targetUserIds: Array.isArray(targetUserIds) ? targetUserIds.filter((x) => typeof x === 'string') : [],
+        // Auction-параметры (имеют смысл только для eventType='auction'; для остальных
+        // безопасно сохраняем — UI их просто не покажет).
+        startBid: startBid != null && startBid !== '' ? Math.max(0, parseFloat(startBid)) : null,
+        minBidIncrement: minBidIncrement != null && minBidIncrement !== ''
+          ? Math.max(1, parseFloat(minBidIncrement))
+          : 100,
       });
 
       logger.info('Событие создано', { id: event.id });
@@ -232,6 +266,8 @@ module.exports = function createEventsRouter({ isDbConnected }) {
       const {
         title, description, prize, startDate, endDate,
         allowedUsers, status, eventType, participantIds, participants,
+        cashbackBoostPercent, discountPercent, targetUserIds,
+        startBid, minBidIncrement,
       } = req.body;
 
       if (title !== undefined) event.title = title;
@@ -251,6 +287,19 @@ module.exports = function createEventsRouter({ isDbConnected }) {
         event.participantIds = Array.isArray(participantIds) ? participantIds : [];
       }
       if (participants !== undefined) event.participants = participants;
+      if (cashbackBoostPercent !== undefined) event.cashbackBoostPercent = clampPercent(cashbackBoostPercent, 20);
+      if (discountPercent !== undefined) event.discountPercent = clampPercent(discountPercent, 80);
+      if (targetUserIds !== undefined) {
+        event.targetUserIds = Array.isArray(targetUserIds)
+          ? targetUserIds.filter((x) => typeof x === 'string')
+          : [];
+      }
+      if (startBid !== undefined) {
+        event.startBid = startBid != null && startBid !== '' ? Math.max(0, parseFloat(startBid)) : null;
+      }
+      if (minBidIncrement !== undefined && minBidIncrement !== '') {
+        event.minBidIncrement = Math.max(1, parseFloat(minBidIncrement));
+      }
 
       await event.save();
 
@@ -362,6 +411,144 @@ module.exports = function createEventsRouter({ isDbConnected }) {
         success: false,
         error: 'Ошибка при добавлении участника',
         details: isDev() ? error.message : undefined,
+      });
+    }
+  });
+
+  // ── Auction routes ─────────────────────────────────────────────────────────
+
+  // Маппинг доменных кодов BidError на HTTP-статусы.
+  const BID_ERROR_HTTP = {
+    invalid_amount:         400,
+    event_not_found:        404,
+    not_auction:            400,
+    closed:                 409,
+    not_started:            409,
+    expired:                409,
+    level_required:         403,
+    below_start_bid:        400,
+    below_increment:        400,
+    self_outbid:            409,
+    insufficient_available: 402,
+    card_not_found:         404,
+    winner_card_missing:    500,
+  };
+
+  /**
+   * POST /:eventId/bid — поставить ставку на аукционе.
+   * Body: { amount: number }
+   */
+  router.post('/:eventId/bid', verifyToken, async (req, res) => {
+    try {
+      if (!isDbConnected()) {
+        return res.status(503).json({ success: false, error: 'База данных не подключена' });
+      }
+      const eventId = parseInt(req.params.eventId, 10);
+      if (!Number.isFinite(eventId)) {
+        return res.status(400).json({ success: false, error: 'Неверный ID события' });
+      }
+      const { amount } = req.body;
+      const result = await placeBid({ eventId, userId: req.userId, amount });
+      return res.status(200).json({
+        success:       true,
+        bid:           result.bid,
+        event:         formatEvent(result.event),
+        lockedBalance: result.lockedBalance,
+      });
+    } catch (err) {
+      if (err instanceof BidError) {
+        const status = BID_ERROR_HTTP[err.code] || 400;
+        return res.status(status).json({
+          success: false,
+          code:    err.code,
+          error:   err.message,
+          ...err.extra,
+        });
+      }
+      logger.error('auction bid error', { error: err.message, stack: err.stack });
+      return res.status(500).json({
+        success: false,
+        error:   'Ошибка при размещении ставки',
+        details: isDev() ? err.message : undefined,
+      });
+    }
+  });
+
+  /**
+   * GET /:eventId/bids — история ставок аукциона. Сортировка amount DESC.
+   * Открыт любому авторизованному (UI показывает leaderboard).
+   */
+  router.get('/:eventId/bids', verifyToken, async (req, res) => {
+    try {
+      if (!isDbConnected()) {
+        return res.status(503).json({ success: false, error: 'База данных не подключена' });
+      }
+      const eventId = parseInt(req.params.eventId, 10);
+      if (!Number.isFinite(eventId)) {
+        return res.status(400).json({ success: false, error: 'Неверный ID события' });
+      }
+      const bids = await AuctionBid.findAll({
+        where: { eventId },
+        order: [['amount', 'DESC'], ['createdAt', 'ASC']],
+        limit: 100,
+      });
+      return res.status(200).json({
+        success: true,
+        bids: bids.map((b) => ({
+          id:         b.id,
+          userId:     b.userId,
+          amount:     parseFloat(b.amount),
+          status:     b.status,
+          createdAt:  b.createdAt,
+          resolvedAt: b.resolvedAt,
+        })),
+      });
+    } catch (err) {
+      logger.error('auction bids list error', { error: err.message });
+      return res.status(500).json({
+        success: false,
+        error:   'Ошибка при получении списка ставок',
+        details: isDev() ? err.message : undefined,
+      });
+    }
+  });
+
+  /**
+   * POST /:eventId/close — досрочное закрытие аукциона админом.
+   * Эквивалентно тому, что делает cron при истечении endDate.
+   */
+  router.post('/:eventId/close', verifyAdmin, async (req, res) => {
+    try {
+      if (!isDbConnected()) {
+        return res.status(503).json({ success: false, error: 'База данных не подключена' });
+      }
+      const eventId = parseInt(req.params.eventId, 10);
+      if (!Number.isFinite(eventId)) {
+        return res.status(400).json({ success: false, error: 'Неверный ID события' });
+      }
+      const result = await closeAuction(eventId);
+      return res.status(200).json({
+        success:       true,
+        event:         formatEvent(result.event),
+        winnerUserId:  result.winnerUserId,
+        winningAmount: result.winningAmount,
+        alreadyClosed: !!result.alreadyClosed,
+      });
+    } catch (err) {
+      if (err instanceof BidError) {
+        const status = BID_ERROR_HTTP[err.code] || 400;
+        return res.status(status).json({
+          success: false,
+          code:    err.code,
+          error:   err.message,
+          ...err.extra,
+        });
+      }
+      logger.error('auction close error', { error: err.message, stack: err.stack });
+      return res.status(500).json({
+        success: false,
+        error:   'Ошибка при закрытии аукциона',
+        details: isDev() ? err.message : undefined,
       });
     }
   });

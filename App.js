@@ -26,6 +26,7 @@ import BookingScreen, { preloadBookingImages } from './src/screens/user/BookingS
 import CheckoutScreen from './src/screens/user/CheckoutScreen';
 import MyCardScreen from './src/screens/user/MyCardScreen';
 import CardTopUpScreen from './src/screens/user/CardTopUpScreen';
+import AuctionDetailScreen from './src/screens/user/AuctionDetailScreen';
 import EventsScreen from './src/screens/user/EventsScreen';
 import SettingsScreen from './src/screens/user/SettingsScreen';
 import ProfileScreen from './src/screens/user/ProfileScreen';
@@ -334,48 +335,79 @@ function UserStack() {
           headerTitleAlign: 'center',
         }}
       />
+      <Stack.Screen
+        name="AuctionDetail"
+        component={AuctionDetailScreen}
+        options={{
+          ...userStackHeaderOptions,
+          headerShown: true,
+          headerTitle: 'Аукцион',
+        }}
+      />
     </Stack.Navigator>
   );
 }
 
 // Admin Navigation
 function AdminTabs() {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const themeColors = theme.colors;
-  
+
   return (
     <Tab.Navigator
       initialRouteName="Dashboard"
-      screenOptions={({ route }) => ({
+      screenOptions={({ route }) => {
+        const headerColor = getUserHeaderColor(isDark);
+        const headerTint  = getUserHeaderTint(isDark);
+        const headerUnderlay = themeColors.background;
+
+        return {
         headerShown: true,
         headerStyle: {
-          backgroundColor: themeColors.secondary,
-          elevation: 3,
-          shadowOpacity: 0.2,
+          backgroundColor: 'transparent',
+          elevation: 0,
+          shadowOpacity: 0,
         },
-        headerTintColor: '#fff',
+        headerBackground: () => (
+          <RoundedHeaderBackground
+            color={headerColor}
+            underlayColor={headerUnderlay}
+          />
+        ),
+        headerShadowVisible: false,
+        headerTintColor: headerTint,
         headerTitleAlign: 'center',
         headerTitleStyle: {
           fontWeight: '700',
           fontSize: 18,
+          color: headerTint,
         },
-        tabBarActiveTintColor: themeColors.secondary,
+        headerRight: () => <NotificationBell color={headerTint} />,
+        tabBarActiveTintColor: themeColors.primary,
         tabBarInactiveTintColor: themeColors.textSecondary,
         tabBarStyle: {
-          backgroundColor: themeColors.cardBg,
-          borderTopColor: themeColors.border,
-          borderTopWidth: 1,
-          paddingBottom: Platform.OS === 'ios' ? 20 : 5,
-          paddingTop: 5,
-          height: Platform.OS === 'ios' ? 85 : 60,
-          elevation: 8,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: 0.15,
-          shadowRadius: 4,
+          position: 'absolute',
+          left: 18,
+          right: 18,
+          bottom: Platform.OS === 'ios' ? 24 : 18,
+          height: 64,
+          paddingTop: 8,
+          paddingBottom: 8,
+          backgroundColor: isDark ? 'rgba(15,23,42,0.94)' : 'rgba(255,255,255,0.96)',
+          borderTopWidth: 0,
+          borderRadius: 24,
+          elevation: 18,
+          shadowColor: USER_NAVY,
+          shadowOffset: { width: 0, height: 10 },
+          shadowOpacity: isDark ? 0.35 : 0.16,
+          shadowRadius: 20,
         },
+        tabBarItemStyle: {
+          height: 48,
+        },
+        tabBarHideOnKeyboard: true,
         tabBarShowLabel: false,
-        tabBarIcon: ({ color, size }) => {
+        tabBarIcon: ({ color, size, focused }) => {
           let iconName = 'dashboard';
           if (route.name === 'Dashboard') iconName = 'dashboard';
           else if (route.name === 'AdminEvents') iconName = 'event-note';
@@ -383,10 +415,20 @@ function AdminTabs() {
           else if (route.name === 'AdminFinance') iconName = 'attach-money';
           else if (route.name === 'AdminStats') iconName = 'bar-chart';
           else if (route.name === 'AdminSettings') iconName = 'settings';
-          return <MaterialIcons name={iconName} size={size} color={color} />;
+          return (
+            <AnimatedTabBarIcon
+              iconName={iconName}
+              focused={focused}
+              color={color}
+              activeColor={themeColors.primary}
+              size={size}
+              activeBg={`${themeColors.primary}18`}
+            />
+          );
         },
         animationEnabled: true,
-      })}
+        };
+      }}
     >
       <Tab.Screen name="Dashboard"    component={DashboardTab}   options={{ title: 'Панель администратора' }} />
       <Tab.Screen name="AdminEvents"  component={AdminEventsTab} options={{ title: 'События' }} />

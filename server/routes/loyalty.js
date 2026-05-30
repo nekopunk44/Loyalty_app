@@ -16,14 +16,20 @@ const allowDemoPayments = () =>
   process.env.ALLOW_DEMO_PAYMENTS === 'true' ||
   (process.env.NODE_ENV || 'development') !== 'production';
 
-const formatCard = (c) => ({
-  userId: c.userId,
-  balance: parseFloat(c.balance),
-  cashbackRate: parseFloat(c.cashbackRate),
-  totalSpent: parseFloat(c.totalSpent),
-  totalEarned: parseFloat(c.totalEarned),
-  membershipLevel: c.membershipLevel,
-});
+const formatCard = (c) => {
+  const balance       = parseFloat(c.balance);
+  const lockedBalance = parseFloat(c.lockedBalance || 0);
+  return {
+    userId:           c.userId,
+    balance,
+    lockedBalance,
+    availableBalance: parseFloat((balance - lockedBalance).toFixed(2)),
+    cashbackRate:     parseFloat(c.cashbackRate),
+    totalSpent:       parseFloat(c.totalSpent),
+    totalEarned:      parseFloat(c.totalEarned),
+    membershipLevel:  c.membershipLevel,
+  };
+};
 
 const findOrCreateCard = async (userId) => {
   let card = await LoyaltyCard.findOne({ where: { userId } });
@@ -126,7 +132,7 @@ module.exports = function createLoyaltyRouter({ isDbConnected }) {
       return res.status(200).json({
         success: true,
         message: `Карта пополнена на ${topUpAmount}₽`,
-        loyaltyCard: { userId: card.userId, balance: card.balance, cashbackRate: parseFloat(card.cashbackRate), totalSpent: parseFloat(card.totalSpent), totalEarned: parseFloat(card.totalEarned) },
+        loyaltyCard: formatCard(card),
       });
     } catch (error) {
       logger.error('loyalty topup error', { error: error.message });

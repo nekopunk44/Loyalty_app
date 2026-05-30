@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ScrollView, Modal, Animated, Easing, Platform, RefreshControl, Dimensions } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { spacing, borderRadius } from '../../constants/theme';
 import { useTheme } from '../../context/ThemeContext';
@@ -29,7 +29,8 @@ const isEventLocked = (event, user) => {
 export default function EventsScreen() {
   const { theme } = useTheme();
   const colors = theme.colors;
-  const { events, isLoading: _isLoading, refreshEvents, updateEvent } = useEvents(); // ← Получаем события из EventContext
+  const navigation = useNavigation();
+  const { events, isLoading: _isLoading, refreshEvents, applyEventLocal } = useEvents(); // ← Получаем события из EventContext
   const { user } = useAuth(); // ← Получаем данные пользователя
   
   const [filter, setFilter] = useState('all');
@@ -267,6 +268,10 @@ export default function EventsScreen() {
   };
 
   const handleEventPress = (event) => {
+    if (event.eventType === 'auction') {
+      navigation.navigate('AuctionDetail', { eventId: event.id });
+      return;
+    }
     openEventDetail(event);
   };
 
@@ -301,7 +306,7 @@ export default function EventsScreen() {
         alert('Уже участвуете - Вы уже участвуете в этом событии');
         if (data.event) {
           setSelectedEvent(data.event);
-          updateEvent(selectedEvent.id, data.event);
+          applyEventLocal(selectedEvent.id, data.event);
         }
         return;
       }
@@ -319,7 +324,7 @@ export default function EventsScreen() {
             : [user.id],
         };
         setSelectedEvent(updatedEvent);
-        updateEvent(selectedEvent.id, updatedEvent);
+        applyEventLocal(selectedEvent.id, updatedEvent);
 
         if (refreshEvents) refreshEvents();
 
