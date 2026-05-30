@@ -18,16 +18,19 @@ const express = require('express');
 
 const logger = require('../logger');
 const { sequelize, Sequelize } = require('../db');
+const { Op } = Sequelize;
 const cache = require('../cache');
 const {
   Booking, LoyaltyCard, Transaction, Property,
-  User, Payment, AdminWallet, AdminTransaction, Notification,
+  User, Payment, AdminWallet, AdminTransaction, Event,
 } = require('../models');
 const {
   verifyToken, verifyAdmin, canAccessBooking, requireOwnerOrAdmin,
 } = require('../middleware/auth');
 const { validate, schemas } = require('../validation');
 const { CASHBACK_RATES, BIRTHDAY_MULTIPLIER, DEFAULT_CASHBACK_RATE } = require('../config/loyalty');
+const { notify, notifyAllAdmins } = require('../utils/notify');
+const { computePromotionEffect } = require('../services/promotionEngine');
 
 const isBirthday = (birthDate) => {
   if (!birthDate) return false;
@@ -55,6 +58,9 @@ const invalidateBookedDatesCache = async (propertyId) => {
 const BOOKING_ATTRIBUTES = [
   'id', 'propertyId', 'userId', 'checkInDate', 'checkOutDate',
   'guests', 'notes', 'saunaHours', 'kitchenware', 'totalPrice',
+  'depositAmount', 'depositPaidAt', 'remainingAmount', 'remainingPaidAt',
+  'remainingPaymentMethod', 'paymentDeadline',
+  'cashbackAmount', 'cashbackCreditedAt', 'cashbackRevertedAt',
   'status', 'createdAt', 'updatedAt',
 ];
 
@@ -81,8 +87,13 @@ module.exports = function createBookingsRouter({ isDbConnected }) {
 
       const propertiesToCheck = relatedProperties[propertyId.toString()] || [propertyId.toString()];
 
+      // booked-dates показывает занятые слоты: и confirmed/completed (оплата
+      // прошла), и pending_payment (зарезервирован, ждёт оплаты депозита).
       const bookings = await Booking.findAll({
-        where: { propertyId: propertiesToCheck, status: 'confirmed' },
+        where: {
+          propertyId: propertiesToCheck,
+          status:     { [Op.in]: ['pending_payment', 'pending', 'confirmed', 'completed'] },
+        },
         attributes: BOOKING_ATTRIBUTES,
       });
 
@@ -164,9 +175,17 @@ module.exports = function createBookingsRouter({ isDbConnected }) {
       });
 
       let booking;
+      let depositAmount   = 0;
+      let remainingAmount = 0;
+      let paymentDeadline;
       try {
+        // Конфликт = любая не-отменённая/не-просроченная бронь. pending_payment тоже
+        // блокирует слот до своего expiry (Sprint A: 12ч TTL, см. §3.1 ВКР).
         const conflicts = await Booking.findAll({
-          where: { propertyId, status: 'confirmed' },
+          where: {
+            propertyId,
+            status: { [Op.in]: ['pending_payment', 'pending', 'confirmed', 'completed'] },
+          },
           lock: bookingTxn.LOCK.UPDATE,
           transaction: bookingTxn,
         });
@@ -197,20 +216,34 @@ module.exports = function createBookingsRouter({ isDbConnected }) {
           }, { transaction: bookingTxn });
         }
 
-        const bookingPrice = parseFloat(totalPrice) || 0;
-        const guestsInt    = Math.max(1, parseInt(guests) || 1);
+        // Депозит — snapshot из Property на момент создания. Если у Property его нет
+        // (legacy=0) — депозит = totalPrice, остатка нет, юзер платит сразу всё.
+        const property = await Property.findByPk(propertyId, { transaction: bookingTxn });
+        const bookingPrice    = parseFloat(totalPrice) || 0;
+        const propertyDeposit = parseFloat(property?.depositAmount) || 0;
+        depositAmount   = propertyDeposit > 0
+          ? Math.min(propertyDeposit, bookingPrice)
+          : bookingPrice;
+        remainingAmount = Math.max(0, parseFloat((bookingPrice - depositAmount).toFixed(2)));
+        // 12 часов на оплату депозита (см. §3.1 ВКР: anti-squat механизм).
+        paymentDeadline = new Date(Date.now() + 12 * 60 * 60 * 1000);
+
+        const guestsInt = Math.max(1, parseInt(guests) || 1);
 
         booking = await Booking.create({
           propertyId,
           userId,
           checkInDate,
           checkOutDate,
-          guests:      guestsInt,
-          notes:       notes || '',
-          saunaHours:  Math.max(0, parseInt(saunaHours) || 0),
-          kitchenware: kitchenware || false,
-          totalPrice:  bookingPrice,
-          status:      'pending',
+          guests:           guestsInt,
+          notes:            notes || '',
+          saunaHours:       Math.max(0, parseInt(saunaHours) || 0),
+          kitchenware:      kitchenware || false,
+          totalPrice:       bookingPrice,
+          depositAmount,
+          remainingAmount,
+          paymentDeadline,
+          status:           'pending_payment',
         }, { transaction: bookingTxn });
 
         await bookingTxn.commit();
@@ -221,15 +254,54 @@ module.exports = function createBookingsRouter({ isDbConnected }) {
 
       await invalidateBookedDatesCache(propertyId);
 
+      // Уведомление администраторов о новом (ещё не оплаченном) бронировании — best-effort
+      try {
+        const bookingUser = await User.findOne({ where: { userId } });
+        const property    = await Property.findByPk(propertyId);
+
+        const services = [];
+        if (booking.saunaHours > 0) services.push(`сауна ${booking.saunaHours}ч.`);
+        if (booking.kitchenware)    services.push('посуда и кухня');
+        const servicesStr = services.length ? `. Услуги: ${services.join(', ')}` : '';
+
+        const adminMsg =
+          `Новое бронирование от ${bookingUser?.name || 'пользователь'}` +
+          ` (${bookingUser?.email || userId}): ${property?.name || `объект ${propertyId}`}.` +
+          ` Заезд: ${checkInDate}, выезд: ${checkOutDate}.` +
+          ` Гостей: ${guestsInt}. Сумма: ${bookingPrice} PRB${servicesStr}.` +
+          ` Ожидает оплаты.`;
+
+        notifyAllAdmins({
+          title:   'Новое бронирование',
+          message: adminMsg,
+          type:    'new_booking',
+          data: {
+            bookingId: booking.id,
+            propertyId,
+            userId,
+            userName: bookingUser?.name,
+            checkInDate,
+            checkOutDate,
+            guests: guestsInt,
+            totalPrice: bookingPrice,
+            status: 'pending',
+          },
+        });
+      } catch (notifyErr) {
+        logger.error('booking create notify error', { error: notifyErr.message });
+      }
+
       return res.status(201).json({
         success:   true,
-        message:   'Бронирование создано. Требуется завершить оплату.',
+        message:   `Бронирование создано. Оплатите депозит ${depositAmount} PRB до ${paymentDeadline.toISOString()}.`,
         bookingId: booking.id,
         booking,
         payment: {
-          amount:          parseFloat(totalPrice) || 0,
-          status:          'pending',
-          requiredAmount:  parseFloat(totalPrice) || 0,
+          totalAmount:     parseFloat(totalPrice) || 0,
+          depositAmount,
+          remainingAmount,
+          status:          'pending_payment',
+          paymentDeadline: paymentDeadline.toISOString(),
           transactionTime: new Date().toISOString(),
         },
       });
@@ -361,20 +433,27 @@ module.exports = function createBookingsRouter({ isDbConnected }) {
     }
   });
 
+  // ─── Sprint A ВКР: гибридный платёжный поток (deposit + remaining) ─────────
+  //
+  // Пути:
+  //   POST /:id/pay-deposit         — оплата депозита с карты (pending_payment → confirmed)
+  //   POST /:id/pay-remaining       — оплата остатка (confirmed → completed),
+  //                                    body: { method: 'card' | 'cash' }
+  //
+  // Кэшбэк начисляется ТОЛЬКО при completion. Если remaining оплачен налом —
+  // кэшбэк считается только с депозита (нал мимо приложения).
+  // ────────────────────────────────────────────────────────────────────────────
+
   /**
-   * POST /:bookingId/confirm-payment — подтвердить платёж, списать с карты и начислить кэшбек.
+   * POST /:bookingId/pay-deposit — оплатить депозит с карты лояльности.
+   * После успешной оплаты status='confirmed'. Остаток оплачивается отдельно.
    */
-  router.post('/:bookingId/confirm-payment', verifyToken, async (req, res) => {
-    // SERIALIZABLE + SELECT FOR UPDATE на обе записи исключает race condition:
-    // два одновременных запроса confirm не спишут деньги дважды.
-    // Кэшбек начисляется В ТОЙ ЖЕ транзакции — атомарно с дебетом.
+  router.post('/:bookingId/pay-deposit', verifyToken, async (req, res) => {
     const txn = await sequelize.transaction({
       isolationLevel: Sequelize.Transaction.ISOLATION_LEVELS.SERIALIZABLE,
     });
-
     try {
       const { bookingId } = req.params;
-
       if (!isDbConnected()) {
         await txn.rollback();
         return res.status(503).json({ success: false, error: 'PostgreSQL не подключена' });
@@ -389,16 +468,25 @@ module.exports = function createBookingsRouter({ isDbConnected }) {
         await txn.rollback();
         return res.status(403).json({ success: false, error: 'Access denied' });
       }
-      if (booking.status !== 'pending') {
+      if (booking.status !== 'pending_payment') {
         await txn.rollback();
         return res.status(400).json({
           success: false,
-          error: 'Бронирование уже обработано или отменено',
+          error:  'Депозит уже оплачен или бронирование не ожидает оплаты',
           currentStatus: booking.status,
         });
       }
+      if (booking.depositAmount == null) {
+        await txn.rollback();
+        return res.status(400).json({ success: false, error: 'У бронирования не указан депозит' });
+      }
+      // Проверка дедлайна (на случай если cron ещё не успел отработать)
+      if (booking.paymentDeadline && new Date() > new Date(booking.paymentDeadline)) {
+        await txn.rollback();
+        return res.status(410).json({ success: false, error: 'Срок оплаты депозита истёк' });
+      }
 
-      // SELECT FOR UPDATE на loyaltyCard — блокируем строку
+      const depositAmount = parseFloat(booking.depositAmount);
       const loyaltyCard = await LoyaltyCard.findOne({
         where: { userId: booking.userId },
         lock: txn.LOCK.UPDATE,
@@ -406,128 +494,394 @@ module.exports = function createBookingsRouter({ isDbConnected }) {
       });
       if (!loyaltyCard) {
         await txn.rollback();
-        return res.status(404).json({ success: false, error: 'Карта лояльности пользователя не найдена' });
+        return res.status(404).json({ success: false, error: 'Карта лояльности не найдена' });
       }
 
-      const user           = await User.findOne({ where: { userId: booking.userId }, transaction: txn });
-      const bookingPrice   = parseFloat(booking.totalPrice);
-      const currentBalance = parseFloat(loyaltyCard.balance);
-
-      if (currentBalance < bookingPrice) {
+      const balance   = parseFloat(loyaltyCard.balance);
+      const locked    = parseFloat(loyaltyCard.lockedBalance || 0);
+      const available = parseFloat((balance - locked).toFixed(2));
+      if (available < depositAmount) {
         await txn.rollback();
         return res.status(402).json({
           success:        false,
-          error:          'Недостаточно средств на карте лояльности',
-          currentBalance,
-          requiredAmount: bookingPrice,
-          deficit:        parseFloat((bookingPrice - currentBalance).toFixed(2)),
+          error:          'Недостаточно доступных PRB для депозита',
+          requiredAmount: depositAmount,
+          available,
+          deficit:        parseFloat((depositAmount - available).toFixed(2)),
         });
       }
 
-      // Рассчитываем кэшбек внутри транзакции
-      const membershipLevel   = user?.membershipLevel || 'Bronze';
-      const cashbackRate      = CASHBACK_RATES[membershipLevel] ?? DEFAULT_CASHBACK_RATE;
-      const birthdayToday     = isBirthday(user?.birthDate);
-      const birthdayMult      = birthdayToday ? (BIRTHDAY_MULTIPLIER[membershipLevel] ?? 1) : 1;
-      const cashbackAmount    = parseFloat((bookingPrice * cashbackRate * birthdayMult).toFixed(2));
-
-      const balanceBefore      = parseFloat(currentBalance.toFixed(2));
-      const balanceAfterDebit  = parseFloat((currentBalance - bookingPrice).toFixed(2));
-      const balanceAfterCashback = parseFloat((balanceAfterDebit + cashbackAmount).toFixed(2));
-
-      // Атомарно: дебет + кэшбек + обновление статистики
+      const balanceAfter = parseFloat((balance - depositAmount).toFixed(2));
       await loyaltyCard.update({
-        balance:     balanceAfterCashback,
-        totalSpent:  parseFloat((parseFloat(loyaltyCard.totalSpent) + bookingPrice).toFixed(2)),
-        totalEarned: parseFloat((parseFloat(loyaltyCard.totalEarned) + cashbackAmount).toFixed(2)),
+        balance:    balanceAfter,
+        totalSpent: parseFloat((parseFloat(loyaltyCard.totalSpent) + depositAmount).toFixed(2)),
       }, { transaction: txn });
 
-      await booking.update({ status: 'confirmed' }, { transaction: txn });
+      const paidAt = new Date();
+      await booking.update({
+        status:        'confirmed',
+        depositPaidAt: paidAt,
+      }, { transaction: txn });
 
-      // Запись дебета
       await Transaction.create({
-        userId:       booking.userId,
-        bookingId:    booking.id,
-        type:         'debit',
-        amount:       bookingPrice,
-        description:  `Оплата бронирования #${booking.id} в объекте ${booking.propertyId}`,
-        balanceBefore,
-        balanceAfter: balanceAfterDebit,
+        userId:        booking.userId,
+        bookingId:     booking.id,
+        type:          'debit',
+        amount:        depositAmount,
+        description:   `Депозит за бронирование #${booking.id}`,
+        balanceBefore: balance,
+        balanceAfter,
+        metadata:      { source: 'booking_deposit' },
       }, { transaction: txn });
 
-      // Запись кэшбека
-      await Transaction.create({
-        userId:       booking.userId,
-        bookingId:    booking.id,
-        type:         'credit',
-        amount:       cashbackAmount,
-        description:  `Кэшбек ${Math.round(cashbackRate * 100)}%${birthdayToday ? ` ×${birthdayMult} (День рождения!)` : ''} за бронирование #${booking.id} (уровень: ${membershipLevel})`,
-        balanceBefore: balanceAfterDebit,
-        balanceAfter:  balanceAfterCashback,
-      }, { transaction: txn });
+      // AdminWallet credit
+      const financeAdmin = await User.findOne({ where: { role: 'admin', adminLevel: 1 }, transaction: txn });
+      if (financeAdmin) {
+        const adminWallet = await AdminWallet.findOne({
+          where: { adminId: financeAdmin.userId },
+          lock: txn.LOCK.UPDATE,
+          transaction: txn,
+        });
+        if (adminWallet) {
+          const aBefore = parseFloat(adminWallet.totalBalance);
+          await adminWallet.update({
+            totalBalance:     parseFloat((aBefore + depositAmount).toFixed(2)),
+            availableBalance: parseFloat((parseFloat(adminWallet.availableBalance) + depositAmount).toFixed(2)),
+            totalReceived:    parseFloat((parseFloat(adminWallet.totalReceived) + depositAmount).toFixed(2)),
+          }, { transaction: txn });
+          await AdminTransaction.create({
+            adminId:       financeAdmin.userId,
+            adminLevel:    1,
+            type:          'booking_deposit',
+            amount:        depositAmount,
+            bookingId:     booking.id,
+            description:   `Депозит за бронирование #${booking.id}`,
+            balanceBefore: aBefore,
+            balanceAfter:  parseFloat((aBefore + depositAmount).toFixed(2)),
+          }, { transaction: txn });
+        }
+      }
 
       await txn.commit();
-
       await invalidateBookedDatesCache(booking.propertyId);
 
-      // Уведомления — вне транзакции, best-effort
+      // Уведомления best-effort
       try {
-        const admins      = await User.findAll({ where: { role: 'admin' } });
-        const bookingUser = await User.findOne({ where: { userId: booking.userId } });
-        const property    = await Property.findByPk(booking.propertyId);
-
-        let services = '';
-        if (booking.saunaHours > 0) services += ` Сауна: ${booking.saunaHours}ч.`;
-        if (booking.kitchenware) services += ' Посуда и кухня';
-
-        const adminMsg = `Новое бронирование от ${bookingUser?.name || 'Пользователь'}: ${property?.name || `объект ${booking.propertyId}`}. Гостей: ${booking.guests}, Сумма: ${bookingPrice}₽, Даты: ${booking.checkInDate} - ${booking.checkOutDate}${services.trim() ? '. ' + services.trim() : ''}`;
-
-        await Promise.allSettled(admins.map(admin => Notification.create({
-          userId:  admin.userId,
-          title:   ' Новое бронирование',
-          message: adminMsg,
-          type:    'new_booking',
-          data: {
-            bookingId: booking.id, propertyId: booking.propertyId,
-            userId: booking.userId, checkInDate: booking.checkInDate,
-            checkOutDate: booking.checkOutDate, guests: booking.guests,
-            totalPrice: bookingPrice,
-          },
-          read: false,
-        })));
+        const property = await Property.findByPk(booking.propertyId);
+        notify({
+          userId:  booking.userId,
+          title:   'Депозит принят',
+          message: `Депозит ${depositAmount} PRB за бронирование #${booking.id} (${property?.name || ''}) принят. Остаток ${booking.remainingAmount || 0} PRB — оплатите до заезда.`,
+          type:    'payment',
+          data:    { bookingId: booking.id, depositAmount },
+        });
+        const user = await User.findOne({ where: { userId: booking.userId } });
+        notifyAllAdmins({
+          title:   'Депозит оплачен',
+          message: `${user?.name || 'пользователь'} оплатил депозит ${depositAmount} PRB за #${booking.id} (${property?.name || `объект ${booking.propertyId}`}).`,
+          type:    'booking_deposit',
+          data:    { bookingId: booking.id, userId: booking.userId, depositAmount },
+        });
       } catch (notifyErr) {
-        logger.error('booking confirm notify error', { error: notifyErr.message });
+        logger.error('pay-deposit notify error', { error: notifyErr.message });
       }
 
       return res.status(200).json({
         success:   true,
-        message:   'Платеж успешно обработан. Бронирование подтверждено. Кэшбек начислен.',
+        message:   'Депозит оплачен. Бронирование подтверждено.',
         bookingId: booking.id,
         booking,
         payment: {
-          amount:              bookingPrice,
-          status:              'confirmed',
-          balanceAfterPayment: balanceAfterDebit,
-          transactionTime:     new Date().toISOString(),
-        },
-        cashback: {
-          rate:                `${Math.round(cashbackRate * 100)}%`,
-          membershipLevel,
-          amount:              cashbackAmount,
-          birthdayBonus:       birthdayToday,
-          multiplier:          birthdayMult,
-          balanceAfterCashback,
+          type:            'deposit',
+          amount:          depositAmount,
+          remainingAmount: parseFloat(booking.remainingAmount) || 0,
+          balanceAfter,
         },
       });
     } catch (error) {
       try { await txn.rollback(); } catch (_) {}
-      logger.error('booking confirm-payment error', { error: error.message });
+      logger.error('booking pay-deposit error', { error: error.message });
       return res.status(500).json({
         success: false,
-        error:   'Ошибка при обработке платежа',
+        error:   'Ошибка при оплате депозита',
         details: isDev() ? error.message : undefined,
       });
     }
+  });
+
+  /**
+   * POST /:bookingId/pay-remaining — оплатить остаток.
+   * Body: { method: 'card' | 'cash' }.
+   *   card — списать с LoyaltyCard.balance + кэшбэк со ВСЕЙ суммы (deposit + remaining).
+   *   cash — без списания (приём на месте); кэшбэк только с депозита.
+   * После успеха status='completed'.
+   */
+  router.post('/:bookingId/pay-remaining', verifyToken, async (req, res) => {
+    const txn = await sequelize.transaction({
+      isolationLevel: Sequelize.Transaction.ISOLATION_LEVELS.SERIALIZABLE,
+    });
+    try {
+      const { bookingId } = req.params;
+      const { method }    = req.body || {};
+      if (!['card', 'cash'].includes(method)) {
+        await txn.rollback();
+        return res.status(400).json({ success: false, error: 'method должен быть "card" или "cash"' });
+      }
+      if (!isDbConnected()) {
+        await txn.rollback();
+        return res.status(503).json({ success: false, error: 'PostgreSQL не подключена' });
+      }
+
+      const booking = await Booking.findByPk(bookingId, { lock: txn.LOCK.UPDATE, transaction: txn });
+      if (!booking) {
+        await txn.rollback();
+        return res.status(404).json({ success: false, error: 'Бронирование не найдено' });
+      }
+      if (!canAccessBooking(req, booking)) {
+        await txn.rollback();
+        return res.status(403).json({ success: false, error: 'Access denied' });
+      }
+      if (booking.status !== 'confirmed') {
+        await txn.rollback();
+        return res.status(400).json({
+          success: false,
+          error:  'Остаток можно оплатить только после оплаты депозита',
+          currentStatus: booking.status,
+        });
+      }
+
+      const loyaltyCard = await LoyaltyCard.findOne({
+        where: { userId: booking.userId },
+        lock: txn.LOCK.UPDATE,
+        transaction: txn,
+      });
+      if (!loyaltyCard) {
+        await txn.rollback();
+        return res.status(404).json({ success: false, error: 'Карта лояльности не найдена' });
+      }
+
+      const user            = await User.findOne({ where: { userId: booking.userId }, transaction: txn });
+      const depositAmount   = parseFloat(booking.depositAmount)   || 0;
+      const remainingAmount = parseFloat(booking.remainingAmount) || 0;
+      const balanceBefore   = parseFloat(loyaltyCard.balance);
+      const lockedBalance   = parseFloat(loyaltyCard.lockedBalance || 0);
+
+      // ── Сумма списания ──
+      let balanceAfter = balanceBefore;
+      if (method === 'card' && remainingAmount > 0) {
+        const available = parseFloat((balanceBefore - lockedBalance).toFixed(2));
+        if (available < remainingAmount) {
+          await txn.rollback();
+          return res.status(402).json({
+            success:        false,
+            error:          'Недостаточно доступных PRB для оплаты остатка',
+            requiredAmount: remainingAmount,
+            available,
+            deficit:        parseFloat((remainingAmount - available).toFixed(2)),
+          });
+        }
+        balanceAfter = parseFloat((balanceBefore - remainingAmount).toFixed(2));
+      }
+
+      // ── Расчёт кэшбэка ──
+      // База для кэшбэка: card → весь totalPrice; cash → только депозит.
+      const cashbackBase = method === 'card' ? (depositAmount + remainingAmount) : depositAmount;
+      const membershipLevel = user?.membershipLevel || 'Bronze';
+      const baseCashbackRate = CASHBACK_RATES[membershipLevel] ?? DEFAULT_CASHBACK_RATE;
+      const birthdayToday    = isBirthday(user?.birthDate);
+      const birthdayMult     = birthdayToday ? (BIRTHDAY_MULTIPLIER[membershipLevel] ?? 1) : 1;
+      const rateWithBirthday = baseCashbackRate * birthdayMult;
+
+      const activeEvents = await Event.findAll({ where: { status: 'active' }, transaction: txn });
+      const promotion = computePromotionEffect({
+        basePrice:    cashbackBase,
+        cashbackRate: rateWithBirthday,
+        events:       activeEvents,
+        userId:       booking.userId,
+      });
+      // promotion.finalRate — итоговая ставка (с boost'ами). Скидка к cashbackBase
+      // тут не применяется — депозит/остаток уже зафиксированы в totalPrice.
+      const cashbackAmount = parseFloat((cashbackBase * promotion.finalRate).toFixed(2));
+
+      // ── Применяем изменения LoyaltyCard ──
+      const balanceAfterCashback = parseFloat((balanceAfter + cashbackAmount).toFixed(2));
+      const totalSpentDelta      = method === 'card' ? remainingAmount : 0;
+      await loyaltyCard.update({
+        balance:     balanceAfterCashback,
+        totalSpent:  parseFloat((parseFloat(loyaltyCard.totalSpent) + totalSpentDelta).toFixed(2)),
+        totalEarned: parseFloat((parseFloat(loyaltyCard.totalEarned) + cashbackAmount).toFixed(2)),
+      }, { transaction: txn });
+
+      // ── Обновляем Booking ──
+      const paidAt = new Date();
+      await booking.update({
+        status:                 'completed',
+        remainingPaidAt:        paidAt,
+        remainingPaymentMethod: method,
+        cashbackAmount,
+        cashbackCreditedAt:     paidAt,
+      }, { transaction: txn });
+
+      // ── Transactions ──
+      if (method === 'card' && remainingAmount > 0) {
+        await Transaction.create({
+          userId:        booking.userId,
+          bookingId:     booking.id,
+          type:          'debit',
+          amount:        remainingAmount,
+          description:   `Оплата остатка бронирования #${booking.id}`,
+          balanceBefore,
+          balanceAfter,
+          metadata:      { source: 'booking_remaining' },
+        }, { transaction: txn });
+      }
+      if (cashbackAmount > 0) {
+        await Transaction.create({
+          userId:        booking.userId,
+          bookingId:     booking.id,
+          type:          'credit',
+          amount:        cashbackAmount,
+          description:   `Кэшбэк ${Math.round(promotion.finalRate * 100)}% за бронирование #${booking.id} (${method === 'cash' ? 'только депозит' : 'полная оплата'})`,
+          balanceBefore: balanceAfter,
+          balanceAfter:  balanceAfterCashback,
+          metadata: {
+            source:           'cashback',
+            cashbackBase,
+            method,
+            membershipLevel,
+            birthdayBonus:    birthdayToday,
+            multiplier:       birthdayMult,
+            promotionApplied: promotion.appliedEvents,
+            boostPercentPoints: promotion.boostPercentPoints,
+          },
+        }, { transaction: txn });
+      }
+
+      // ── AdminWallet credit / debit для кэшбэка (PRB выдаётся из AdminWallet) ──
+      const financeAdmin = await User.findOne({ where: { role: 'admin', adminLevel: 1 }, transaction: txn });
+      if (financeAdmin) {
+        const adminWallet = await AdminWallet.findOne({
+          where: { adminId: financeAdmin.userId },
+          lock: txn.LOCK.UPDATE,
+          transaction: txn,
+        });
+        if (adminWallet) {
+          let aBalance = parseFloat(adminWallet.totalBalance);
+          let aAvail   = parseFloat(adminWallet.availableBalance);
+          let aRecv    = parseFloat(adminWallet.totalReceived);
+
+          // card-оплата остатка → +remainingAmount в AdminWallet
+          if (method === 'card' && remainingAmount > 0) {
+            const before = aBalance;
+            aBalance += remainingAmount;
+            aAvail   += remainingAmount;
+            aRecv    += remainingAmount;
+            await AdminTransaction.create({
+              adminId:       financeAdmin.userId,
+              adminLevel:    1,
+              type:          'booking_remaining',
+              amount:        remainingAmount,
+              bookingId:     booking.id,
+              description:   `Остаток за бронирование #${booking.id}`,
+              balanceBefore: before,
+              balanceAfter:  aBalance,
+            }, { transaction: txn });
+          }
+
+          // кэшбэк уходит из AdminWallet (он его выдаёт юзеру)
+          if (cashbackAmount > 0) {
+            const before = aBalance;
+            aBalance -= cashbackAmount;
+            aAvail   -= cashbackAmount;
+            aRecv    -= cashbackAmount;
+            await AdminTransaction.create({
+              adminId:       financeAdmin.userId,
+              adminLevel:    1,
+              type:          'cashback_payout',
+              amount:        cashbackAmount,
+              bookingId:     booking.id,
+              description:   `Начисление кэшбэка за бронирование #${booking.id}`,
+              balanceBefore: before,
+              balanceAfter:  aBalance,
+            }, { transaction: txn });
+          }
+
+          await adminWallet.update({
+            totalBalance:     parseFloat(aBalance.toFixed(2)),
+            availableBalance: parseFloat(aAvail.toFixed(2)),
+            totalReceived:    parseFloat(aRecv.toFixed(2)),
+          }, { transaction: txn });
+        }
+      }
+
+      await txn.commit();
+      await invalidateBookedDatesCache(booking.propertyId);
+
+      // Уведомления best-effort
+      try {
+        const property = await Property.findByPk(booking.propertyId);
+        notify({
+          userId:  booking.userId,
+          title:   'Бронирование оплачено',
+          message: method === 'card'
+            ? `Остаток ${remainingAmount} PRB по бронированию #${booking.id} списан с карты. Начислен кэшбэк ${cashbackAmount} PRB.`
+            : `Бронирование #${booking.id} помечено как оплаченное наличными. Начислен кэшбэк ${cashbackAmount} PRB с депозита.`,
+          type:    'payment',
+          data:    { bookingId: booking.id, method, remainingAmount, cashbackAmount },
+        });
+        notifyAllAdmins({
+          title:   'Бронирование оплачено',
+          message: `${user?.name || 'пользователь'} оплатил бронирование #${booking.id} (${property?.name || ''}). Метод остатка: ${method}.`,
+          type:    'booking_completed',
+          data:    { bookingId: booking.id, userId: booking.userId, method, remainingAmount, cashbackAmount },
+        });
+      } catch (notifyErr) {
+        logger.error('pay-remaining notify error', { error: notifyErr.message });
+      }
+
+      return res.status(200).json({
+        success:   true,
+        message:   'Бронирование полностью оплачено.',
+        bookingId: booking.id,
+        booking,
+        payment: {
+          type:            'remaining',
+          method,
+          remainingAmount,
+          balanceAfter:    balanceAfterCashback,
+        },
+        cashback: {
+          amount:          cashbackAmount,
+          base:            cashbackBase,
+          rate:            `${Math.round(promotion.finalRate * 100)}%`,
+          membershipLevel,
+          birthdayBonus:   birthdayToday,
+          multiplier:      birthdayMult,
+        },
+      });
+    } catch (error) {
+      try { await txn.rollback(); } catch (_) {}
+      logger.error('booking pay-remaining error', { error: error.message });
+      return res.status(500).json({
+        success: false,
+        error:   'Ошибка при оплате остатка',
+        details: isDev() ? error.message : undefined,
+      });
+    }
+  });
+
+  // ─── Старый confirm-payment (deprecated в Sprint A ВКР) ────────────────────
+  // Заменён на пару pay-deposit + pay-remaining. Возвращает 410 Gone, чтобы
+  // старые клиенты получили явную ошибку, а не молчаливо «сломались».
+  router.post('/:bookingId/confirm-payment', verifyToken, async (req, res) => {
+    return res.status(410).json({
+      success: false,
+      error:   'Endpoint удалён. Используйте POST /:bookingId/pay-deposit и POST /:bookingId/pay-remaining.',
+      migration: {
+        deposit:   'POST /api/bookings/:bookingId/pay-deposit',
+        remaining: 'POST /api/bookings/:bookingId/pay-remaining  body: { method: "card" | "cash" }',
+      },
+    });
   });
 
   /**
@@ -559,15 +913,19 @@ module.exports = function createBookingsRouter({ isDbConnected }) {
         return res.status(403).json({ success: false, error: 'Access denied' });
       }
 
-      if (booking.status !== 'pending' && booking.status !== 'confirmed') {
+      // Допустимые статусы для отмены. expired / cancelled — терминальные.
+      const CANCELLABLE = ['pending', 'pending_payment', 'confirmed', 'completed'];
+      if (!CANCELLABLE.includes(booking.status)) {
         await txn.rollback();
         return res.status(400).json({
           success: false,
-          error:  'Можно отменить только незаплаченные (pending) или подтвержденные (confirmed) бронирования',
+          error:  'Бронирование уже отменено или просрочено',
           currentStatus: booking.status,
         });
       }
 
+      // 2-day deadline применяется только когда уже есть оплата (confirmed/completed).
+      // Для pending_payment/pending — отмена бесплатна в любой момент.
       const [dayIn, monthIn, yearIn] = booking.checkInDate.split('.');
       const checkInDate = new Date(yearIn, monthIn - 1, dayIn);
       const today = new Date();
@@ -575,7 +933,8 @@ module.exports = function createBookingsRouter({ isDbConnected }) {
       checkInDate.setHours(0, 0, 0, 0);
       const daysUntilCheckIn = Math.floor((checkInDate - today) / (1000 * 60 * 60 * 24));
 
-      if (daysUntilCheckIn < 2) {
+      const hasPayment = booking.status === 'confirmed' || booking.status === 'completed';
+      if (hasPayment && daysUntilCheckIn < 2) {
         await txn.rollback();
         return res.status(400).json({
           success: false,
@@ -584,49 +943,120 @@ module.exports = function createBookingsRouter({ isDbConnected }) {
         });
       }
 
-      let refundAmount = 0;
-      let cashbackDeducted = 0;
+      let depositBurned   = 0;
+      let remainingRefund = 0;
+      let cashbackRevert  = 0;
 
-      if (booking.status === 'confirmed') {
-        // SELECT FOR UPDATE на loyaltyCard — блокируем строку от параллельных изменений
+      if (booking.status === 'confirmed' || booking.status === 'completed') {
         const loyaltyCard = await LoyaltyCard.findOne({
           where: { userId: booking.userId },
           lock: txn.LOCK.UPDATE,
           transaction: txn,
         });
-
         if (!loyaltyCard) {
           await txn.rollback();
           return res.status(404).json({ success: false, error: 'Карта лояльности пользователя не найдена' });
         }
 
-        const user            = await User.findOne({ where: { userId: booking.userId }, transaction: txn });
-        const bookingPrice    = parseFloat(booking.totalPrice);
-        const membershipLevel = user?.membershipLevel || 'Bronze';
-        const cashbackRate    = CASHBACK_RATES[membershipLevel] ?? DEFAULT_CASHBACK_RATE;
+        const financeAdmin = await User.findOne({ where: { role: 'admin', adminLevel: 1 }, transaction: txn });
+        const adminWallet  = financeAdmin
+          ? await AdminWallet.findOne({ where: { adminId: financeAdmin.userId }, lock: txn.LOCK.UPDATE, transaction: txn })
+          : null;
 
-        cashbackDeducted = parseFloat((bookingPrice * cashbackRate).toFixed(2));
-        refundAmount     = parseFloat((bookingPrice - cashbackDeducted).toFixed(2));
+        // Депозит остаётся в AdminWallet — записываем как штраф для аудита.
+        depositBurned = parseFloat(booking.depositAmount) || 0;
 
-        const balanceBefore = parseFloat(loyaltyCard.balance);
-        const balanceAfter  = parseFloat((balanceBefore + refundAmount).toFixed(2));
-        const earnedAfter   = parseFloat(((parseFloat(loyaltyCard.totalEarned) || 0) - cashbackDeducted).toFixed(2));
+        // 1) Возврат остатка (если был оплачен картой) — забираем из AdminWallet,
+        //    возвращаем на LoyaltyCard.
+        if (booking.status === 'completed' && booking.remainingPaymentMethod === 'card') {
+          remainingRefund = parseFloat(booking.remainingAmount) || 0;
+          if (remainingRefund > 0) {
+            const balBefore = parseFloat(loyaltyCard.balance);
+            const balAfter  = parseFloat((balBefore + remainingRefund).toFixed(2));
+            await loyaltyCard.update({ balance: balAfter }, { transaction: txn });
 
-        // Один атомарный update — баланс и totalEarned меняются вместе
-        await loyaltyCard.update({
-          balance:     balanceAfter,
-          totalEarned: earnedAfter,
-        }, { transaction: txn });
+            await Transaction.create({
+              userId:        booking.userId,
+              bookingId:     booking.id,
+              type:          'credit',
+              amount:        remainingRefund,
+              description:   `Возврат остатка по отмене бронирования #${booking.id}`,
+              balanceBefore: balBefore,
+              balanceAfter:  balAfter,
+              metadata:      { source: 'cancel_refund_remaining' },
+            }, { transaction: txn });
 
-        await Transaction.create({
-          userId:      booking.userId,
-          bookingId:   booking.id,
-          type:        'credit',
-          amount:      refundAmount,
-          description: `Возврат при отмене бронирования #${booking.id} (минус кэшбек ${Math.round(cashbackRate * 100)}%)`,
-          balanceBefore,
-          balanceAfter,
-        }, { transaction: txn });
+            if (adminWallet) {
+              const aBefore = parseFloat(adminWallet.totalBalance);
+              const aAfter  = parseFloat((aBefore - remainingRefund).toFixed(2));
+              await adminWallet.update({
+                totalBalance:     aAfter,
+                availableBalance: parseFloat((parseFloat(adminWallet.availableBalance) - remainingRefund).toFixed(2)),
+                totalReceived:    parseFloat((parseFloat(adminWallet.totalReceived) - remainingRefund).toFixed(2)),
+              }, { transaction: txn });
+              await AdminTransaction.create({
+                adminId:       financeAdmin.userId,
+                adminLevel:    1,
+                type:          'booking_refund',
+                amount:        remainingRefund,
+                bookingId:     booking.id,
+                description:   `Возврат остатка по отмене бронирования #${booking.id}`,
+                balanceBefore: aBefore,
+                balanceAfter:  aAfter,
+              }, { transaction: txn });
+            }
+          }
+        }
+
+        // 2) Возврат кэшбэка обратно в AdminWallet (только для completed,
+        //    т.к. кэшбэк начислялся только при completion).
+        if (booking.status === 'completed' && !booking.cashbackRevertedAt) {
+          cashbackRevert = parseFloat(booking.cashbackAmount) || 0;
+          if (cashbackRevert > 0) {
+            const balBefore = parseFloat(loyaltyCard.balance);
+            const balAfter  = parseFloat((balBefore - cashbackRevert).toFixed(2));
+            const earnedBefore = parseFloat(loyaltyCard.totalEarned) || 0;
+            const earnedAfter  = parseFloat((earnedBefore - cashbackRevert).toFixed(2));
+
+            await loyaltyCard.update({
+              balance:     balAfter,
+              totalEarned: earnedAfter,
+            }, { transaction: txn });
+
+            await Transaction.create({
+              userId:        booking.userId,
+              bookingId:     booking.id,
+              type:          'debit',
+              amount:        cashbackRevert,
+              description:   `Возврат кэшбэка по отмене бронирования #${booking.id}`,
+              balanceBefore: balBefore,
+              balanceAfter:  balAfter,
+              metadata:      { source: 'cashback_revert' },
+            }, { transaction: txn });
+
+            if (adminWallet) {
+              const aBefore = parseFloat(adminWallet.totalBalance);
+              const aAfter  = parseFloat((aBefore + cashbackRevert).toFixed(2));
+              await adminWallet.update({
+                totalBalance:     aAfter,
+                availableBalance: parseFloat((parseFloat(adminWallet.availableBalance) + cashbackRevert).toFixed(2)),
+                totalReceived:    parseFloat((parseFloat(adminWallet.totalReceived) + cashbackRevert).toFixed(2)),
+              }, { transaction: txn });
+              await AdminTransaction.create({
+                adminId:       financeAdmin.userId,
+                adminLevel:    1,
+                type:          'cashback_revert',
+                amount:        cashbackRevert,
+                bookingId:     booking.id,
+                description:   `Возврат кэшбэка по отмене бронирования #${booking.id}`,
+                balanceBefore: aBefore,
+                balanceAfter:  aAfter,
+              }, { transaction: txn });
+            }
+
+            await booking.update({ cashbackRevertedAt: new Date() }, { transaction: txn });
+          }
+        }
       }
 
       await booking.update({ status: 'cancelled' }, { transaction: txn });
@@ -639,7 +1069,12 @@ module.exports = function createBookingsRouter({ isDbConnected }) {
         message:   'Бронирование отменено. Даты освобождены.',
         bookingId: booking.id,
         booking,
-        refund: { refundAmount, cashbackDeducted, daysUntilCheckIn },
+        refund: {
+          depositBurned,
+          remainingRefund,
+          cashbackRevert,
+          daysUntilCheckIn,
+        },
       });
     } catch (error) {
       try { await txn.rollback(); } catch (_) {}
@@ -667,7 +1102,7 @@ module.exports = function createBookingsRouter({ isDbConnected }) {
         return res.status(400).json({ success: false, error: 'Статус не предоставлен' });
       }
 
-      const validStatuses = ['pending', 'confirmed', 'completed', 'cancelled'];
+      const validStatuses = ['pending', 'pending_payment', 'confirmed', 'completed', 'cancelled', 'expired'];
       if (!validStatuses.includes(status)) {
         return res.status(400).json({
           success: false,
@@ -698,159 +1133,18 @@ module.exports = function createBookingsRouter({ isDbConnected }) {
   });
 
   /**
-   * POST /:bookingId/pay-from-card — оплатить бронирование с карты лояльности (SELECT FOR UPDATE).
+   * POST /:bookingId/pay-from-card — DEPRECATED (Sprint A ВКР).
+   * Заменён парой pay-deposit + pay-remaining (method='card').
    */
   router.post('/:bookingId/pay-from-card', verifyToken, async (req, res) => {
-    const t = await sequelize.transaction({
-      isolationLevel: Sequelize.Transaction.ISOLATION_LEVELS.SERIALIZABLE,
+    return res.status(410).json({
+      success: false,
+      error:   'Endpoint удалён. Используйте POST /:bookingId/pay-deposit и POST /:bookingId/pay-remaining { method:"card" }.',
+      migration: {
+        deposit:   'POST /api/bookings/:bookingId/pay-deposit',
+        remaining: 'POST /api/bookings/:bookingId/pay-remaining  body: { method: "card" }',
+      },
     });
-    try {
-      const { bookingId } = req.params;
-      const userId = req.userId;
-
-      if (!bookingId) {
-        await t.rollback();
-        return res.status(400).json({ success: false, error: 'bookingId обязателен' });
-      }
-      if (!isDbConnected()) {
-        await t.rollback();
-        return res.status(503).json({ success: false, error: 'База данных не подключена' });
-      }
-
-      const booking = await Booking.findByPk(bookingId, { lock: t.LOCK.UPDATE, transaction: t });
-      if (!booking) {
-        await t.rollback();
-        return res.status(404).json({ success: false, error: 'Бронирование не найдено' });
-      }
-      if (booking.userId !== userId) {
-        await t.rollback();
-        return res.status(403).json({ success: false, error: 'Вы не можете оплатить чужое бронирование' });
-      }
-      if (booking.status === 'confirmed') {
-        await t.rollback();
-        return res.status(400).json({ success: false, error: 'Бронирование уже оплачено' });
-      }
-
-      const bookingAmount = parseFloat(booking.totalPrice);
-      const loyaltyCard   = await LoyaltyCard.findOne({ where: { userId }, lock: t.LOCK.UPDATE, transaction: t });
-      if (!loyaltyCard) {
-        await t.rollback();
-        return res.status(404).json({ success: false, error: 'Карта лояльности не найдена' });
-      }
-
-      const currentBalance = parseFloat(loyaltyCard.balance);
-      if (currentBalance < bookingAmount) {
-        await t.rollback();
-        return res.status(400).json({
-          success:          false,
-          error:            'Недостаточно средств на карте',
-          requiredAmount:   bookingAmount,
-          availableBalance: currentBalance,
-          deficit:          bookingAmount - currentBalance,
-        });
-      }
-
-      const payment = await Payment.create({
-        userId,
-        bookingId:     booking.id,
-        amount:        bookingAmount,
-        currency:      'RUB',
-        paymentMethod: 'loyalty_card',
-        status:        'completed',
-      }, { transaction: t });
-
-      const newBalance = parseFloat((currentBalance - bookingAmount).toFixed(2));
-      await loyaltyCard.update({
-        balance:    newBalance,
-        totalSpent: parseFloat((parseFloat(loyaltyCard.totalSpent) + bookingAmount).toFixed(2)),
-      }, { transaction: t });
-
-      await Transaction.create({
-        userId,
-        bookingId:    booking.id,
-        type:         'debit',
-        amount:       bookingAmount,
-        description:  `Оплата бронирования #${booking.id} с карты лояльности`,
-        balanceBefore: currentBalance,
-        balanceAfter:  newBalance,
-      }, { transaction: t });
-
-      await booking.update({ status: 'confirmed' }, { transaction: t });
-
-      const financeAdmin = await User.findOne({ where: { role: 'admin', adminLevel: 1 }, transaction: t });
-      if (financeAdmin) {
-        const adminWallet = await AdminWallet.findOne({ where: { adminId: financeAdmin.userId }, lock: t.LOCK.UPDATE, transaction: t });
-        if (adminWallet) {
-          const prevAdminBalance = parseFloat(adminWallet.totalBalance);
-          await adminWallet.update({
-            totalBalance:     parseFloat((prevAdminBalance + bookingAmount).toFixed(2)),
-            availableBalance: parseFloat((parseFloat(adminWallet.availableBalance) + bookingAmount).toFixed(2)),
-            totalReceived:    parseFloat((parseFloat(adminWallet.totalReceived) + bookingAmount).toFixed(2)),
-          }, { transaction: t });
-
-          await AdminTransaction.create({
-            adminId:      financeAdmin.userId,
-            adminLevel:   1,
-            type:         'booking_payment',
-            amount:       bookingAmount,
-            bookingId:    booking.id,
-            description:  `Платёж за бронирование #${booking.id} (пользователь: ${userId})`,
-            balanceBefore: prevAdminBalance,
-            balanceAfter:  prevAdminBalance + bookingAmount,
-          }, { transaction: t });
-        }
-      }
-
-      await t.commit();
-      await invalidateBookedDatesCache(booking.propertyId);
-
-      try {
-        await Notification.create({
-          userId,
-          title:   ' Платёж принят',
-          message: `Ваше бронирование #${booking.id} успешно оплачено. Сумма: ${bookingAmount}₽`,
-          type:    'payment',
-          data:    { bookingId: booking.id, paymentId: payment.id, amount: bookingAmount },
-          read:    false,
-        });
-      } catch (notifyErr) {
-        logger.error('pay-from-card user notify error', { error: notifyErr.message });
-      }
-
-      try {
-        if (financeAdmin) {
-          await Notification.create({
-            userId:  financeAdmin.userId,
-            title:   ' Новый платёж',
-            message: `Получен платёж ${bookingAmount}₽ за бронирование #${booking.id}`,
-            type:    'admin_payment',
-            data:    { bookingId: booking.id, paymentId: payment.id, amount: bookingAmount },
-            read:    false,
-          });
-        }
-      } catch (notifyErr) {
-        logger.error('pay-from-card admin notify error', { error: notifyErr.message });
-      }
-
-      logger.info('Платёж с карты лояльности', { bookingId, amount: bookingAmount });
-
-      return res.status(201).json({
-        success:   true,
-        message:   'Платёж успешно выполнен',
-        payment,
-        booking:   { id: booking.id, status: booking.status },
-        newBalance: loyaltyCard.balance,
-        paymentId:  payment.id,
-      });
-    } catch (error) {
-      await t.rollback();
-      logger.error('pay-from-card error', { error: error.message });
-      return res.status(500).json({
-        success: false,
-        error:   'Ошибка при оплате с карты',
-        details: isDev() ? error.message : undefined,
-      });
-    }
   });
 
   /**
