@@ -165,7 +165,11 @@ export default function UserManagementModal({ visible, onClose, theme, onUserCre
     } catch (error) {
       let msg = 'Не удалось создать пользователя';
       const m = error.message || '';
-      if (m.includes('email-already-in-use') || m.includes('already registered')) {
+      if (
+        m.includes('email-already-in-use') ||
+        m.includes('already registered') ||
+        m.includes('уже зарегистрирован')
+      ) {
         msg = 'Этот email уже зарегистрирован';
       } else if (m.includes('Network')) {
         msg = 'Ошибка сети. Проверьте подключение';
