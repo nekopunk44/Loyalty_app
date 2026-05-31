@@ -13,6 +13,7 @@ import {
   Easing,
   Dimensions,
   PanResponder,
+  Alert,
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { colors, spacing, borderRadius } from '../../constants/theme';
@@ -383,6 +384,43 @@ export default function AdminUsers({ navigation: _navigation }) {
     setTxHistoryVisible(true);
   };
 
+  const handleResendInvite = (user) => {
+    Alert.alert(
+      'Отправить приглашение повторно?',
+      `На ${user.email} будет отправлено новое письмо. Старый код приглашения перестанет работать.`,
+      [
+        { text: 'Отмена', style: 'cancel' },
+        {
+          text: 'Отправить',
+          onPress: async () => {
+            try {
+              const data = await apiCall(`${API_BASE_URL}/auth/resend-invite`, {
+                method: 'POST',
+                body: JSON.stringify({ userId: user.id }),
+              });
+              if (data.error) throw new Error(data.error);
+              if (data.emailSent) {
+                Alert.alert('Готово', `Письмо отправлено на ${user.email}.`);
+              } else if (data.setupToken) {
+                Alert.alert(
+                  'Письмо не ушло',
+                  `Передайте код вручную:\n\n${data.setupToken}`,
+                );
+              } else {
+                Alert.alert(
+                  'Письмо не ушло',
+                  'Почта не настроена — см. логи сервера.',
+                );
+              }
+            } catch (e) {
+              Alert.alert('Ошибка', e.message || 'Не удалось отправить приглашение');
+            }
+          },
+        },
+      ],
+    );
+  };
+
   // Рендер для администратора - список с подробной информацией
   const renderAdminUserCard = ({ item, index }) => (
     <FadeInCard delay={150 + index * 30}>
@@ -400,6 +438,7 @@ export default function AdminUsers({ navigation: _navigation }) {
         }}
         onQuickBalance={() => handleOpenBalanceAdjust(item)}
         onShowTransactions={() => handleShowTransactions(item)}
+        onResendInvite={() => handleResendInvite(item)}
       />
     </FadeInCard>
   );

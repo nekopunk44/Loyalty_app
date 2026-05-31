@@ -35,6 +35,7 @@ export const AdminUserListCard = ({
   onDelete,
   onQuickBalance,
   onShowTransactions,
+  onResendInvite,
   theme,
 }) => {
   const isAdmin = user.role === 'admin';
@@ -155,6 +156,18 @@ export const AdminUserListCard = ({
               ]}
             >
               <MaterialIcons name="receipt-long" size={18} color={ICON_MUTED} />
+            </Pressable>
+          )}
+          {onResendInvite && (
+            <Pressable
+              onPress={onResendInvite}
+              hitSlop={8}
+              style={({ pressed }) => [
+                styles.iconBtn,
+                { backgroundColor: pressed ? `${ICON_MUTED}26` : 'transparent' },
+              ]}
+            >
+              <MaterialIcons name="mail-outline" size={18} color={ICON_MUTED} />
             </Pressable>
           )}
           <Pressable

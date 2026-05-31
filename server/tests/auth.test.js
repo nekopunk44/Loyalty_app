@@ -235,6 +235,60 @@ describe('POST /api/auth/register-admin', () => {
   });
 });
 
+// ─── POST /resend-invite ─────────────────────────────────────────────────────
+
+describe('POST /api/auth/resend-invite', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    UserModel.findOne.mockResolvedValue({ userId: 'admin-1', role: 'admin' });
+  });
+
+  test('401 без токена', async () => {
+    const res = await request(createApp()).post('/api/auth/resend-invite').send({ userId: 'u-1' });
+    expect(res.status).toBe(401);
+  });
+
+  test('400 без userId', async () => {
+    const res = await request(createApp())
+      .post('/api/auth/resend-invite')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({});
+    expect(res.status).toBe(400);
+  });
+
+  test('404 если юзер не найден', async () => {
+    User.findOne.mockResolvedValue(null);
+    const res = await request(createApp())
+      .post('/api/auth/resend-invite')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ userId: 'missing' });
+    expect(res.status).toBe(404);
+  });
+
+  test('200 + ротация setupToken + повторная отправка', async () => {
+    const target = mockUser({ userId: 'u-1', email: 'target@example.com' });
+    User.findOne.mockImplementation(async ({ where }) => {
+      if (where && where.userId === 'u-1') return target;
+      return null;
+    });
+    const res = await request(createApp())
+      .post('/api/auth/resend-invite')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ userId: 'u-1' });
+    expect(res.status).toBe(200);
+    expect(res.body.emailSent).toBe(true);
+    // токен ротирован и сохранён
+    expect(target.update).toHaveBeenCalledWith(expect.objectContaining({
+      resetPasswordToken: expect.any(String),
+      resetPasswordExpires: expect.any(Date),
+    }));
+    // письмо отправлено на текущий email юзера, с новым токеном
+    const [calledEmail, calledToken] = lastSendWelcomeEmail.mock.calls[0];
+    expect(calledEmail).toBe('target@example.com');
+    expect(calledToken).toBe(target.update.mock.calls[0][0].resetPasswordToken);
+  });
+});
+
 // ─── POST /login ─────────────────────────────────────────────────────────────
 
 describe('POST /api/auth/login', () => {

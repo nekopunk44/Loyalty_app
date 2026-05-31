@@ -191,6 +191,64 @@ module.exports = function createAuthRouter({
   });
 
   /**
+   * POST /resend-invite — повторная отправка welcome-письма.
+   * Админ нажимает «Отправить приглашение повторно» на карточке юзера.
+   * Старый setupToken инвалидируется, генерится новый на 24 часа, и письмо
+   * уходит fire-and-forget. Работает и для не-активированных юзеров (изначальное
+   * приглашение), и для активированных — в этом случае фактически это password
+   * reset, инициированный админом.
+   */
+  router.post('/resend-invite', verifyAdmin, async (req, res) => {
+    try {
+      const { userId } = req.body;
+      if (!userId) {
+        return res.status(400).json({ success: false, error: 'userId обязателен' });
+      }
+      if (!isDbConnected()) {
+        return res.status(503).json({ success: false, error: 'База данных не подключена' });
+      }
+
+      const user = await User.findOne({ where: { userId } });
+      if (!user) {
+        return res.status(404).json({ success: false, error: 'Пользователь не найден' });
+      }
+
+      const setupToken = crypto.randomBytes(32).toString('hex');
+      const setupExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      await user.update({
+        resetPasswordToken: setupToken,
+        resetPasswordExpires: setupExpires,
+      });
+
+      logger.info('Повторное приглашение', { userId, email: user.email });
+
+      const mailConfigured = !!(
+        process.env.RESEND_API_KEY ||
+        (process.env.SMTP_USER && process.env.SMTP_PASS)
+      );
+      sendWelcomeEmail(user.email, setupToken, user.displayName).catch((mailErr) => {
+        logger.error('resend invite failed', { email: user.email, error: mailErr.message });
+      });
+
+      return res.status(200).json({
+        success: true,
+        emailSent: mailConfigured,
+        setupToken: isDev() ? setupToken : undefined,
+        message: mailConfigured
+          ? 'Письмо-приглашение отправлено повторно.'
+          : 'Почта не настроена — сообщите код приглашения вручную.',
+      });
+    } catch (error) {
+      logger.error('resend-invite error', { error: error.message });
+      return res.status(500).json({
+        success: false,
+        error: 'Ошибка при повторной отправке',
+        details: isDev() ? error.message : undefined,
+      });
+    }
+  });
+
+  /**
    * POST /login — JWT-вход.
    */
   router.post('/login', authLimiter, authSlowDown, validate(schemas.login), async (req, res) => {
