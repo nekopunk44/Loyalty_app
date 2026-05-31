@@ -92,9 +92,12 @@ export default function EventsScreen() {
     pulse(hBlob2, 1.20, 2700, 1400).start();
   }, []);
 
-  // filteredEvents declared early so useEffect below can safely depend on it
+  // filteredEvents declared early so useEffect below can safely depend on it.
+  // Дедуп по id обязателен: SSE-листенер и refreshEvents могут параллельно
+  // вернуть один и тот же ивент (id=225 как server-копия + local_xxx как
+  // оптимистичная вставка), и FlatList бросает duplicate-key warning.
   const filteredEvents = useMemo(() => {
-    return events.filter(event => {
+    const filtered = events.filter(event => {
       if (filter === 'all') {
         // show all
       } else if (filter === 'active') {
@@ -117,6 +120,15 @@ export default function EventsScreen() {
 
       return false;
     });
+    const seen = new Set();
+    const unique = [];
+    for (const e of filtered) {
+      const key = String(e.id);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      unique.push(e);
+    }
+    return unique;
   }, [filter, events, user]);
 
   // Функция для показа уведомления
@@ -909,7 +921,7 @@ export default function EventsScreen() {
         }
         data={filteredEvents}
         key={`list-${filter}`}
-        keyExtractor={(i) => i.id}
+        keyExtractor={(i) => String(i.id)}
         renderItem={renderEvent}
         scrollEnabled={true}
         nestedScrollEnabled={false}
