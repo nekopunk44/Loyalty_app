@@ -127,7 +127,7 @@ const rateLimit = require('express-rate-limit');
 
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: NODE_ENV === 'production' ? 300 : 3000,
+  max: NODE_ENV === 'production' ? 1500 : 6000,
   keyGenerator: (req) => {
     try {
       const token = req.headers.authorization?.split(' ')[1];
@@ -137,6 +137,11 @@ const apiLimiter = rateLimit({
       }
     } catch {}
     return req.ip;
+  },
+  skip: (req) => {
+    if (req.path === '/health' || req.path === '/api/health') return true;
+    if (req.path.endsWith('/stream')) return true;
+    return false;
   },
   message: 'Слишком много запросов, пожалуйста попробуйте позже.',
   standardHeaders: true,
