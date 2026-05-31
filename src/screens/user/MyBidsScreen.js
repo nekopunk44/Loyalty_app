@@ -174,6 +174,7 @@ export default function MyBidsScreen() {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
+        style={styles.filterScroll}
         contentContainerStyle={styles.filterRow}
       >
         {FILTERS.map((f) => {
@@ -264,18 +265,23 @@ const styles = StyleSheet.create({
   },
   retryText: { color: '#fff', fontWeight: '700' },
 
+  filterScroll: {
+    flexGrow: 0,
+    flexShrink: 0,
+  },
   filterRow: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     gap: spacing.sm,
+    alignItems: 'center',
   },
   filterChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
+    height: 34,
+    borderRadius: 17,
     borderWidth: 1,
   },
   filterText: { fontSize: 13, fontWeight: '600' },
