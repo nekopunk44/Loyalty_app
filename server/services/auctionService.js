@@ -191,10 +191,19 @@ async function placeBid({ eventId, userId, amount }) {
       status: 'active',
     }, { transaction: txn });
 
-    // Денормализация на Event
+    // Денормализация на Event. participants = distinct userIds в AuctionBid,
+    // считается внутри той же SERIALIZABLE-txn чтобы видеть только что созданный newBid.
+    const uniqueBidders = await AuctionBid.count({
+      where: { eventId },
+      distinct: true,
+      col: 'userId',
+      transaction: txn,
+    });
+
     await event.update({
       currentBid:       bidAmount,
       currentBidUserId: userId,
+      participants:     uniqueBidders,
     }, { transaction: txn });
 
     await txn.commit();
