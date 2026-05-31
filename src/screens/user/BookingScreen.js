@@ -22,6 +22,8 @@ import { spacing, borderRadius } from '../../constants/theme';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useBookings } from '../../context/BookingContext';
+import { usePayment } from '../../context/PaymentContext';
+import { useNotification } from '../../context/NotificationContext';
 import LoyaltyCardService from '../../services/LoyaltyCardService';
 import { SkeletonBookingRow } from '../../components/ui/Skeleton';
 import { BookingCalendar } from '../../components/booking/BookingCalendar';
@@ -95,7 +97,13 @@ export default function BookingScreen({ navigation }) {
   const { user } = useAuth();
   const colors = theme.colors;
   const { bookings: contextBookings, refreshBookings } = useBookings();
+  const { payDeposit, payRemaining } = usePayment();
+  const { notifyPaymentSuccess } = useNotification();
   const useNative = Platform.OS !== 'web';
+
+  // ID бронирования, для которого сейчас идёт списание (показываем спиннер на CTA)
+  const [payingDepositId,   setPayingDepositId]   = useState(null);
+  const [payingRemainingId, setPayingRemainingId] = useState(null);
 
   // Entrance animations
   const heroAnim    = useRef(new Animated.Value(0)).current;
@@ -308,8 +316,14 @@ export default function BookingScreen({ navigation }) {
       const checkOutDate = new Date(year, month - 1, day);
       checkOutDate.setHours(0, 0, 0, 0);
 
-      // Если дата выезда меньше текущей даты, то бронирование завершено
-      if (checkOutDate < today && booking.status === 'confirmed') {
+      // Если дата выезда меньше текущей даты, то бронирование завершено.
+      // Sprint A: пропускаем брони с неоплаченным остатком — их должен закрыть
+      // payRemaining (через CTA в карточке), иначе кэшбэк не начислится.
+      const hasUnpaidRemainder =
+        booking.depositPaidAt && !booking.remainingPaidAt &&
+        Number(booking.totalPrice) > Number(booking.depositAmount || 0);
+
+      if (checkOutDate < today && booking.status === 'confirmed' && !hasUnpaidRemainder) {
         try {
           const data = await apiCall(`${getApiUrl()}/bookings/${booking.id}/status`, {
             method: 'PATCH',
@@ -345,7 +359,7 @@ export default function BookingScreen({ navigation }) {
       const formattedBookings = contextBookings.map((booking) => {
         const saunaHours = parseInt(booking.saunaHours) || 0;
         const kitchenware = Boolean(booking.kitchenware) || false;
-        
+
         return {
           id: booking.id,
           property: getPropertyName(booking.propertyId),
@@ -360,6 +374,14 @@ export default function BookingScreen({ navigation }) {
           review: '',
           saunaHours,
           kitchenware,
+          // Sprint A: поля для split-оплаты (депозит / остаток).
+          depositAmount:          booking.depositAmount,
+          depositPaidAt:          booking.depositPaidAt,
+          remainingAmount:        booking.remainingAmount,
+          remainingPaidAt:        booking.remainingPaidAt,
+          remainingPaymentMethod: booking.remainingPaymentMethod,
+          paymentDeadline:        booking.paymentDeadline,
+          cashbackAmount:         booking.cashbackAmount,
         };
       });
       setBookings(formattedBookings);
@@ -582,9 +604,10 @@ export default function BookingScreen({ navigation }) {
       const total = calculateTotal();
 
       // Отправляем бронирование на сервер
+      // userId сервер берёт из JWT (req.userId) — в теле не отправляем,
+      // т.к. zod-схема .strict() и неизвестное поле даёт «Ошибка валидации»
       const response = await apiPost(API_ENDPOINTS.BOOKINGS.CREATE, {
         propertyId: selectedProperty.id,
-        userId: user?.id,
         checkInDate: bookingData.checkIn,
         checkOutDate: bookingData.checkOut,
         guests: bookingData.guests,
@@ -700,8 +723,71 @@ export default function BookingScreen({ navigation }) {
     <PropertyCard item={item} onSelect={handleSelectProperty} />
   );
 
+  // Sprint A: оплата депозита по pending_payment-брони из карточки в списке.
+  const handlePayDepositFromList = async (item) => {
+    try {
+      setPayingDepositId(item.id);
+      const result = await payDeposit(item.id);
+      const amount = result?.payment?.amount ?? item.depositAmount ?? 0;
+      await notifyPaymentSuccess(amount, 'карта лояльности (депозит)');
+      await refreshBookings();
+      Alert.alert('Готово', `Депозит ${amount.toLocaleString('ru-RU')} PRB списан. Бронирование подтверждено.`);
+    } catch (error) {
+      console.error('❌ Ошибка оплаты депозита:', error);
+      Alert.alert('Ошибка', error.message || 'Не удалось списать депозит');
+    } finally {
+      setPayingDepositId(null);
+    }
+  };
+
+  // Sprint A: оплата остатка — card → списать с карты сейчас; cash → отметить «принято при заезде».
+  const handlePayRemainingFromList = async (item, method) => {
+    const remaining = Math.max(0, Number(item.total) - Number(item.depositAmount));
+    const title = method === 'card' ? 'Списать остаток картой?' : 'Принять оплату наличными?';
+    const message = method === 'card'
+      ? `С карты лояльности будет списано ${remaining.toLocaleString('ru-RU')} PRB. Кэшбэк начислится со всей суммы брони.`
+      : `Остаток ${remaining.toLocaleString('ru-RU')} PRB будет принят при заезде. С карты ничего не спишется. Кэшбэк начислен только с депозита.`;
+
+    Alert.alert(title, message, [
+      { text: 'Отмена', style: 'cancel' },
+      {
+        text: method === 'card' ? 'Списать' : 'Подтвердить',
+        onPress: async () => {
+          try {
+            setPayingRemainingId(item.id);
+            const result = await payRemaining(item.id, method);
+            const cashbackTotal = result?.cashback?.total ?? 0;
+            if (method === 'card') {
+              await notifyPaymentSuccess(remaining, 'карта лояльности (остаток)');
+            }
+            await refreshBookings();
+            Alert.alert(
+              'Бронирование завершено',
+              method === 'card'
+                ? `Остаток списан. Кэшбэк начислен: ${cashbackTotal.toLocaleString('ru-RU')} PRB.`
+                : `Оплата наличными зафиксирована. Кэшбэк начислен: ${cashbackTotal.toLocaleString('ru-RU')} PRB.`,
+            );
+          } catch (error) {
+            console.error('❌ Ошибка оплаты остатка:', error);
+            Alert.alert('Ошибка', error.message || 'Не удалось завершить оплату');
+          } finally {
+            setPayingRemainingId(null);
+          }
+        },
+      },
+    ]);
+  };
+
   const renderBooking = ({ item, index }) => (
-    <BookingCard item={item} index={index} onCancel={handleCancelBooking} />
+    <BookingCard
+      item={item}
+      index={index}
+      onCancel={handleCancelBooking}
+      onPayDeposit={handlePayDepositFromList}
+      onPayRemaining={handlePayRemainingFromList}
+      payingDepositId={payingDepositId}
+      payingRemainingId={payingRemainingId}
+    />
   );
 
 
@@ -759,11 +845,11 @@ export default function BookingScreen({ navigation }) {
                 <SkeletonBookingRow />
                 <SkeletonBookingRow />
               </View>
-            ) : bookings.filter(b => b.status === 'pending' || b.status === 'confirmed' || b.status === 'paid').length > 0 ? (
+            ) : bookings.filter(b => b.status === 'pending' || b.status === 'pending_payment' || b.status === 'confirmed' || b.status === 'paid').length > 0 ? (
               <>
                 <Text style={styles.sectionTitle}>Активные бронирования</Text>
                 <FlatList
-                  data={bookings.filter(b => b.status === 'pending' || b.status === 'confirmed' || b.status === 'paid')}
+                  data={bookings.filter(b => b.status === 'pending' || b.status === 'pending_payment' || b.status === 'confirmed' || b.status === 'paid')}
                   renderItem={renderBooking}
                   keyExtractor={(item) => item.id}
                   scrollEnabled={false}

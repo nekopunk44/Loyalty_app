@@ -73,7 +73,9 @@ export const getAPIEndpoints = () => ({
     USER_BOOKINGS: (userId) => `${getApiUrl()}/bookings/user/${userId}`,
     PROPERTY_BOOKED_DATES: (propertyId) =>
       `${getApiUrl()}/bookings/property/${propertyId}/booked-dates`,
-    CONFIRM_PAYMENT: (bookingId) => `${getApiUrl()}/bookings/${bookingId}/confirm-payment`,
+    CONFIRM_PAYMENT: (bookingId) => `${getApiUrl()}/bookings/${bookingId}/confirm-payment`, // deprecated → 410
+    PAY_DEPOSIT:   (bookingId) => `${getApiUrl()}/bookings/${bookingId}/pay-deposit`,
+    PAY_REMAINING: (bookingId) => `${getApiUrl()}/bookings/${bookingId}/pay-remaining`,
     CANCEL: (bookingId) => `${getApiUrl()}/bookings/${bookingId}/cancel`,
   },
 
