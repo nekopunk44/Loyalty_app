@@ -213,6 +213,43 @@ const sendPasswordResetEmail = async (toEmail, resetToken) => {
   });
 };
 
+const sendWelcomeEmail = async (toEmail, setupToken, displayName) => {
+  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+    logger.info('DEV welcome token', { email: toEmail, token: setupToken });
+    return;
+  }
+  const greeting = displayName ? `Здравствуйте, ${displayName}!` : 'Здравствуйте!';
+  await emailTransporter.sendMail({
+    from: `"Villa Jaconda" <${process.env.SMTP_USER}>`,
+    to: toEmail,
+    subject: 'Добро пожаловать в Villa Jaconda',
+    headers: {
+      'X-Priority': '1',
+      'X-Mailer': 'Villa Jaconda Mailer',
+      'Precedence': 'transactional',
+    },
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#f7fafc;border-radius:12px">
+        <h2 style="color:#1a1150;margin-bottom:8px">Добро пожаловать в Villa Jaconda</h2>
+        <p style="color:#4a5568;margin-bottom:8px">${greeting}</p>
+        <p style="color:#4a5568;margin-bottom:24px">
+          Для вас создан аккаунт в приложении <strong>Villa Jaconda</strong>.<br>
+          Ваш логин: <strong>${toEmail}</strong><br>
+          Чтобы войти, откройте приложение, выберите «Есть код приглашения?» и введите код ниже.
+          Код действует <strong>24 часа</strong>.
+        </p>
+        <div style="background:#1a1150;border-radius:10px;padding:20px 24px;text-align:center;margin-bottom:24px">
+          <p style="color:#a0aec0;font-size:12px;margin:0 0 8px">Код приглашения</p>
+          <code style="color:#ffffff;font-size:22px;letter-spacing:2px;word-break:break-all">${setupToken}</code>
+        </div>
+        <p style="color:#718096;font-size:13px">
+          Если вы не ожидали это письмо — просто проигнорируйте его. Аккаунт станет неактивным после истечения срока действия кода.
+        </p>
+      </div>
+    `,
+  });
+};
+
 const path = require('path');
 app.use(express.static('public'));
 app.use('/assets', express.static(path.join(__dirname, '../src/assets')));
@@ -435,7 +472,7 @@ app.get('/health', async (req, res) => {
   });
 });
 
-app.use('/api/auth',          require('./routes/auth')({ authLimiter, authSlowDown, sendPasswordResetEmail, isDbConnected: () => dbConnected }));
+app.use('/api/auth',          require('./routes/auth')({ authLimiter, authSlowDown, sendPasswordResetEmail, sendWelcomeEmail, isDbConnected: () => dbConnected }));
 app.use('/api/users',         require('./routes/users')({ isDbConnected: () => dbConnected }));
 app.use('/api/events',        require('./routes/events')({ isDbConnected: () => dbConnected }));
 app.use('/api/notifications', require('./routes/notifications')({ isDbConnected: () => dbConnected }));

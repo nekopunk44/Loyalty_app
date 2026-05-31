@@ -68,6 +68,7 @@ module.exports = function createAuthRouter({
   authLimiter,
   authSlowDown,
   sendPasswordResetEmail,
+  sendWelcomeEmail,
   isDbConnected,
 }) {
   const router = express.Router();
@@ -91,15 +92,17 @@ module.exports = function createAuthRouter({
     try {
       const {
         email,
-        password,
         displayName,
         phone,
         role = 'user',
         membershipLevel = 'Bronze',
       } = req.body;
 
-      if (!email || !password) {
-        return res.status(400).json({ success: false, message: 'Email и пароль обязательны' });
+      if (!email) {
+        return res.status(400).json({ success: false, message: 'Email обязателен' });
+      }
+      if (!validateEmail(email)) {
+        return res.status(400).json({ success: false, message: 'Неверный формат email' });
       }
       if (!isDbConnected()) {
         return res.status(503).json({ success: false, message: 'База данных не подключена' });
@@ -110,8 +113,13 @@ module.exports = function createAuthRouter({
         return res.status(400).json({ success: false, message: 'Email уже зарегистрирован' });
       }
 
-      const passwordHash = await bcryptjs.hash(password, 10);
+      // Пароль не задаётся админом — генерим случайный hash. Юзер не сможет
+      // войти, пока не использует setupToken из welcome-письма.
+      const passwordHash = await bcryptjs.hash(crypto.randomBytes(32).toString('hex'), 10);
       const userId = `user_${Date.now()}_${crypto.randomBytes(5).toString('hex')}`;
+
+      const setupToken = crypto.randomBytes(32).toString('hex');
+      const setupExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
 
       const newUser = await User.create({
         userId,
@@ -122,6 +130,8 @@ module.exports = function createAuthRouter({
         role: role || 'user',
         membershipLevel: membershipLevel || 'Bronze',
         loyaltyPoints: 0,
+        resetPasswordToken: setupToken,
+        resetPasswordExpires: setupExpires,
       });
 
       await LoyaltyCard.create({
@@ -134,6 +144,16 @@ module.exports = function createAuthRouter({
       });
 
       logger.info('Новый пользователь создан админом', { email, role });
+
+      // Письмо с приглашением. Сбой почты не должен ломать создание юзера —
+      // токен живёт 24 часа, admin может переотправить или сообщить вручную.
+      let emailSent = true;
+      try {
+        await sendWelcomeEmail(email, setupToken, newUser.displayName);
+      } catch (mailErr) {
+        emailSent = false;
+        logger.error('welcome email failed', { email, error: mailErr.message });
+      }
 
       return res.status(201).json({
         success: true,
@@ -151,7 +171,12 @@ module.exports = function createAuthRouter({
           cashback: 0,
           joinDate: 'сегодня',
         },
-        message: 'Пользователь успешно создан',
+        emailSent,
+        // В dev возвращаем токен, чтобы админ мог скопировать, если SMTP не настроен.
+        setupToken: isDev() ? setupToken : undefined,
+        message: emailSent
+          ? 'Пользователь создан. Письмо-приглашение отправлено.'
+          : 'Пользователь создан, но письмо отправить не удалось. Сообщите код приглашения вручную.',
       });
     } catch (error) {
       logger.error('register-admin error', { error: error.message });
