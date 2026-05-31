@@ -1,7 +1,12 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, Modal } from 'react-native';
+import { View, Text, TouchableOpacity, Modal, StyleSheet } from 'react-native';
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { spacing, borderRadius } from '../../constants/theme';
 import { useTheme } from '../../context/ThemeContext';
+
+const ACCENT_OK   = '#10B981';
+const ACCENT_WARN = '#EF4444';
+const DANGER_BG   = '#EF4444';
 
 function getDaysUntilCheckIn(checkIn) {
   const [day, month, year] = checkIn.split('.');
@@ -12,116 +17,273 @@ function getDaysUntilCheckIn(checkIn) {
   return Math.floor((checkInDate - today) / (1000 * 60 * 60 * 24));
 }
 
+function pluralizeDays(n) {
+  const abs = Math.abs(n);
+  const mod10 = abs % 10;
+  const mod100 = abs % 100;
+  if (mod10 === 1 && mod100 !== 11) return 'день';
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'дня';
+  return 'дней';
+}
+
 export default function CancelConfirmModal({ visible, cancelBookingId, bookings, onClose, onConfirm }) {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const colors = theme.colors;
 
   const booking = bookings.find(b => String(b.id) === String(cancelBookingId));
   const daysUntilCheckIn = booking ? getDaysUntilCheckIn(booking.checkIn) : 0;
   const canCancel = daysUntilCheckIn >= 2;
 
+  const okBg   = isDark ? 'rgba(16,185,129,0.12)' : 'rgba(16,185,129,0.10)';
+  const warnBg = isDark ? 'rgba(239,68,68,0.14)'  : 'rgba(239,68,68,0.08)';
+
+  const statusLine = !booking
+    ? ''
+    : daysUntilCheckIn < 0
+      ? `Заезд был ${Math.abs(daysUntilCheckIn)} ${pluralizeDays(daysUntilCheckIn)} назад`
+      : daysUntilCheckIn === 0
+        ? 'Заезд сегодня'
+        : `До заезда ${daysUntilCheckIn} ${pluralizeDays(daysUntilCheckIn)}`;
+
   return (
-    <Modal visible={visible} transparent animationType="fade">
-      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end', alignItems: 'center' }}>
-        <View style={{
-          backgroundColor: colors.cardBg,
-          borderTopLeftRadius: 20,
-          borderTopRightRadius: 20,
-          padding: spacing.lg,
-          width: '100%',
-          maxHeight: '85%',
-          paddingTop: spacing.xl,
-        }}>
-          <View style={{ alignItems: 'center', marginBottom: spacing.lg }}>
-            <View style={{ width: 40, height: 4, backgroundColor: colors.border, borderRadius: 2 }} />
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.backdrop}>
+        <TouchableOpacity style={styles.backdropTouch} activeOpacity={1} onPress={onClose} />
+        <View style={[styles.sheet, { backgroundColor: colors.cardBg }]}>
+          <View style={[styles.grabber, { backgroundColor: colors.border }]} />
+
+          <View style={styles.header}>
+            <View style={[styles.headerIcon, { backgroundColor: canCancel ? okBg : warnBg }]}>
+              <MaterialIcons
+                name={canCancel ? 'event-busy' : 'block'}
+                size={22}
+                color={canCancel ? ACCENT_OK : ACCENT_WARN}
+              />
+            </View>
+            <Text style={[styles.title, { color: colors.text }]}>
+              {canCancel ? 'Отменить бронирование?' : 'Отмена недоступна'}
+            </Text>
+            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+              {canCancel
+                ? 'Сумма вернётся на карту с учётом удержания кэшбека по вашему уровню.'
+                : 'Отмена возможна минимум за 3 дня до заезда.'}
+            </Text>
           </View>
 
-          <Text style={{ fontSize: 20, fontWeight: '700', color: colors.text, marginBottom: spacing.lg, textAlign: 'center' }}>
-            Отменить бронирование?
-          </Text>
-
           {booking && (
-            <View style={{ marginBottom: spacing.xl }}>
-              <View style={{
-                backgroundColor: `${colors.primary}10`,
-                borderLeftWidth: 4,
-                borderLeftColor: colors.primary,
-                padding: spacing.md,
-                borderRadius: borderRadius.md,
-                marginBottom: spacing.lg,
-              }}>
-                <View style={{ marginBottom: spacing.md }}>
-                  <Text style={{ fontSize: 11, color: colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 }}>Номер</Text>
-                  <Text style={{ fontSize: 16, color: colors.text, fontWeight: '700', marginTop: spacing.xs }}>{booking.property}</Text>
-                </View>
-                <View style={{ marginBottom: spacing.md }}>
-                  <Text style={{ fontSize: 11, color: colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 }}>Дата проживания</Text>
-                  <Text style={{ fontSize: 14, color: colors.text, fontWeight: '600', marginTop: spacing.xs }}>{booking.date}</Text>
-                </View>
-                <View>
-                  <Text style={{ fontSize: 11, color: colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 }}>Сумма платежа</Text>
-                  <Text style={{ fontSize: 20, color: colors.primary, fontWeight: '700', marginTop: spacing.xs }}>{booking.total} PRB</Text>
-                </View>
+            <View style={[styles.card, { borderColor: colors.border, backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)' }]}>
+              <View style={styles.row}>
+                <MaterialIcons name="hotel" size={18} color={colors.textSecondary} />
+                <Text style={[styles.rowLabel, { color: colors.textSecondary }]}>Номер</Text>
+                <Text style={[styles.rowValue, { color: colors.text }]} numberOfLines={1}>
+                  {booking.property}
+                </Text>
               </View>
 
-              {canCancel ? (
-                <View style={{ backgroundColor: '#E8F5E9', borderLeftWidth: 4, borderLeftColor: '#4CAF50', padding: spacing.md, borderRadius: borderRadius.md, marginBottom: spacing.lg }}>
-                  <Text style={{ fontSize: 13, color: '#2E7D32', fontWeight: '700', marginBottom: spacing.sm }}>Отмена доступна</Text>
-                  <Text style={{ fontSize: 12, color: '#2E7D32', lineHeight: 18 }}>
-                    При отмене будет произведен возврат с вычетом кэшбека в соответствии с вашим уровнем лояльности.
-                  </Text>
-                  <Text style={{ fontSize: 11, color: '#2E7D32', marginTop: spacing.sm, fontWeight: '600' }}>
-                    Дней до заезда: {daysUntilCheckIn}
-                  </Text>
-                </View>
-              ) : (
-                <View style={{ backgroundColor: '#FFEBEE', borderLeftWidth: 4, borderLeftColor: '#D32F2F', padding: spacing.md, borderRadius: borderRadius.md, marginBottom: spacing.lg }}>
-                  <Text style={{ fontSize: 13, color: '#C62828', fontWeight: '600', marginBottom: spacing.sm }}>Отмена недоступна</Text>
-                  <Text style={{ fontSize: 12, color: '#C62828', lineHeight: 18 }}>
-                    Отмена возможна только минимум за 3 дня до заезда.
-                  </Text>
-                  <Text style={{ fontSize: 11, color: '#C62828', marginTop: spacing.sm, fontWeight: '600' }}>
-                    {daysUntilCheckIn <= 0
-                      ? `Заезд был ${Math.abs(daysUntilCheckIn)} дн. назад`
-                      : `До заезда осталось ${daysUntilCheckIn} дн.`}
-                  </Text>
-                </View>
-              )}
+              <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+              <View style={styles.row}>
+                <MaterialIcons name="event" size={18} color={colors.textSecondary} />
+                <Text style={[styles.rowLabel, { color: colors.textSecondary }]}>Даты</Text>
+                <Text style={[styles.rowValue, { color: colors.text }]} numberOfLines={1}>
+                  {booking.date}
+                </Text>
+              </View>
+
+              <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+              <View style={styles.row}>
+                <MaterialIcons name="payments" size={18} color={colors.textSecondary} />
+                <Text style={[styles.rowLabel, { color: colors.textSecondary }]}>Сумма</Text>
+                <Text style={[styles.rowValuePrimary, { color: colors.primary }]} numberOfLines={1}>
+                  {booking.total} PRB
+                </Text>
+              </View>
             </View>
           )}
 
-          <View style={{ flexDirection: 'row', gap: spacing.md }}>
-            <TouchableOpacity
-              style={{ flex: 1, paddingVertical: spacing.lg, backgroundColor: colors.background, borderWidth: 2, borderColor: colors.border, borderRadius: borderRadius.lg, alignItems: 'center', justifyContent: 'center' }}
-              onPress={onClose}
-            >
-              <Text style={{ color: colors.text, fontWeight: '700', fontSize: 14 }}>Закрыть</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              disabled={!canCancel}
-              style={{
-                flex: 1,
-                paddingVertical: spacing.lg,
-                backgroundColor: canCancel ? '#D32F2F' : '#BDBDBD',
-                borderRadius: borderRadius.lg,
-                alignItems: 'center',
-                justifyContent: 'center',
-                shadowColor: canCancel ? '#D32F2F' : 'transparent',
-                shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: canCancel ? 0.3 : 0,
-                shadowRadius: 8,
-                elevation: canCancel ? 5 : 0,
-              }}
-              onPress={onConfirm}
-            >
-              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13, textAlign: 'center', lineHeight: 18 }}>
-                {canCancel ? 'Отменить\nбронирование' : 'Отмена\nнедоступна'}
-              </Text>
-            </TouchableOpacity>
+          <View style={[
+            styles.statusPill,
+            { backgroundColor: canCancel ? okBg : warnBg, borderColor: canCancel ? `${ACCENT_OK}55` : `${ACCENT_WARN}55` },
+          ]}>
+            <MaterialIcons
+              name={canCancel ? 'schedule' : 'error-outline'}
+              size={14}
+              color={canCancel ? ACCENT_OK : ACCENT_WARN}
+            />
+            <Text style={[styles.statusText, { color: canCancel ? ACCENT_OK : ACCENT_WARN }]}>
+              {statusLine}
+            </Text>
           </View>
+
+          {canCancel ? (
+            <View style={styles.actionRow}>
+              <TouchableOpacity
+                style={[styles.actionBtn, styles.btnSecondary, { borderColor: colors.border, backgroundColor: colors.background }]}
+                onPress={onClose}
+                activeOpacity={0.85}
+              >
+                <Text style={[styles.btnSecondaryText, { color: colors.text }]}>Закрыть</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionBtn, styles.btnDanger]}
+                onPress={onConfirm}
+                activeOpacity={0.85}
+              >
+                <MaterialIcons name="cancel" size={16} color="#fff" />
+                <Text style={styles.btnDangerText}>Подтвердить отмену</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.btnFull, { backgroundColor: colors.primary }]}
+              onPress={onClose}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.btnFullText}>Понятно</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     </Modal>
   );
 }
+
+const styles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'flex-end',
+  },
+  backdropTouch: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  sheet: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xl,
+  },
+  grabber: {
+    width: 44,
+    height: 4,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: spacing.lg,
+  },
+  header: {
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+  },
+  headerIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.sm,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  subtitle: {
+    fontSize: 13,
+    textAlign: 'center',
+    marginTop: 6,
+    lineHeight: 18,
+    paddingHorizontal: spacing.md,
+  },
+  card: {
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 4,
+    marginBottom: spacing.md,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    gap: 10,
+  },
+  rowLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    minWidth: 64,
+  },
+  rowValue: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '700',
+    textAlign: 'right',
+  },
+  rowValuePrimary: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '800',
+    textAlign: 'right',
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+  },
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    marginBottom: spacing.lg,
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  actionRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  actionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.lg,
+    gap: 6,
+  },
+  btnSecondary: {
+    borderWidth: 1,
+  },
+  btnSecondaryText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  btnDanger: {
+    backgroundColor: DANGER_BG,
+    shadowColor: DANGER_BG,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  btnDangerText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  btnFull: {
+    flex: 0,
+  },
+  btnFullText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+});
