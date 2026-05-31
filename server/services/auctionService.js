@@ -291,10 +291,13 @@ async function closeAuction(eventId) {
     await Transaction.create({
       userId:        winnerUserId,
       type:          'debit',
+      category:      'bid_lock',
       amount:        winningAmount,
       description:   `Победа в аукционе: ${event.title}`,
       balanceBefore: winBalanceBefore,
       balanceAfter:  winBalanceAfter,
+      relatedType:   'auction',
+      relatedId:     String(event.id),
       metadata: {
         source:  'auction_win',
         eventId: event.id,

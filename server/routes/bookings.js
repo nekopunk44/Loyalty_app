@@ -527,10 +527,13 @@ module.exports = function createBookingsRouter({ isDbConnected }) {
         userId:        booking.userId,
         bookingId:     booking.id,
         type:          'debit',
+        category:      'booking_deposit',
         amount:        depositAmount,
         description:   `Депозит за бронирование #${booking.id}`,
         balanceBefore: balance,
         balanceAfter,
+        relatedType:   'booking',
+        relatedId:     String(booking.id),
         metadata:      { source: 'booking_deposit' },
       }, { transaction: txn });
 
@@ -728,10 +731,13 @@ module.exports = function createBookingsRouter({ isDbConnected }) {
           userId:        booking.userId,
           bookingId:     booking.id,
           type:          'debit',
+          category:      'booking_remaining',
           amount:        remainingAmount,
           description:   `Оплата остатка бронирования #${booking.id}`,
           balanceBefore,
           balanceAfter,
+          relatedType:   'booking',
+          relatedId:     String(booking.id),
           metadata:      { source: 'booking_remaining' },
         }, { transaction: txn });
       }
@@ -740,10 +746,13 @@ module.exports = function createBookingsRouter({ isDbConnected }) {
           userId:        booking.userId,
           bookingId:     booking.id,
           type:          'credit',
+          category:      'cashback',
           amount:        cashbackAmount,
           description:   `Кэшбэк ${Math.round(promotion.finalRate * 100)}% за бронирование #${booking.id} (${method === 'cash' ? 'только депозит' : 'полная оплата'})`,
           balanceBefore: balanceAfter,
           balanceAfter:  balanceAfterCashback,
+          relatedType:   'booking',
+          relatedId:     String(booking.id),
           metadata: {
             source:           'cashback',
             cashbackBase,
@@ -979,10 +988,13 @@ module.exports = function createBookingsRouter({ isDbConnected }) {
               userId:        booking.userId,
               bookingId:     booking.id,
               type:          'credit',
+              category:      'refund',
               amount:        remainingRefund,
               description:   `Возврат остатка по отмене бронирования #${booking.id}`,
               balanceBefore: balBefore,
               balanceAfter:  balAfter,
+              relatedType:   'booking',
+              relatedId:     String(booking.id),
               metadata:      { source: 'cancel_refund_remaining' },
             }, { transaction: txn });
 
@@ -1027,10 +1039,13 @@ module.exports = function createBookingsRouter({ isDbConnected }) {
               userId:        booking.userId,
               bookingId:     booking.id,
               type:          'debit',
+              category:      'refund',
               amount:        cashbackRevert,
               description:   `Возврат кэшбэка по отмене бронирования #${booking.id}`,
               balanceBefore: balBefore,
               balanceAfter:  balAfter,
+              relatedType:   'booking',
+              relatedId:     String(booking.id),
               metadata:      { source: 'cashback_revert' },
             }, { transaction: txn });
 

@@ -9,7 +9,7 @@ const express = require('express');
 
 const logger = require('../logger');
 const { sequelize, Sequelize } = require('../db');
-const { LoyaltyCard, CardTopUp, Transaction } = require('../models');
+const { LoyaltyCard, CardTopUp, Transaction, User, Booking } = require('../models');
 const { verifyToken, requireOwnerOrAdmin } = require('../middleware/auth');
 const { validate, schemas } = require('../validation');
 const { parsePagination } = require('../utils/pagination');
@@ -110,10 +110,12 @@ module.exports = function createCardRouter({ isDbConnected }) {
       await Transaction.create({
         userId,
         type:          'credit',
+        category:      'topup',
         amount:        parsedAmount,
         description:   `Пополнение карты через ${paymentMethod}`,
         balanceBefore,
         balanceAfter,
+        metadata:      { paymentMethod, transactionId },
       }, { transaction: t });
 
       await t.commit();
@@ -176,6 +178,9 @@ module.exports = function createCardRouter({ isDbConnected }) {
 
   /**
    * GET /transactions/:userId — история транзакций с пагинацией.
+   *
+   * Sprint B: разрешаем performedBy → displayName/email админа,
+   * bookingId → property name (одним пакетом, без N+1).
    */
   router.get('/transactions/:userId', verifyToken, requireOwnerOrAdmin, async (req, res) => {
     try {
@@ -197,7 +202,47 @@ module.exports = function createCardRouter({ isDbConnected }) {
       });
       const total = await Transaction.count({ where: { userId } });
 
-      return res.status(200).json({ success: true, transactions, total, limit, offset });
+      // Резолвим performedBy (админы) и bookingId (брони) одним пакетом
+      const adminIds  = [...new Set(transactions.map(t => t.performedBy).filter(Boolean))];
+      const bookingIds = [...new Set(transactions.map(t => t.bookingId).filter(Boolean))];
+
+      const [admins, bookings] = await Promise.all([
+        adminIds.length
+          ? User.findAll({
+              where: { userId: adminIds },
+              attributes: ['userId', 'email', 'displayName'],
+            })
+          : [],
+        bookingIds.length
+          ? Booking.findAll({
+              where: { id: bookingIds },
+              attributes: ['id', 'propertyId', 'checkInDate', 'checkOutDate'],
+            })
+          : [],
+      ]);
+
+      const adminMap   = new Map(admins.map(a => [a.userId, a]));
+      const bookingMap = new Map(bookings.map(b => [b.id, b]));
+
+      const enriched = transactions.map((tx) => {
+        const obj = typeof tx.toJSON === 'function' ? tx.toJSON() : { ...tx };
+        if (obj.performedBy && adminMap.has(obj.performedBy)) {
+          const a = adminMap.get(obj.performedBy);
+          obj.performedByInfo = { displayName: a.displayName, email: a.email };
+        }
+        if (obj.bookingId && bookingMap.has(obj.bookingId)) {
+          const b = bookingMap.get(obj.bookingId);
+          obj.bookingInfo = {
+            id: b.id,
+            propertyId: b.propertyId,
+            checkInDate: b.checkInDate,
+            checkOutDate: b.checkOutDate,
+          };
+        }
+        return obj;
+      });
+
+      return res.status(200).json({ success: true, transactions: enriched, total, limit, offset });
     } catch (error) {
       logger.error('card transactions error', { error: error.message });
       return res.status(500).json({

@@ -13,16 +13,26 @@ const express = require('express');
 // ─── Моки ────────────────────────────────────────────────────────────────────
 
 jest.mock('../models', () => ({
-  User:              { count: jest.fn(), findOne: jest.fn(), findAll: jest.fn() },
-  Booking:           { count: jest.fn(), findAll: jest.fn() },
-  Property:          { findAll: jest.fn() },
-  Payment:           { count: jest.fn(), sum: jest.fn(), findAll: jest.fn() },
-  AdminWallet:       { findOne: jest.fn() },
-  AdminTransaction:  { findAll: jest.fn(), count: jest.fn() },
-  WithdrawalRequest: { create: jest.fn(), findAll: jest.fn(), count: jest.fn() },
+  User:                { count: jest.fn(), findOne: jest.fn(), findAll: jest.fn() },
+  Booking:             { count: jest.fn(), findAll: jest.fn() },
+  Property:            { findAll: jest.fn() },
+  Payment:             { count: jest.fn(), sum: jest.fn(), findAll: jest.fn() },
+  AdminWallet:         { findOne: jest.fn() },
+  AdminTransaction:    { findAll: jest.fn(), count: jest.fn(), create: jest.fn() },
+  WithdrawalRequest:   { create: jest.fn(), findAll: jest.fn(), findByPk: jest.fn(), count: jest.fn() },
+  WithdrawalAuditLog:  { create: jest.fn(), findAll: jest.fn() },
+  LoyaltyCard:         { findOne: jest.fn() },
+  Transaction:         { create: jest.fn() },
+  Notification:        { create: jest.fn() },
 }));
 
 jest.mock('../models/User', () => ({ findOne: jest.fn() }));
+
+const makeTxn = () => ({
+  LOCK:     { UPDATE: 'UPDATE' },
+  commit:   jest.fn().mockResolvedValue(undefined),
+  rollback: jest.fn().mockResolvedValue(undefined),
+});
 
 jest.mock('../db', () => ({
   sequelize: {
@@ -55,9 +65,11 @@ const adminToken       = jwt.sign({ userId: 'admin-1', role: 'admin' }, SECRET);
 const financeAdminTok  = jwt.sign({ userId: 'fadmin-1', role: 'admin' }, SECRET);
 
 const {
-  User, Booking, Property, Payment, AdminWallet, AdminTransaction, WithdrawalRequest,
+  User, Booking, Property, Payment, AdminWallet, AdminTransaction, WithdrawalRequest, WithdrawalAuditLog,
+  LoyaltyCard, Transaction, Notification,
 } = require('../models');
 const UserModel = require('../models/User');
+const { sequelize } = require('../db');
 
 const mockAdminUser       = { userId: 'admin-1',  role: 'admin', adminLevel: 0 };
 const mockFinanceAdminUser = { userId: 'fadmin-1', role: 'admin', adminLevel: 1 };
@@ -279,10 +291,12 @@ describe('POST /api/admin/finances/withdrawal', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    sequelize.transaction.mockResolvedValue(makeTxn());
     UserModel.findOne.mockResolvedValue(mockFinanceAdminUser);
     User.findOne.mockResolvedValue({ userId: 'fadmin-1', adminLevel: 1 });
     AdminWallet.findOne.mockResolvedValue(mockAdminWallet());
     WithdrawalRequest.create.mockResolvedValue({ id: 'wr-1', ...validBody, status: 'pending' });
+    WithdrawalAuditLog.create.mockResolvedValue({ id: 'wal-1' });
   });
 
   test('401 без токена', async () => {
@@ -470,5 +484,269 @@ describe('GET /api/admin/churn-risk', () => {
     expect(Booking.findAll).toHaveBeenLastCalledWith(
       expect.objectContaining({ limit: 1 }),
     );
+  });
+});
+
+// ─── POST /users/:userId/adjust-balance ───────────────────────────────────────
+
+describe('POST /api/admin/users/:userId/adjust-balance', () => {
+  const VALID_BODY = {
+    amount: 500,
+    reason: 'compensation',
+    description: 'Компенсация за неудобства при бронировании #42',
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    UserModel.findOne.mockResolvedValue(mockFinanceAdminUser);
+    sequelize.transaction.mockResolvedValue(makeTxn());
+  });
+
+  test('403 если не финансовый админ (adminLevel != 1)', async () => {
+    UserModel.findOne.mockResolvedValue(mockAdminUser);
+    const res = await request(createApp())
+      .post('/api/admin/users/u-target/adjust-balance')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send(VALID_BODY);
+    expect(res.status).toBe(403);
+  });
+
+  test('401 без токена', async () => {
+    const res = await request(createApp())
+      .post('/api/admin/users/u-target/adjust-balance')
+      .send(VALID_BODY);
+    expect(res.status).toBe(401);
+  });
+
+  test('400 при невалидной сумме (0)', async () => {
+    const res = await request(createApp())
+      .post('/api/admin/users/u-target/adjust-balance')
+      .set('Authorization', `Bearer ${financeAdminTok}`)
+      .send({ ...VALID_BODY, amount: 0 });
+    expect(res.status).toBe(400);
+  });
+
+  test('400 при неизвестном reason', async () => {
+    const res = await request(createApp())
+      .post('/api/admin/users/u-target/adjust-balance')
+      .set('Authorization', `Bearer ${financeAdminTok}`)
+      .send({ ...VALID_BODY, reason: 'bogus' });
+    expect(res.status).toBe(400);
+  });
+
+  test('404 если пользователь не найден', async () => {
+    User.findOne.mockResolvedValue(null);
+    const res = await request(createApp())
+      .post('/api/admin/users/u-missing/adjust-balance')
+      .set('Authorization', `Bearer ${financeAdminTok}`)
+      .send(VALID_BODY);
+    expect(res.status).toBe(404);
+    expect(res.body.error).toMatch(/Пользователь/);
+  });
+
+  test('400 если целевой — админ', async () => {
+    User.findOne.mockResolvedValue({ userId: 'admin-2', role: 'admin', email: 'a2@x.com' });
+    const res = await request(createApp())
+      .post('/api/admin/users/admin-2/adjust-balance')
+      .set('Authorization', `Bearer ${financeAdminTok}`)
+      .send(VALID_BODY);
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/админа/);
+  });
+
+  test('404 если карта не найдена', async () => {
+    User.findOne.mockResolvedValue({ userId: 'u-target', role: 'user', email: 'u@x.com' });
+    LoyaltyCard.findOne.mockResolvedValue(null);
+    const res = await request(createApp())
+      .post('/api/admin/users/u-target/adjust-balance')
+      .set('Authorization', `Bearer ${financeAdminTok}`)
+      .send(VALID_BODY);
+    expect(res.status).toBe(404);
+    expect(res.body.error).toMatch(/Карта/);
+  });
+
+  test('409 при списании больше баланса карты', async () => {
+    User.findOne.mockResolvedValue({ userId: 'u-target', role: 'user', email: 'u@x.com' });
+    LoyaltyCard.findOne.mockResolvedValue({
+      userId: 'u-target',
+      balance: '100',
+      update: jest.fn().mockResolvedValue(true),
+    });
+    AdminWallet.findOne.mockResolvedValue({
+      adminId: 'fadmin-1',
+      totalBalance: '50000',
+      availableBalance: '40000',
+      update: jest.fn().mockResolvedValue(true),
+    });
+
+    const res = await request(createApp())
+      .post('/api/admin/users/u-target/adjust-balance')
+      .set('Authorization', `Bearer ${financeAdminTok}`)
+      .send({ ...VALID_BODY, amount: -500, reason: 'penalty' });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toMatch(/Недостаточно средств на карте/);
+    expect(Transaction.create).not.toHaveBeenCalled();
+  });
+
+  test('409 при зачислении больше доступного в кошельке админа', async () => {
+    User.findOne.mockResolvedValue({ userId: 'u-target', role: 'user', email: 'u@x.com' });
+    LoyaltyCard.findOne.mockResolvedValue({
+      userId: 'u-target',
+      balance: '100',
+      update: jest.fn().mockResolvedValue(true),
+    });
+    AdminWallet.findOne.mockResolvedValue({
+      adminId: 'fadmin-1',
+      totalBalance: '300',
+      availableBalance: '200',
+      update: jest.fn().mockResolvedValue(true),
+    });
+
+    const res = await request(createApp())
+      .post('/api/admin/users/u-target/adjust-balance')
+      .set('Authorization', `Bearer ${financeAdminTok}`)
+      .send({ ...VALID_BODY, amount: 500 });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toMatch(/Недостаточно доступных средств/);
+    expect(Transaction.create).not.toHaveBeenCalled();
+  });
+
+  test('успех при положительной корректировке: AdminWallet ↓, LoyaltyCard ↑, аудит', async () => {
+    User.findOne.mockResolvedValue({ userId: 'u-target', role: 'user', email: 'u@x.com' });
+
+    const cardUpdate = jest.fn().mockResolvedValue(true);
+    LoyaltyCard.findOne.mockResolvedValue({
+      userId: 'u-target',
+      balance: '1000',
+      update: cardUpdate,
+    });
+    const walletUpdate = jest.fn().mockResolvedValue(true);
+    AdminWallet.findOne.mockResolvedValue({
+      adminId: 'fadmin-1',
+      totalBalance: '50000',
+      availableBalance: '40000',
+      update: walletUpdate,
+    });
+
+    Transaction.create.mockResolvedValue({});
+    AdminTransaction.create.mockResolvedValue({});
+    Notification.create.mockResolvedValue({});
+
+    const res = await request(createApp())
+      .post('/api/admin/users/u-target/adjust-balance')
+      .set('Authorization', `Bearer ${financeAdminTok}`)
+      .send(VALID_BODY);
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.userBalanceBefore).toBe(1000);
+    expect(res.body.userBalanceAfter).toBe(1500);
+    expect(res.body.walletBalanceAfter).toBe(49500);
+
+    expect(cardUpdate).toHaveBeenCalledWith({ balance: 1500 }, expect.any(Object));
+    expect(walletUpdate).toHaveBeenCalledWith({
+      totalBalance: 49500,
+      availableBalance: 39500,
+    }, expect.any(Object));
+
+    expect(Transaction.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'u-target',
+        type: 'credit',
+        category: 'admin_adjustment',
+        amount: 500,
+        balanceBefore: 1000,
+        balanceAfter: 1500,
+        performedBy: 'fadmin-1',
+        relatedType: 'admin_adjustment',
+      }),
+      expect.any(Object),
+    );
+    expect(AdminTransaction.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        adminId: 'fadmin-1',
+        type: 'adjustment',
+        amount: 500,
+      }),
+      expect.any(Object),
+    );
+    expect(Notification.create).toHaveBeenCalled();
+  });
+
+  test('успех при отрицательной корректировке: LoyaltyCard ↓, AdminWallet ↑', async () => {
+    User.findOne.mockResolvedValue({ userId: 'u-target', role: 'user', email: 'u@x.com' });
+
+    const cardUpdate = jest.fn().mockResolvedValue(true);
+    LoyaltyCard.findOne.mockResolvedValue({
+      userId: 'u-target',
+      balance: '2000',
+      update: cardUpdate,
+    });
+    const walletUpdate = jest.fn().mockResolvedValue(true);
+    AdminWallet.findOne.mockResolvedValue({
+      adminId: 'fadmin-1',
+      totalBalance: '10000',
+      availableBalance: '8000',
+      update: walletUpdate,
+    });
+
+    Transaction.create.mockResolvedValue({});
+    AdminTransaction.create.mockResolvedValue({});
+    Notification.create.mockResolvedValue({});
+
+    const res = await request(createApp())
+      .post('/api/admin/users/u-target/adjust-balance')
+      .set('Authorization', `Bearer ${financeAdminTok}`)
+      .send({ amount: -300, reason: 'penalty', description: 'Штраф за no-show' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.userBalanceAfter).toBe(1700);
+    expect(res.body.walletBalanceAfter).toBe(10300);
+
+    expect(cardUpdate).toHaveBeenCalledWith({ balance: 1700 }, expect.any(Object));
+    expect(walletUpdate).toHaveBeenCalledWith({
+      totalBalance: 10300,
+      availableBalance: 8300,
+    }, expect.any(Object));
+
+    expect(Transaction.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'debit',
+        category: 'admin_adjustment',
+        amount: 300,
+        balanceBefore: 2000,
+        balanceAfter: 1700,
+      }),
+      expect.any(Object),
+    );
+  });
+
+  test('rollback при ошибке БД во время записи в Transaction', async () => {
+    User.findOne.mockResolvedValue({ userId: 'u-target', role: 'user', email: 'u@x.com' });
+    LoyaltyCard.findOne.mockResolvedValue({
+      userId: 'u-target',
+      balance: '1000',
+      update: jest.fn().mockResolvedValue(true),
+    });
+    AdminWallet.findOne.mockResolvedValue({
+      adminId: 'fadmin-1',
+      totalBalance: '50000',
+      availableBalance: '40000',
+      update: jest.fn().mockResolvedValue(true),
+    });
+
+    const txn = makeTxn();
+    sequelize.transaction.mockResolvedValue(txn);
+    Transaction.create.mockRejectedValue(new Error('insert failed'));
+
+    const res = await request(createApp())
+      .post('/api/admin/users/u-target/adjust-balance')
+      .set('Authorization', `Bearer ${financeAdminTok}`)
+      .send(VALID_BODY);
+
+    expect(res.status).toBe(500);
+    expect(txn.rollback).toHaveBeenCalled();
   });
 });
