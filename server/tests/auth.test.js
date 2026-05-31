@@ -213,11 +213,13 @@ describe('POST /api/auth/register-admin', () => {
     expect(failingSend).toHaveBeenCalled();
   });
 
-  test('emailSent=false когда SMTP не настроен', async () => {
+  test('emailSent=false когда почта не настроена', async () => {
     const savedUser = process.env.SMTP_USER;
     const savedPass = process.env.SMTP_PASS;
+    const savedResend = process.env.RESEND_API_KEY;
     delete process.env.SMTP_USER;
     delete process.env.SMTP_PASS;
+    delete process.env.RESEND_API_KEY;
     try {
       const res = await request(createApp())
         .post('/api/auth/register-admin')
@@ -228,6 +230,7 @@ describe('POST /api/auth/register-admin', () => {
     } finally {
       process.env.SMTP_USER = savedUser;
       process.env.SMTP_PASS = savedPass;
+      if (savedResend !== undefined) process.env.RESEND_API_KEY = savedResend;
     }
   });
 });
