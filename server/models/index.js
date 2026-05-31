@@ -21,4 +21,6 @@ module.exports = {
   AdminWallet:        require('./AdminWallet'),
   AdminTransaction:   require('./AdminTransaction'),
   WithdrawalRequest:  require('./WithdrawalRequest'),
+  WithdrawalAuditLog: require('./WithdrawalAuditLog'),
+  AuctionBid:         require('./AuctionBid'),
 };
