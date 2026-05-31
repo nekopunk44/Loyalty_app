@@ -493,6 +493,23 @@ export default function EventsScreen() {
     color: colors.textSecondary,
     flex: 1,
   },
+  myBidsLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-end',
+    marginHorizontal: 16,
+    marginTop: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: `${TEAL}14`,
+    borderRadius: 999,
+    gap: 4,
+  },
+  myBidsLinkText: {
+    fontSize: 12,
+    color: TEAL,
+    fontWeight: '700',
+  },
   filterPill: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.cardBg },
   filterPillActive: { borderColor: TEAL, backgroundColor: `${TEAL}14` },
   filterPillText: { fontSize: 12, fontWeight: '700', color: colors.textSecondary },
@@ -879,6 +896,15 @@ export default function EventsScreen() {
                 <Text style={styles.personalizedHintText}>{personalizedHint}</Text>
               </View>
             ) : null}
+            <TouchableOpacity
+              style={styles.myBidsLink}
+              onPress={() => navigation.navigate('MyBids')}
+              activeOpacity={0.7}
+            >
+              <MaterialIcons name="gavel" size={14} color={TEAL} />
+              <Text style={styles.myBidsLinkText}>Мои ставки</Text>
+              <MaterialIcons name="chevron-right" size={16} color={TEAL} />
+            </TouchableOpacity>
           </View>
         }
         data={filteredEvents}

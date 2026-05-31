@@ -168,6 +168,73 @@ module.exports = function createEventsRouter({ isDbConnected }) {
   });
 
   /**
+   * GET /me/bids — все ставки авторизованного пользователя со связанными аукционами.
+   * Используется на экране «Мои ставки» (MyBidsScreen).
+   * Регистрируем ДО /:eventId, иначе Express маршрутизирует /me/bids как eventId='me'.
+   * Фильтры (необязательно): ?status=active|outbid|won|returned (через запятую).
+   */
+  router.get('/me/bids', verifyToken, async (req, res) => {
+    try {
+      if (!isDbConnected()) {
+        return res.status(503).json({ success: false, error: 'База данных не подключена' });
+      }
+      const userId = req.userId;
+
+      const where = { userId };
+      if (typeof req.query.status === 'string' && req.query.status.length) {
+        const statuses = req.query.status.split(',').map(s => s.trim()).filter(Boolean);
+        const allowed  = statuses.filter(s => ['active', 'outbid', 'won', 'returned'].includes(s));
+        if (allowed.length) where.status = allowed;
+      }
+
+      const bids = await AuctionBid.findAll({
+        where,
+        order: [['createdAt', 'DESC']],
+        limit: 100,
+      });
+
+      const eventIds = [...new Set(bids.map(b => b.eventId))];
+      const events = eventIds.length
+        ? await Event.findAll({ where: { id: eventIds } })
+        : [];
+      const evMap = new Map(events.map(e => [e.id, e]));
+
+      const items = bids.map((b) => {
+        const ev = evMap.get(b.eventId);
+        return {
+          id:         b.id,
+          eventId:    b.eventId,
+          amount:     parseFloat(b.amount),
+          status:     b.status,
+          createdAt:  b.createdAt,
+          resolvedAt: b.resolvedAt,
+          event: ev ? {
+            id:           ev.id,
+            title:        ev.title,
+            status:       ev.status,
+            startDate:    ev.startDate,
+            endDate:      ev.endDate,
+            currentBid:   ev.currentBid != null ? parseFloat(ev.currentBid) : null,
+            currentBidUserId: ev.currentBidUserId,
+            winnerUserId: ev.winnerUserId,
+            closedAt:     ev.closedAt,
+            prize:        ev.prize,
+          } : null,
+        };
+      });
+
+      return res.status(200).json({ success: true, bids: items });
+    } catch (err) {
+      logger.error('me/bids error', { error: err.message, stack: err.stack });
+      return res.status(500).json({
+        success: false,
+        error:   'Ошибка при получении ставок',
+        details: isDev() ? err.message : undefined,
+      });
+    }
+  });
+
+  /**
    * GET /:eventId — одно событие.
    */
   router.get('/:eventId', async (req, res) => {

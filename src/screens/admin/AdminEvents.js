@@ -128,7 +128,11 @@ export default function AdminEvents() {
     endDate: '',
     allowedUsers: 'all',
     status: 'active',
-    eventType: 'auction', // Новое поле для типа события
+    eventType: 'auction',
+    cashbackBoostPercent: '',
+    discountPercent: '',
+    startBid: '',
+    minBidIncrement: '',
   });
 
 
@@ -182,6 +186,20 @@ export default function AdminEvents() {
   ];
 
   const eventTypes = getAllEventTypes();
+
+  // Какие промо-поля разрешены для каждого типа события.
+  // Аукцион/розыгрыш — приз достаётся одному, цену брони не трогает.
+  // Кэшбек/скидка — узкоспециализированные, только одно поле.
+  // Акция/спец. — open-ended, оба поля.
+  const promoFieldsByType = {
+    auction:   { boost: false, discount: false },
+    giveaway:  { boost: false, discount: false },
+    cashback:  { boost: true,  discount: false },
+    discount:  { boost: false, discount: true  },
+    promotion: { boost: true,  discount: true  },
+    special:   { boost: true,  discount: true  },
+  };
+  const promoCfg = promoFieldsByType[formData.eventType] || { boost: true, discount: true };
 
   const statuses = [
     { value: 'upcoming', label: 'Скоро' },
@@ -241,6 +259,10 @@ export default function AdminEvents() {
         allowedUsers: event.allowedUsers || 'all',
         status: statusValue,
         eventType: eventType,
+        cashbackBoostPercent: event.cashbackBoostPercent ? String(event.cashbackBoostPercent) : '',
+        discountPercent: event.discountPercent ? String(event.discountPercent) : '',
+        startBid: event.startBid != null ? String(event.startBid) : '',
+        minBidIncrement: event.minBidIncrement != null ? String(event.minBidIncrement) : '',
       });
     } else {
       setEditingEvent(null);
@@ -253,6 +275,10 @@ export default function AdminEvents() {
         allowedUsers: 'all',
         status: 'active',
         eventType: 'auction',
+        cashbackBoostPercent: '',
+        discountPercent: '',
+        startBid: '',
+        minBidIncrement: '',
       });
     }
     openEventModal();
@@ -268,6 +294,27 @@ export default function AdminEvents() {
       // Вычисляем статус автоматически на основе дат
       const calculatedStatus = calculateEventStatus(formData.startDate, formData.endDate);
 
+      // Кэпы валидируем на клиенте, чтобы не отправлять заведомо невалидное значение —
+      // сервер всё равно зажмёт повторно в clampPercent (см. server/routes/events.js).
+      const parsePercent = (raw, max) => {
+        const n = parseFloat(String(raw).replace(',', '.'));
+        if (!Number.isFinite(n) || n < 0) return 0;
+        return Math.min(n, max);
+      };
+      const cashbackBoostPercent = parsePercent(formData.cashbackBoostPercent, 20);
+      const discountPercent = parsePercent(formData.discountPercent, 80);
+
+      // Параметры аукциона: только для type='auction', иначе игнорируем.
+      // Если поле пустое — отдаём null, сервер подставит дефолт (minBidIncrement=100).
+      const parseAuctionField = (raw) => {
+        if (raw === '' || raw == null) return null;
+        const n = parseFloat(String(raw).replace(',', '.'));
+        return Number.isFinite(n) && n > 0 ? n : null;
+      };
+      const isAuction = formData.eventType === 'auction';
+      const startBid        = isAuction ? parseAuctionField(formData.startBid) : null;
+      const minBidIncrement = isAuction ? parseAuctionField(formData.minBidIncrement) : null;
+
       if (editingEvent) {
         await updateEvent(editingEvent.id, {
           title: formData.title,
@@ -280,6 +327,11 @@ export default function AdminEvents() {
           eventType: formData.eventType,
           participantIds: editingEvent.participantIds || [],
           participants: editingEvent.participants || editingEvent.participantsCount || 0,
+          cashbackBoostPercent,
+          discountPercent,
+          startBid,
+          minBidIncrement,
+          targetUserIds: Array.isArray(editingEvent.targetUserIds) ? editingEvent.targetUserIds : [],
         });
 
         // Отправляем уведомление
@@ -302,6 +354,10 @@ export default function AdminEvents() {
           status: 'active',
           allowedUsers: 'all',
           eventType: 'auction',
+          cashbackBoostPercent: '',
+          discountPercent: '',
+          startBid: '',
+          minBidIncrement: '',
         });
         setEditingEvent(null);
         closeEventModal();
@@ -317,6 +373,11 @@ export default function AdminEvents() {
           status: calculatedStatus,
           allowedUsers: formData.allowedUsers,
           eventType: formData.eventType,
+          cashbackBoostPercent,
+          discountPercent,
+          startBid,
+          minBidIncrement,
+          targetUserIds: [],
         });
         
         if (newEvent) {
@@ -336,8 +397,12 @@ export default function AdminEvents() {
             status: 'active',
             allowedUsers: 'all',
             eventType: 'auction',
+            cashbackBoostPercent: '',
+            discountPercent: '',
+            startBid: '',
+            minBidIncrement: '',
           });
-          
+
           closeEventModal();
 
           // Показываем Alert
@@ -381,6 +446,9 @@ export default function AdminEvents() {
         color: event.color,
         participants: 0,
         participantIds: [],
+        cashbackBoostPercent: event.cashbackBoostPercent || 0,
+        discountPercent: event.discountPercent || 0,
+        targetUserIds: Array.isArray(event.targetUserIds) ? event.targetUserIds : [],
       };
       await addEvent(copy);
       showNotification(`Событие "${event.title}" продублировано`, 'success');
@@ -887,6 +955,100 @@ export default function AdminEvents() {
                 </View>
               </View>
 
+              {/* === Секция: Промо-эффект (только для типов, где это имеет смысл) === */}
+              {(promoCfg.boost || promoCfg.discount) && (
+                <>
+                  <Text style={[styles.sectionLabel, { color: theme.colors.textSecondary, marginTop: 18 }]}>Промо-эффект</Text>
+                  <View style={[styles.groupCard, { backgroundColor: theme.colors.background, borderColor: theme.colors.border }]}>
+                    {promoCfg.boost && (
+                      <View style={[styles.groupRow, styles.prizeRow]}>
+                        <View style={styles.prizeLeftBlock}>
+                          <View style={[styles.prizeIconWrap, { backgroundColor: `${theme.colors.primary}22` }]}>
+                            <MaterialIcons name="trending-up" size={16} color={theme.colors.primary} />
+                          </View>
+                          <Text style={[styles.rowLabelInline, { color: theme.colors.text }]}>Кэшбек +, п.п.</Text>
+                        </View>
+                        <TextInput
+                          style={[styles.prizeInput, { color: theme.colors.primary }]}
+                          placeholder="0"
+                          placeholderTextColor={theme.colors.textSecondary}
+                          keyboardType="decimal-pad"
+                          value={String(formData.cashbackBoostPercent ?? '')}
+                          onChangeText={(text) => setFormData({ ...formData, cashbackBoostPercent: text })}
+                        />
+                      </View>
+                    )}
+
+                    {promoCfg.boost && promoCfg.discount && (
+                      <View style={[styles.hairline, { backgroundColor: theme.colors.border }]} />
+                    )}
+
+                    {promoCfg.discount && (
+                      <View style={[styles.groupRow, styles.prizeRow]}>
+                        <View style={styles.prizeLeftBlock}>
+                          <View style={[styles.prizeIconWrap, { backgroundColor: `${theme.colors.accent}22` }]}>
+                            <MaterialIcons name="local-offer" size={16} color={theme.colors.accent} />
+                          </View>
+                          <Text style={[styles.rowLabelInline, { color: theme.colors.text }]}>Скидка, %</Text>
+                        </View>
+                        <TextInput
+                          style={[styles.prizeInput, { color: theme.colors.accent }]}
+                          placeholder="0"
+                          placeholderTextColor={theme.colors.textSecondary}
+                          keyboardType="decimal-pad"
+                          value={String(formData.discountPercent ?? '')}
+                          onChangeText={(text) => setFormData({ ...formData, discountPercent: text })}
+                        />
+                      </View>
+                    )}
+                  </View>
+                </>
+              )}
+
+              {/* === Секция: Параметры аукциона (только для type='auction') === */}
+              {formData.eventType === 'auction' && (
+                <>
+                  <Text style={[styles.sectionLabel, { color: theme.colors.textSecondary, marginTop: 18 }]}>Параметры аукциона</Text>
+                  <View style={[styles.groupCard, { backgroundColor: theme.colors.background, borderColor: theme.colors.border }]}>
+                    <View style={[styles.groupRow, styles.prizeRow]}>
+                      <View style={styles.prizeLeftBlock}>
+                        <View style={[styles.prizeIconWrap, { backgroundColor: `${theme.colors.primary}22` }]}>
+                          <MaterialIcons name="gavel" size={16} color={theme.colors.primary} />
+                        </View>
+                        <Text style={[styles.rowLabelInline, { color: theme.colors.text }]}>Стартовая ставка, PRB</Text>
+                      </View>
+                      <TextInput
+                        style={[styles.prizeInput, { color: theme.colors.primary }]}
+                        placeholder="0"
+                        placeholderTextColor={theme.colors.textSecondary}
+                        keyboardType="decimal-pad"
+                        value={String(formData.startBid ?? '')}
+                        onChangeText={(text) => setFormData({ ...formData, startBid: text })}
+                      />
+                    </View>
+
+                    <View style={[styles.hairline, { backgroundColor: theme.colors.border }]} />
+
+                    <View style={[styles.groupRow, styles.prizeRow]}>
+                      <View style={styles.prizeLeftBlock}>
+                        <View style={[styles.prizeIconWrap, { backgroundColor: `${theme.colors.accent}22` }]}>
+                          <MaterialIcons name="trending-up" size={16} color={theme.colors.accent} />
+                        </View>
+                        <Text style={[styles.rowLabelInline, { color: theme.colors.text }]}>Шаг ставки, PRB</Text>
+                      </View>
+                      <TextInput
+                        style={[styles.prizeInput, { color: theme.colors.accent }]}
+                        placeholder="100"
+                        placeholderTextColor={theme.colors.textSecondary}
+                        keyboardType="decimal-pad"
+                        value={String(formData.minBidIncrement ?? '')}
+                        onChangeText={(text) => setFormData({ ...formData, minBidIncrement: text })}
+                      />
+                    </View>
+                  </View>
+                </>
+              )}
+
               {/* === Секция: Сроки === */}
               <Text style={[styles.sectionLabel, { color: theme.colors.textSecondary, marginTop: 18 }]}>Сроки</Text>
               <View style={[styles.groupCard, { backgroundColor: theme.colors.background, borderColor: theme.colors.border }]}>
@@ -953,7 +1115,18 @@ export default function AdminEvents() {
                         },
                       ]}
                       activeOpacity={0.85}
-                      onPress={() => setFormData({ ...formData, eventType: type.value })}
+                      onPress={() => {
+                        const nextCfg = promoFieldsByType[type.value] || { boost: true, discount: true };
+                        const willBeAuction = type.value === 'auction';
+                        setFormData({
+                          ...formData,
+                          eventType: type.value,
+                          cashbackBoostPercent: nextCfg.boost ? formData.cashbackBoostPercent : '',
+                          discountPercent: nextCfg.discount ? formData.discountPercent : '',
+                          startBid:        willBeAuction ? formData.startBid : '',
+                          minBidIncrement: willBeAuction ? formData.minBidIncrement : '',
+                        });
+                      }}
                     >
                       <MaterialIcons
                         name={type.icon}

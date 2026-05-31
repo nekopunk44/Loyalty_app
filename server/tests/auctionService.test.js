@@ -40,8 +40,14 @@ jest.mock('../db', () => ({
 
 jest.mock('../logger', () => ({ info: jest.fn(), error: jest.fn(), warn: jest.fn() }));
 
+jest.mock('../utils/notify', () => ({
+  notify:         jest.fn().mockResolvedValue(null),
+  notifyAllAdmins: jest.fn().mockResolvedValue(null),
+}));
+
 const { Event, LoyaltyCard, AuctionBid, Transaction, User } = require('../models');
 const { sequelize } = require('../db');
+const { notify } = require('../utils/notify');
 const {
   placeBid, closeAuction, closeExpiredAuctions, BidError,
 } = require('../services/auctionService');
@@ -254,6 +260,48 @@ describe('placeBid: счастливый путь', () => {
     expect(result.lockedBalance).toBe(600);
   });
 
+  test('outbid: прежнему лидеру отправляется уведомление auction_outbid', async () => {
+    const event = makeEvent({
+      currentBid:       500,
+      currentBidUserId: 'u-prev',
+      minBidIncrement:  100,
+    });
+    const myCard   = makeCard({ userId: 'u-1',    balance: '1000', lockedBalance: '0' });
+    const prevCard = makeCard({ userId: 'u-prev', balance: '2000', lockedBalance: '500' });
+    const prevBid  = makeBid({  userId: 'u-prev', amount:  '500' });
+    Event.findByPk.mockResolvedValue(event);
+    User.findOne.mockResolvedValue({ userId: 'u-1', membershipLevel: 'Bronze' });
+    LoyaltyCard.findOne
+      .mockResolvedValueOnce(myCard)
+      .mockResolvedValueOnce(prevCard);
+    AuctionBid.findOne
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(prevBid);
+    AuctionBid.create.mockResolvedValue(makeBid({ userId: 'u-1', amount: 700 }));
+
+    await placeBid({ eventId: 1, userId: 'u-1', amount: 700 });
+
+    expect(notify).toHaveBeenCalledWith(expect.objectContaining({
+      userId: 'u-prev',
+      type:   'auction_outbid',
+      data:   expect.objectContaining({ eventId: 1, newAmount: 700 }),
+    }));
+  });
+
+  test('первая ставка без прежнего лидера — notify не вызывается', async () => {
+    const event = makeEvent({ startBid: 500 });
+    const card  = makeCard({ balance: '1000', lockedBalance: '0' });
+    Event.findByPk.mockResolvedValue(event);
+    User.findOne.mockResolvedValue({ userId: 'u-1', membershipLevel: 'Bronze' });
+    LoyaltyCard.findOne.mockResolvedValue(card);
+    AuctionBid.findOne.mockResolvedValue(null);
+    AuctionBid.create.mockResolvedValue(makeBid({ amount: 600 }));
+
+    await placeBid({ eventId: 1, userId: 'u-1', amount: 600 });
+
+    expect(notify).not.toHaveBeenCalled();
+  });
+
   test('outbid: прежнему лидеру освобождается lock, его bid → outbid', async () => {
     const event = makeEvent({
       currentBid:       500,
@@ -424,6 +472,19 @@ describe('closeAuction', () => {
     expect(result.winnerUserId).toBe('u-1');
     expect(result.winningAmount).toBe(800);
     expect(txn.commit).toHaveBeenCalled();
+    expect(notify).toHaveBeenCalledWith(expect.objectContaining({
+      userId: 'u-1',
+      type:   'auction_won',
+      data:   expect.objectContaining({ eventId: 1, winningAmount: 800 }),
+    }));
+  });
+
+  test('закрытие без ставок не шлёт уведомление', async () => {
+    const event = makeEvent();
+    Event.findByPk.mockResolvedValue(event);
+    AuctionBid.findAll.mockResolvedValue([]);
+    await closeAuction(1);
+    expect(notify).not.toHaveBeenCalled();
   });
 
   test('защитный путь: если несколько active — выбирается с максимальной суммой, остальные → returned', async () => {

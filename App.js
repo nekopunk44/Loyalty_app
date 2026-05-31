@@ -27,6 +27,7 @@ import CheckoutScreen from './src/screens/user/CheckoutScreen';
 import MyCardScreen from './src/screens/user/MyCardScreen';
 import CardTopUpScreen from './src/screens/user/CardTopUpScreen';
 import AuctionDetailScreen from './src/screens/user/AuctionDetailScreen';
+import MyBidsScreen from './src/screens/user/MyBidsScreen';
 import EventsScreen from './src/screens/user/EventsScreen';
 import SettingsScreen from './src/screens/user/SettingsScreen';
 import ProfileScreen from './src/screens/user/ProfileScreen';
@@ -342,6 +343,15 @@ function UserStack() {
           ...userStackHeaderOptions,
           headerShown: true,
           headerTitle: 'Аукцион',
+        }}
+      />
+      <Stack.Screen
+        name="MyBids"
+        component={MyBidsScreen}
+        options={{
+          ...userStackHeaderOptions,
+          headerShown: true,
+          headerTitle: 'Мои ставки',
         }}
       />
     </Stack.Navigator>
