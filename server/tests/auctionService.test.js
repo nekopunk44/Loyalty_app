@@ -19,7 +19,7 @@ process.env.NODE_ENV = 'test';
 jest.mock('../models', () => ({
   Event:       { findByPk: jest.fn(), findAll: jest.fn() },
   LoyaltyCard: { findOne: jest.fn() },
-  AuctionBid:  { findOne: jest.fn(), findAll: jest.fn(), create: jest.fn() },
+  AuctionBid:  { findOne: jest.fn(), findAll: jest.fn(), create: jest.fn(), count: jest.fn() },
   Transaction: { create: jest.fn() },
   User:        { findOne: jest.fn() },
 }));
@@ -231,6 +231,7 @@ describe('placeBid: счастливый путь', () => {
     jest.clearAllMocks();
     txn = makeTxn();
     sequelize.transaction.mockResolvedValue(txn);
+    AuctionBid.count.mockResolvedValue(1);
   });
 
   test('первая ставка: lockedBalance растёт, Event.currentBid денормализуется', async () => {
@@ -254,7 +255,7 @@ describe('placeBid: счастливый путь', () => {
       { transaction: txn },
     );
     expect(event.update).toHaveBeenCalledWith(
-      { currentBid: 600, currentBidUserId: 'u-1' },
+      expect.objectContaining({ currentBid: 600, currentBidUserId: 'u-1', participants: expect.any(Number) }),
       { transaction: txn },
     );
     expect(result.lockedBalance).toBe(600);
@@ -337,7 +338,7 @@ describe('placeBid: счастливый путь', () => {
     // мой lock = 700
     expect(myCard.update).toHaveBeenCalledWith({ lockedBalance: 700 }, { transaction: txn });
     expect(event.update).toHaveBeenCalledWith(
-      { currentBid: 700, currentBidUserId: 'u-1' },
+      expect.objectContaining({ currentBid: 700, currentBidUserId: 'u-1', participants: expect.any(Number) }),
       { transaction: txn },
     );
     expect(result.lockedBalance).toBe(700);
