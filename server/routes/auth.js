@@ -145,15 +145,14 @@ module.exports = function createAuthRouter({
 
       logger.info('Новый пользователь создан админом', { email, role });
 
-      // Письмо с приглашением. Сбой почты не должен ломать создание юзера —
-      // токен живёт 24 часа, admin может переотправить или сообщить вручную.
-      let emailSent = true;
-      try {
-        await sendWelcomeEmail(email, setupToken, newUser.displayName);
-      } catch (mailErr) {
-        emailSent = false;
+      // Письмо с приглашением — fire-and-forget. SMTP может уйти в таймаут
+      // на десятки секунд, а юзер уже создан — нет смысла блокировать ответ.
+      // Сбои логируются; админ либо переотправит письмо, либо сообщит токен
+      // вручную (в dev токен возвращается в ответе).
+      const smtpConfigured = !!(process.env.SMTP_USER && process.env.SMTP_PASS);
+      sendWelcomeEmail(email, setupToken, newUser.displayName).catch((mailErr) => {
         logger.error('welcome email failed', { email, error: mailErr.message });
-      }
+      });
 
       return res.status(201).json({
         success: true,
@@ -171,12 +170,12 @@ module.exports = function createAuthRouter({
           cashback: 0,
           joinDate: 'сегодня',
         },
-        emailSent,
+        emailSent: smtpConfigured,
         // В dev возвращаем токен, чтобы админ мог скопировать, если SMTP не настроен.
         setupToken: isDev() ? setupToken : undefined,
-        message: emailSent
-          ? 'Пользователь создан. Письмо-приглашение отправлено.'
-          : 'Пользователь создан, но письмо отправить не удалось. Сообщите код приглашения вручную.',
+        message: smtpConfigured
+          ? 'Пользователь создан. Письмо-приглашение отправляется.'
+          : 'Пользователь создан. SMTP не настроен — сообщите код приглашения вручную.',
       });
     } catch (error) {
       logger.error('register-admin error', { error: error.message });
