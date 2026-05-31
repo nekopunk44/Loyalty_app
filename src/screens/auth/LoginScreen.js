@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import Svg, { Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+import { useRoute } from '@react-navigation/native';
 import { spacing, borderRadius } from '../../constants/theme';
 import { AMBER, LOGIN_THEME, NAVY, TEAL } from '../../constants/loginPalette';
 import { useAuth } from '../../context/AuthContext';
@@ -131,14 +132,25 @@ export default function LoginScreen() {
     setResetVisible(true);
   };
 
-  const handleSetupInvite = () => {
+  const handleSetupInvite = (prefilledToken = '') => {
     setSetupMode(true);
-    setResetToken('');
+    setResetToken(typeof prefilledToken === 'string' ? prefilledToken : '');
     setResetNewPwd('');
     setResetConfirm('');
     setResetStep(2); // сразу к вводу кода и пароля
     setResetVisible(true);
   };
+
+  // Deep-link villajaconda://setup?token=XXX из welcome-письма автоматически
+  // открывает модалку установки пароля с предзаполненным токеном.
+  const route = useRoute();
+  const setupTokenFromLink = route?.params?.token;
+  useEffect(() => {
+    if (setupTokenFromLink && typeof setupTokenFromLink === 'string') {
+      handleSetupInvite(setupTokenFromLink);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setupTokenFromLink]);
 
   const handleCloseReset = () => {
     setResetVisible(false);
@@ -178,7 +190,7 @@ export default function LoginScreen() {
     }
     setResetLoading(true);
     try {
-      await setNewPassword(resetToken.trim(), resetNewPwd);
+      await setNewPassword(resetToken.trim(), resetNewPwd, setupMode ? 'setup' : 'reset');
       const wasSetup = setupMode;
       handleCloseReset();
       Alert.alert(

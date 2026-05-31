@@ -585,7 +585,7 @@ function NavigationContainerWrapper() {
         backgroundColor={statusBarColor}
         translucent={Platform.OS === 'android'}
       />
-      <NavigationContainer theme={navigationTheme}>
+      <NavigationContainer theme={navigationTheme} linking={LINKING}>
         <RootNavigator />
       </NavigationContainer>
       <OfflineBanner />
@@ -598,3 +598,17 @@ function NavigationContainerWrapper() {
     </>
   );
 }
+
+// villajaconda://setup?token=XXX → экран Login с параметром setupToken.
+// Используется в welcome-письме при создании юзера админом.
+const LINKING = {
+  prefixes: ['villajaconda://', 'https://villajaconda.app'],
+  config: {
+    screens: {
+      Login: {
+        path: 'setup',
+        parse: { token: (t) => String(t || '') },
+      },
+    },
+  },
+};
