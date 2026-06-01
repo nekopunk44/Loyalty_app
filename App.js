@@ -39,6 +39,7 @@ import AdminEvents from './src/screens/admin/AdminEvents';
 import AdminStats from './src/screens/admin/AdminStats';
 import AdminUsers from './src/screens/admin/AdminUsers';
 import AdminChurnRisk from './src/screens/admin/AdminChurnRisk';
+import AdminBookings from './src/screens/admin/AdminBookings';
 
 Sentry.init({
   dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
@@ -168,7 +169,8 @@ const DashboardTab   = withTabTransition(AdminDashboard);
 const AdminEventsTab = withTabTransition(AdminEvents);
 const AdminUsersTab  = withTabTransition(AdminUsers);
 const AdminFinanceTab = withTabTransition(AdminFinanceDashboard);
-const AdminStatsTab  = withTabTransition(AdminStats);
+const AdminStatsTab    = withTabTransition(AdminStats);
+const AdminBookingsTab = withTabTransition(AdminBookings);
 
 // User Navigation
 function UserTabs() {
@@ -424,6 +426,7 @@ function AdminTabs() {
           else if (route.name === 'AdminUsers') iconName = 'people';
           else if (route.name === 'AdminFinance') iconName = 'attach-money';
           else if (route.name === 'AdminStats') iconName = 'bar-chart';
+          else if (route.name === 'AdminBookings') iconName = 'hotel';
           else if (route.name === 'AdminSettings') iconName = 'settings';
           return (
             <AnimatedTabBarIcon
@@ -441,6 +444,7 @@ function AdminTabs() {
       }}
     >
       <Tab.Screen name="Dashboard"    component={DashboardTab}   options={{ title: 'Панель администратора' }} />
+      <Tab.Screen name="AdminBookings" component={AdminBookingsTab} options={{ title: 'Бронирования' }} />
       <Tab.Screen name="AdminEvents"  component={AdminEventsTab} options={{ title: 'События' }} />
       <Tab.Screen name="AdminUsers"   component={AdminUsersTab}  options={{ title: 'Пользователи' }} />
       <Tab.Screen name="AdminFinance" component={AdminFinanceTab} options={{ title: 'Финансы' }} />

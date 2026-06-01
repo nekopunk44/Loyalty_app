@@ -317,15 +317,38 @@ module.exports = function createBookingsRouter({ isDbConnected }) {
 
   /**
    * GET / — все бронирования с фильтром по статусу [admin].
+   * Обогащает каждое бронирование именем гостя и названием объекта.
    */
   router.get('/', verifyAdmin, async (req, res) => {
     try {
       const { status } = req.query;
       if (!isDbConnected()) return res.status(503).json({ success: false, error: 'DB not connected' });
       const where = status ? { status } : {};
-      const bookings = await Booking.findAll({ where, order: [['id', 'DESC']] });
+      const rawBookings = await Booking.findAll({ where, order: [['id', 'DESC']] });
+
+      // Обогащаем именами пользователей и объектов за один дополнительный запрос
+      const userIds = [...new Set(rawBookings.map(b => b.userId).filter(Boolean))];
+      const propIds = [...new Set(rawBookings.map(b => b.propertyId).filter(Boolean))];
+      const [users, properties] = await Promise.all([
+        userIds.length ? User.findAll({ where: { userId: { [Op.in]: userIds } }, attributes: ['userId', 'displayName', 'email', 'avatar', 'rulesSignature', 'rulesSignedAt'] }) : [],
+        propIds.length ? Property.findAll({ where: { id: { [Op.in]: propIds } }, attributes: ['id', 'name'] }) : [],
+      ]);
+      const userMap = Object.fromEntries(users.map(u => [u.userId, u]));
+      const propMap = Object.fromEntries(properties.map(p => [String(p.id), p]));
+
+      const bookings = rawBookings.map(b => ({
+        ...b.toJSON(),
+        userName:     userMap[b.userId]?.displayName || null,
+        userEmail:    userMap[b.userId]?.email       || null,
+        userAvatar:   userMap[b.userId]?.avatar      || null,
+        userRulesSignature: userMap[b.userId]?.rulesSignature || null,
+        userRulesSignedAt:  userMap[b.userId]?.rulesSignedAt  || null,
+        propertyName: propMap[String(b.propertyId)]?.name || null,
+      }));
+
       return res.json({ success: true, bookings, count: bookings.length });
     } catch (error) {
+      logger.error('admin bookings list error', { error: error.message });
       return res.status(500).json({ success: false, error: 'Error fetching bookings' });
     }
   });
