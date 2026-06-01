@@ -367,7 +367,7 @@ export default function AdminUsers({ navigation: _navigation }) {
   const LEVEL_LABEL = {
     admin: 'Admin', platinum: 'Platinum', gold: 'Gold', silver: 'Silver', bronze: 'Bronze',
   };
-  const levelOrder = ['admin', 'platinum', 'gold', 'silver', 'bronze'];
+  const levelOrder = ['platinum', 'gold', 'silver', 'bronze'];
   const totalForBar = levelOrder.reduce((s, k) => s + levelStats[k], 0) || 1;
 
   const handleOpenBalanceAdjust = (user) => {
@@ -539,37 +539,41 @@ export default function AdminUsers({ navigation: _navigation }) {
           </View>
         )}
 
-        {/* Hero stats: KPI + распределение по уровням */}
+        {/* Hero stats: KPI-тайлы + бар распределения */}
         {!loading && totalUsers > 0 && (
           <FadeInCard delay={120} style={{ paddingHorizontal: spacing.md, marginBottom: spacing.lg }}>
-            <View style={[styles.heroCard, { backgroundColor: theme.colors.cardBg, borderColor: theme.colors.border }]}>
-              {/* KPI-строка: всего + онлайн + админов */}
-              <View style={styles.kpiRow}>
-                <View style={styles.kpiItem}>
-                  <Text style={[styles.kpiValue, { color: theme.colors.text }]}>{totalUsers}</Text>
-                  <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>Всего</Text>
+            {/* Три KPI-карточки */}
+            <View style={styles.statTilesRow}>
+              <View style={[styles.statTile, { backgroundColor: theme.colors.cardBg, borderColor: theme.colors.border }]}>
+                <View style={[styles.statTileIcon, { backgroundColor: `${theme.colors.primary}18` }]}>
+                  <MaterialIcons name="people" size={16} color={theme.colors.primary} />
                 </View>
-                <View style={[styles.kpiDivider, { backgroundColor: theme.colors.border }]} />
-                <View style={styles.kpiItem}>
-                  <View style={styles.kpiValueRow}>
-                    <View style={[styles.kpiDot, { backgroundColor: '#10B981' }]} />
-                    <Text style={[styles.kpiValue, { color: theme.colors.text }]}>{onlineCount}</Text>
-                  </View>
-                  <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>Онлайн</Text>
-                </View>
-                <View style={[styles.kpiDivider, { backgroundColor: theme.colors.border }]} />
-                <View style={styles.kpiItem}>
-                  <View style={styles.kpiValueRow}>
-                    <MaterialIcons name="shield" size={14} color={LEVEL_PALETTE.admin} />
-                    <Text style={[styles.kpiValue, { color: theme.colors.text }]}>{levelStats.admin}</Text>
-                  </View>
-                  <Text style={[styles.kpiLabel, { color: theme.colors.textSecondary }]}>Админов</Text>
-                </View>
+                <Text style={[styles.statTileValue, { color: theme.colors.text }]}>{totalUsers}</Text>
+                <Text style={[styles.statTileLabel, { color: theme.colors.textSecondary }]}>ВСЕГО</Text>
               </View>
 
-              {/* Сегментированный бар распределения по уровням */}
+              <View style={[styles.statTile, { backgroundColor: theme.colors.cardBg, borderColor: '#10B98133' }]}>
+                <View style={[styles.statTileIcon, { backgroundColor: '#10B98115' }]}>
+                  <MaterialIcons name="wifi" size={16} color="#10B981" />
+                </View>
+                <Text style={[styles.statTileValue, { color: '#10B981' }]}>{onlineCount}</Text>
+                <Text style={[styles.statTileLabel, { color: theme.colors.textSecondary }]}>ОНЛАЙН</Text>
+              </View>
+
+              <View style={[styles.statTile, { backgroundColor: theme.colors.cardBg, borderColor: `${LEVEL_PALETTE.admin}33` }]}>
+                <View style={[styles.statTileIcon, { backgroundColor: `${LEVEL_PALETTE.admin}15` }]}>
+                  <MaterialIcons name="shield" size={16} color={LEVEL_PALETTE.admin} />
+                </View>
+                <Text style={[styles.statTileValue, { color: LEVEL_PALETTE.admin }]}>{levelStats.admin}</Text>
+                <Text style={[styles.statTileLabel, { color: theme.colors.textSecondary }]}>АДМИНОВ</Text>
+              </View>
+            </View>
+
+            {/* Бар + тапабельная легенда */}
+            <View style={[styles.heroCard, { backgroundColor: theme.colors.cardBg, borderColor: theme.colors.border, marginTop: 10 }]}>
+              {/* Сегментированный бар */}
               <View style={[styles.segBarTrack, { backgroundColor: theme.colors.background }]}>
-                {levelOrder.map((k) => {
+                {levelOrder.map((k, i) => {
                   const w = (levelStats[k] / totalForBar) * 100;
                   if (w <= 0) return null;
                   return (
@@ -579,25 +583,52 @@ export default function AdminUsers({ navigation: _navigation }) {
                         width: `${w}%`,
                         backgroundColor: LEVEL_PALETTE[k],
                         height: '100%',
+                        marginLeft: i > 0 ? 2 : 0,
                       }}
                     />
                   );
                 })}
               </View>
 
-              {/* Легенда — компактные чипы с количеством */}
+              {/* Легенда — каждый чип фильтрует список по уровню */}
               <View style={styles.legendRow}>
-                {levelOrder.map((k) => (
-                  <View key={k} style={styles.legendItem}>
-                    <View style={[styles.legendDot, { backgroundColor: LEVEL_PALETTE[k] }]} />
-                    <Text style={[styles.legendLabel, { color: theme.colors.textSecondary }]}>
-                      {LEVEL_LABEL[k]}
-                    </Text>
-                    <Text style={[styles.legendValue, { color: theme.colors.text }]}>
-                      {levelStats[k]}
-                    </Text>
-                  </View>
-                ))}
+                {levelOrder.map((k) => {
+                  const isActive =
+                    k === 'admin'
+                      ? activeFilters.role === 'admin'
+                      : activeFilters.membership === k;
+                  return (
+                    <TouchableOpacity
+                      key={k}
+                      activeOpacity={0.7}
+                      onPress={() => {
+                        if (k === 'admin') {
+                          setActiveFilters(f => ({ ...f, role: f.role === 'admin' ? 'all' : 'admin' }));
+                        } else {
+                          setActiveFilters(f => ({ ...f, membership: f.membership === k ? 'all' : k }));
+                        }
+                      }}
+                      style={[
+                        styles.legendChip,
+                        {
+                          backgroundColor: isActive ? `${LEVEL_PALETTE[k]}20` : 'transparent',
+                          borderColor: isActive ? `${LEVEL_PALETTE[k]}60` : 'transparent',
+                        },
+                      ]}
+                    >
+                      <View style={[styles.legendDot, { backgroundColor: LEVEL_PALETTE[k] }]} />
+                      <Text style={[
+                        styles.legendLabel,
+                        { color: isActive ? LEVEL_PALETTE[k] : theme.colors.textSecondary, fontWeight: isActive ? '800' : '600' },
+                      ]}>
+                        {LEVEL_LABEL[k]}
+                      </Text>
+                      <Text style={[styles.legendValue, { color: isActive ? LEVEL_PALETTE[k] : theme.colors.text }]}>
+                        {levelStats[k]}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
             </View>
           </FadeInCard>
@@ -605,7 +636,7 @@ export default function AdminUsers({ navigation: _navigation }) {
 
         {/* Search */}
         {!loading && (
-          <FadeInCard delay={150} style={{ paddingHorizontal: spacing.md, marginBottom: spacing.md }}>
+          <FadeInCard delay={150} style={{ paddingHorizontal: spacing.md, marginBottom: spacing.xs }}>
             <View
               style={[
                 styles.searchContainer,
@@ -641,14 +672,14 @@ export default function AdminUsers({ navigation: _navigation }) {
 
         {/* Filters */}
         {!loading && (
-          <FadeInCard delay={200} style={{ paddingHorizontal: spacing.md, marginBottom: spacing.lg, zIndex: 100, overflow: 'visible' }}>
+          <FadeInCard delay={200} style={{ paddingHorizontal: spacing.sm, marginBottom: spacing.xs, zIndex: 100, overflow: 'visible' }}>
             <View 
               style={[
-                styles.compactFiltersContainer, 
-                { 
+                styles.compactFiltersContainer,
+                {
                   overflow: 'visible',
                   backgroundColor: theme.colors.background,
-                  paddingVertical: spacing.md,
+                  paddingVertical: spacing.sm,
                   paddingHorizontal: spacing.md,
                   borderRadius: 12,
                 }
@@ -672,7 +703,7 @@ export default function AdminUsers({ navigation: _navigation }) {
                   onPress={() => setOpenDropdown(openDropdown === 'role' ? null : 'role')}
                   activeOpacity={0.85}
                 >
-                  <MaterialIcons name="person" size={15} color={fg} />
+                  <MaterialIcons name="person" size={16} color={fg} />
                   <Text
                     style={[
                       styles.compactFilterButtonText,
@@ -748,7 +779,7 @@ export default function AdminUsers({ navigation: _navigation }) {
                   onPress={() => setOpenDropdown(openDropdown === 'membership' ? null : 'membership')}
                   activeOpacity={0.85}
                 >
-                  <MaterialIcons name="star" size={15} color={fg} />
+                  <MaterialIcons name="star" size={16} color={fg} />
                   <Text
                     style={[
                       styles.compactFilterButtonText,
@@ -824,7 +855,7 @@ export default function AdminUsers({ navigation: _navigation }) {
                   onPress={() => setOpenDropdown(openDropdown === 'status' ? null : 'status')}
                   activeOpacity={0.85}
                 >
-                  <MaterialIcons name="signal-cellular-alt" size={15} color={fg} />
+                  <MaterialIcons name="signal-cellular-alt" size={16} color={fg} />
                   <Text
                     style={[
                       styles.compactFilterButtonText,
@@ -1219,68 +1250,69 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 4,
   },
+  statTilesRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 0,
+  },
+  statTile: {
+    flex: 1,
+    alignItems: 'center',
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 6,
+    gap: 4,
+  },
+  statTileIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statTileValue: {
+    fontSize: 20,
+    fontWeight: '900',
+    letterSpacing: -0.5,
+    lineHeight: 22,
+  },
+  statTileLabel: {
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
   heroCard: {
     borderRadius: 16,
     borderWidth: 1,
     padding: spacing.md,
     gap: 14,
   },
-  kpiRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  kpiItem: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 4,
-  },
-  kpiValueRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  kpiValue: {
-    fontSize: 22,
-    fontWeight: '800',
-    letterSpacing: -0.5,
-  },
-  kpiLabel: {
-    fontSize: 10,
-    fontWeight: '600',
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
-  },
-  kpiDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  kpiDivider: {
-    width: 1,
-    height: 28,
-    opacity: 0.6,
-  },
   segBarTrack: {
     flexDirection: 'row',
-    height: 8,
-    borderRadius: 4,
+    height: 12,
+    borderRadius: 6,
     overflow: 'hidden',
   },
   legendRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    rowGap: 6,
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
-  legendItem: {
+  legendChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: 1,
   },
   legendDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
   },
   legendLabel: {
     fontSize: 11,
@@ -1365,8 +1397,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 10,
-    paddingVertical: 9,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: colors.border,
@@ -1376,7 +1408,7 @@ const styles = StyleSheet.create({
   compactFilterButtonText: {
     flex: 1,
     marginHorizontal: 2,
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '600',
     color: colors.text,
     textAlign: 'center',

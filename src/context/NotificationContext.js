@@ -15,6 +15,7 @@ export const NOTIFICATION_CATEGORIES = {
   payment: [
     'paymentSuccess', 'paymentFailed', 'cashbackReceived', 'topup',
     'balance_replenishment', 'user_balance_replenishment',
+    'withdrawalCreated', 'withdrawalCompleted', 'withdrawalCancelled',
   ],
   booking: [
     'newBooking', 'bookingConfirmed', 'bookingCompleted', 'bookingCancelled',
@@ -87,7 +88,9 @@ export const NotificationProvider = ({ children }) => {
         if (eventType !== 'notification') continue;
         try {
           const notification = JSON.parse(dataLine.slice(5).trim());
-          setNotifications(prev => [notification, ...prev]);
+          setNotifications(prev =>
+            prev.some(n => n.id === notification.id) ? prev : [notification, ...prev]
+          );
           // OS-баннер на нативе. В Expo Go / web модуль не загружен — мягко пропускаем.
           if (Notifications && notification?.title) {
             Notifications.scheduleNotificationAsync({
@@ -297,9 +300,8 @@ export const NotificationProvider = ({ children }) => {
       });
 
       if (data.notification) {
-        // Функциональный апдейт — не теряем уведомления, прилетевшие через SSE
-        // между моментом отправки POST и получением ответа.
         setNotifications((prev) => {
+          if (prev.some(n => n.id === data.notification.id)) return prev;
           const updated = [data.notification, ...prev];
           AsyncStorage.setItem('@notifications', JSON.stringify(updated)).catch(() => {});
           return updated;
@@ -464,6 +466,36 @@ export const NotificationProvider = ({ children }) => {
     });
   };
 
+  // ─── Withdrawal lifecycle (для админа-владельца) ─────────────────────────
+  // Подтверждения движений по AdminWallet. Single-admin: получатель — он же
+  // отправитель действия; это работает как «receipt» в шторке уведомлений.
+  const notifyWithdrawalCreated = async (amount, bankAccount) => {
+    await addNotification({
+      type: 'withdrawalCreated',
+      title: '📤 Заявка на вывод создана',
+      message: `Заблокировано ${amount} PRB для перевода на ${bankAccount || 'счёт'}`,
+      data: { amount, bankAccount },
+    });
+  };
+
+  const notifyWithdrawalCompleted = async (amount, bankAccount) => {
+    await addNotification({
+      type: 'withdrawalCompleted',
+      title: '✅ Выплата подтверждена',
+      message: `${amount} PRB списано как выплаченное на ${bankAccount || 'счёт'}`,
+      data: { amount, bankAccount },
+    });
+  };
+
+  const notifyWithdrawalCancelled = async (amount) => {
+    await addNotification({
+      type: 'withdrawalCancelled',
+      title: '↩️ Заявка отменена',
+      message: `${amount} PRB возвращено на доступный баланс`,
+      data: { amount },
+    });
+  };
+
   const notifyAdminEvent = async (eventType, details) => {
     const messages = {
       new_user: `Новый пользователь: ${details.name}`,
@@ -610,6 +642,9 @@ export const NotificationProvider = ({ children }) => {
         notifyUserAdded,
         notifyUserDeleted,
         notifyUserUpdated,
+        notifyWithdrawalCreated,
+        notifyWithdrawalCompleted,
+        notifyWithdrawalCancelled,
         markAsRead,
         markAllAsRead,
         deleteNotification,
