@@ -387,6 +387,15 @@ const connectDB = async () => {
         ADD COLUMN IF NOT EXISTS "pushToken"             VARCHAR(512);
     `);
 
+    // ВКР: подпись правил дома. Источник — migrations/015_house_rules_signature.sql.
+    // Без этих колонок User.findOne падает (модель ссылается на rules_signature /
+    // rules_signed_at), что ломает /auth/login.
+    await sequelize.query(`
+      ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS rules_signature TEXT,
+        ADD COLUMN IF NOT EXISTS rules_signed_at TIMESTAMPTZ;
+    `);
+
     // Stage 2 ВКР: аукционы. Источник истины — migrations/013_auction_system.sql.
     // sync() не добавляет колонки в существующие таблицы и не умеет partial-индексы,
     // поэтому ALTER + CREATE INDEX делаем inline. Всё идемпотентно.
