@@ -1,8 +1,8 @@
 export const properties = [
   {
     id: '2',
-    name: 'Стандрат',
-    description: 'Студия с терассой и бассейном',
+    name: 'Стандарт',
+    description: 'Студия с террасой и бассейном',
     price: '150PRB/ночь',
     priceNumber: 150,
     rooms: 2,
