@@ -18,8 +18,17 @@ if (!sqlFile) {
   process.exit(1);
 }
 
-if (!process.env.DATABASE_URL) {
-  console.error('DATABASE_URL environment variable is required');
+// При локальном запуске через `railway run` DATABASE_URL указывает на
+// postgres.railway.internal, который резолвится только изнутри Railway-сети.
+// Если параллельно есть DATABASE_PUBLIC_URL (через proxy.rlwy.net) — берём его.
+let connectionString = process.env.DATABASE_URL;
+if (connectionString && connectionString.includes('railway.internal') && process.env.DATABASE_PUBLIC_URL) {
+  console.log('Note: DATABASE_URL is internal Railway host — switching to DATABASE_PUBLIC_URL for local run');
+  connectionString = process.env.DATABASE_PUBLIC_URL;
+}
+
+if (!connectionString) {
+  console.error('DATABASE_URL (or DATABASE_PUBLIC_URL) environment variable is required');
   process.exit(1);
 }
 
@@ -37,7 +46,7 @@ const statements = sql
   .map(s => s.replace(/--[^\n]*/g, '').trim())
   .filter(Boolean);
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const pool = new Pool({ connectionString });
 
 (async () => {
   console.log(`Applying ${sqlFile} (${statements.length} statements)...`);
