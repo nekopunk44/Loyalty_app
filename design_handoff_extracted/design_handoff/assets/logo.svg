@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  
+  <g stroke="currentColor" stroke-width="0.4" opacity="0.35">
+    
+    <line x1="14" y1="12" x2="14" y2="88"></line>
+    <line x1="25.3" y1="12" x2="25.3" y2="88"></line>
+    <line x1="36.6" y1="12" x2="36.6" y2="88"></line>
+    <line x1="50" y1="12" x2="50" y2="88"></line>
+    <line x1="63.4" y1="12" x2="63.4" y2="88"></line>
+    <line x1="74.7" y1="12" x2="74.7" y2="88"></line>
+    <line x1="86" y1="12" x2="86" y2="88"></line>
+    
+    <line x1="12" y1="14" x2="88" y2="14"></line>
+    <line x1="12" y1="25.3" x2="88" y2="25.3"></line>
+    <line x1="12" y1="36.6" x2="88" y2="36.6"></line>
+    <line x1="12" y1="50" x2="88" y2="50"></line>
+    <line x1="12" y1="63.4" x2="88" y2="63.4"></line>
+    <line x1="12" y1="74.7" x2="88" y2="74.7"></line>
+    <line x1="12" y1="86" x2="88" y2="86"></line>
+  </g>
+  
+  <circle cx="50" cy="50" r="34" stroke="currentColor" stroke-width="1.6"></circle>
+  <circle cx="50" cy="50" r="24" stroke="currentColor" stroke-width="1.6"></circle>
+  <circle cx="50" cy="50" r="12" stroke="currentColor" stroke-width="1.6"></circle>
+</svg>

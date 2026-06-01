@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Villa Jaconda — Редизайн лендинга</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400;1,500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+<style>
+  /* ── Light redesign tokens ─────────────────────────── */
+  :root {
+    --r-bg:            #f7f2e8;
+    --r-surface:       #ffffff;
+    --r-surface-warm:  #ede8db;
+    --r-line:          rgba(160,120,60,0.13);
+    --r-line-strong:   rgba(160,120,60,0.26);
+    --r-text:          #1c1208;
+    --r-text-soft:     #4a3820;
+    --r-muted:         #8a7560;
+    --r-gold:          #a07840;
+    --r-gold-light:    #c8954e;
+    --r-gold-deep:     #7a5820;
+    --r-serif:         'Cormorant Garamond', 'Iowan Old Style', Georgia, serif;
+    --r-sans:          'Inter', system-ui, sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; background: var(--r-bg); }
+  body {
+    color: var(--r-text);
+    background: var(--r-bg);
+    font-family: var(--r-sans);
+    font-size: 15px;
+    font-weight: 400;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  a { color: inherit; text-decoration: none; }
+  button { font-family: inherit; cursor: pointer; }
+  ::selection { background: var(--r-gold); color: #fff; }
+
+  /* ── Ken Burns keyframes ───────────────────────────── */
+  @keyframes kbA {
+    from { transform: scale(1)    translate(0%, 0%); }
+    to   { transform: scale(1.08) translate(-2%, -1%); }
+  }
+  @keyframes kbB {
+    from { transform: scale(1)    translate(0%, 0%); }
+    to   { transform: scale(1.08) translate(2%, 1%); }
+  }
+
+  /* ── Entrance animations ───────────────────────────── */
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(50px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+  @keyframes fadeSlideUp {
+    from { opacity: 0; transform: translateY(24px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.4; }
+  }
+  @keyframes pulse-line {
+    0%   { transform: scaleY(0); transform-origin: top; opacity: 0; }
+    50%  { transform: scaleY(1); transform-origin: top; opacity: 1; }
+    100% { transform: scaleY(0); transform-origin: bottom; opacity: 0; }
+  }
+
+  /* ── Scroll reveal ─────────────────────────────────── */
+  .reveal {
+    opacity: 0;
+    transform: translateY(32px);
+    transition: opacity 0.8s cubic-bezier(0.16,1,0.3,1),
+                transform 0.8s cubic-bezier(0.16,1,0.3,1);
+  }
+  .reveal.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .reveal-delay-1 { transition-delay: 0.1s; }
+  .reveal-delay-2 { transition-delay: 0.2s; }
+  .reveal-delay-3 { transition-delay: 0.3s; }
+
+  /* ── Tour section ──────────────────────────────────── */
+  .tour-section {
+    position: relative;
+    min-height: 80vh;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* ── Scrollbar ─────────────────────────────────────── */
+  ::-webkit-scrollbar { width: 5px; background: var(--r-bg); }
+  ::-webkit-scrollbar-thumb { background: var(--r-gold); border-radius: 4px; }
+
+  /* ── Mobile ────────────────────────────────────────── */
+  @media (max-width: 768px) {
+    .rooms-row { grid-template-columns: 1fr !important; }
+    .rooms-row > div { order: unset !important; min-height: 300px !important; }
+    .booking-grid { grid-template-columns: 1fr !important; }
+    .loyalty-path { grid-template-columns: repeat(2,1fr) !important; gap: 28px 8px !important; }
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+// ── Icon helper (Lucide) ──────────────────────────────
+function Icon({ name, size=16, strokeWidth=1.5, color='currentColor', style }) {
+  const ref = React.useRef(null);
+  React.useEffect(() => {
+    if (ref.current && window.lucide) window.lucide.createIcons({ el: ref.current });
+  });
+  return (
+    <span ref={ref} style={{ display:'inline-flex', alignItems:'center', lineHeight:1, flexShrink:0, ...style }}>
+      <i data-lucide={name} style={{ width:size, height:size, color, strokeWidth }} />
+    </span>
+  );
+}
+Object.assign(window, { Icon });
+</script>
+
+<script type="text/babel" src="NavbarR.jsx"></script>
+<script type="text/babel" src="HeroR.jsx"></script>
+<script type="text/babel" src="RoomsR.jsx"></script>
+<script type="text/babel" src="LoyaltyR.jsx"></script>
+<script type="text/babel" src="ReviewsR.jsx"></script>
+<script type="text/babel" src="BookingR.jsx"></script>
+<script type="text/babel" src="FAQR.jsx"></script>
+<script type="text/babel" src="FooterR.jsx"></script>
+
+<script type="text/babel">
+// ── Tour Section ──────────────────────────────────────
+function TourSection() {
+  return (
+    <section id="tour" className="tour-section" style={{ borderTop:'1px solid var(--r-line)' }}>
+      {/* Background */}
+      <div style={{ position:'absolute', inset:0 }}>
+        <img src="../../assets/images/property2.png" alt="" style={{ width:'100%', height:'100%', objectFit:'cover', animation:'kbA 14s ease-in-out infinite alternate' }} />
+        <div style={{ position:'absolute', inset:0, background:'linear-gradient(180deg, rgba(247,242,232,0.5) 0%, rgba(247,242,232,0.2) 50%, rgba(247,242,232,0.65) 100%)' }} />
+      </div>
+
+      <div style={{ position:'relative', zIndex:2, textAlign:'center', padding:'120px clamp(20px,4vw,60px)' }}>
+        <p style={{ fontSize:10, letterSpacing:'0.32em', textTransform:'uppercase', color:'var(--r-gold)', fontWeight:500, marginBottom:20 }}>— Виртуальный тур</p>
+        <h2 style={{ fontFamily:'var(--r-serif)', fontSize:'clamp(2.4rem,5vw,5rem)', fontWeight:300, lineHeight:1, letterSpacing:'-0.02em', color:'var(--r-text)', margin:'0 0 24px', maxWidth:'16ch', marginLeft:'auto', marginRight:'auto' }}>
+          Пройдитесь по дому <em style={{ fontStyle:'italic', color:'var(--r-gold)' }}>раньше</em>, чем приедете
+        </h2>
+        <p style={{ fontSize:15, color:'var(--r-text-soft)', lineHeight:1.7, maxWidth:480, margin:'0 auto 48px' }}>
+          360°-обход всех номеров и общих зон. Выбирайте номер не по фотографии — а по ощущению.
+        </p>
+        <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:12 }}>
+          <button onClick={() => document.getElementById('contact')?.scrollIntoView()} style={{ display:'inline-flex', alignItems:'center', gap:10, padding:'18px 40px', background:'var(--r-text)', color:'var(--r-bg)', border:'none', borderRadius:999, fontSize:13, letterSpacing:'0.14em', textTransform:'uppercase', fontFamily:'inherit', fontWeight:500, transition:'background 0.3s ease' }}
+            onMouseEnter={e=>e.currentTarget.style.background='var(--r-gold)'}
+            onMouseLeave={e=>e.currentTarget.style.background='var(--r-text)'}>
+            Запросить доступ →
+          </button>
+          <span style={{ fontSize:11, color:'var(--r-muted)', letterSpacing:'0.18em', textTransform:'uppercase' }}>3D-тур · скоро</span>
+        </div>
+        <div style={{ position:'absolute', bottom:40, left:'50%', transform:'translateX(-50%)', display:'flex', alignItems:'center', gap:16, color:'var(--r-muted)' }}>
+          <span style={{ width:48, height:1, background:'currentColor', display:'block' }} />
+          <span style={{ fontSize:10, letterSpacing:'0.28em', textTransform:'uppercase', whiteSpace:'nowrap' }}>360° · 8 rooms · 2 floors</span>
+          <span style={{ width:48, height:1, background:'currentColor', display:'block' }} />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ── App ───────────────────────────────────────────────
+function App() {
+  const [active, setActive] = React.useState(null);
+
+  // Scroll reveal observer
+  React.useEffect(() => {
+    const els = document.querySelectorAll('.reveal');
+    const io = new IntersectionObserver(
+      entries => entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); }),
+      { rootMargin:'-8% 0px -8% 0px', threshold:0.05 }
+    );
+    els.forEach(el => io.observe(el));
+    return () => io.disconnect();
+  }, []);
+
+  // Active section tracking
+  React.useEffect(() => {
+    const ids = ['rooms','tour','loyalty','reviews','faq','contact'];
+    const io = new IntersectionObserver(
+      entries => entries.forEach(e => { if (e.isIntersecting) setActive(e.target.id); }),
+      { rootMargin:'-40% 0px -40% 0px', threshold:0 }
+    );
+    ids.forEach(id => { const el = document.getElementById(id); if (el) io.observe(el); });
+    return () => io.disconnect();
+  }, []);
+
+  return (
+    <>
+      <NavbarR active={active} setActive={setActive} />
+      <main>
+        <HeroR />
+        <RoomsR />
+        <TourSection />
+        <LoyaltyR />
+        <ReviewsR />
+        <BookingR />
+        <FAQR />
+      </main>
+      <FooterR />
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
