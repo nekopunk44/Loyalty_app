@@ -2,7 +2,7 @@ import React, { useState, useCallback, useMemo, useRef } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   TextInput, RefreshControl, ActivityIndicator, Alert,
-  Animated, Easing, Modal, Pressable, ScrollView,
+  Animated, Modal, Pressable, ScrollView,
   Dimensions, PanResponder, Image,
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
@@ -10,7 +10,6 @@ import Svg, { Path as SvgPath } from 'react-native-svg';
 import { useFocusEffect } from '@react-navigation/native';
 import { spacing, borderRadius } from '../../constants/theme';
 import { properties as PROPERTIES_LIST } from '../../constants/properties';
-import { HOUSE_RULES } from '../../constants/houseRules';
 import { useTheme } from '../../context/ThemeContext';
 import { apiCall } from '../../utils/api';
 import { getApiUrl } from '../../utils/apiUrl';
