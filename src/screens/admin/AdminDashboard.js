@@ -9,9 +9,11 @@ import {
   RefreshControl,
   Modal,
   Animated,
+  StatusBar,
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { spacing, borderRadius } from '../../constants/theme';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -24,7 +26,6 @@ const LEVEL_GRADIENT_TOP = {
 };
 
 const asNumber = value => Number(value || 0);
-const formatNumber = value => asNumber(value).toLocaleString('ru-RU');
 const formatMoney = value => `${Math.round(asNumber(value)).toLocaleString('ru-RU')} PRB`;
 
 const NAVY  = '#063B5C';
@@ -94,6 +95,7 @@ const STATUS_META = {
 export default function AdminDashboard({ navigation }) {
   const { user } = useAuth();
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
 
   const [stats,      setStats]      = useState(null);
   const [bookings,   setBookings]   = useState([]);
@@ -293,20 +295,27 @@ export default function AdminDashboard({ navigation }) {
           </Text>
         </View>
 
-        {/* ── Quick actions ── */}
-        <View style={styles.actionsRow}>
-          <ActionTile theme={theme} icon="qr-code-scanner" label="Сканировать" sub="QR клиента" color={TEAL}   onPress={openScanner} />
-          <ActionTile theme={theme} icon="payments"        label="Платёж"      sub="новый"     color={NAVY2}  onPress={() => navigation.navigate('AdminFinance')} />
-          <ActionTile theme={theme} icon="event-available" label="Событие"     sub="создать"   color={AMBER}  onPress={() => navigation.navigate('AdminEvents')} />
-          <ActionTile theme={theme} icon="person-search"   label="Клиент"      sub="найти"     color={TEAL2}  onPress={() => navigation.navigate('AdminUsers')} />
-        </View>
+        {/* ── Scan QR CTA — primary admin action ── */}
+        <TouchableOpacity activeOpacity={0.92} onPress={openScanner} style={styles.scanCta}>
+          {/* Декоративные уголки рамки видоискателя */}
+          <View style={[styles.ctaCorner, styles.ctaCornerTL]} />
+          <View style={[styles.ctaCorner, styles.ctaCornerTR]} />
+          <View style={[styles.ctaCorner, styles.ctaCornerBL]} />
+          <View style={[styles.ctaCorner, styles.ctaCornerBR]} />
 
-        {/* ── KPI strip ── */}
-        <View style={styles.kpiStrip}>
-          <KpiPill label="Сегодня броней"   value={formatNumber(dashboard.todayBookings)} color={NAVY2} theme={theme} />
-          <KpiPill label="Сегодня оборот"   value={formatMoney(dashboard.todayRevenue)}   color={TEAL}  theme={theme} compact />
-          <KpiPill label="Всего клиентов"   value={formatNumber(dashboard.totalUsers)}    color={AMBER} theme={theme} />
-        </View>
+          <View style={styles.scanIconBox}>
+            <MaterialIcons name="qr-code-scanner" size={30} color="#fff" />
+          </View>
+
+          <View style={styles.scanCtaText}>
+            <Text style={styles.scanCtaTitle}>Сканировать QR</Text>
+            <Text style={styles.scanCtaSub}>Быстрая идентификация клиента</Text>
+          </View>
+
+          <View style={styles.scanCtaArrow}>
+            <MaterialIcons name="arrow-forward" size={20} color="#fff" />
+          </View>
+        </TouchableOpacity>
 
         {/* ── Alerts ── */}
         {alerts.length > 0 && (
@@ -374,8 +383,20 @@ export default function AdminDashboard({ navigation }) {
       </ScrollView>
 
       {/* ── QR Scanner Modal ── */}
-      <Modal visible={scannerVisible} animationType="slide" onRequestClose={() => setScannerVisible(false)}>
+      {/*
+        statusBarTranslucent + navigationBarTranslucent — модалка расползается
+        под системный статус-бар и под gesture-pill снизу. Иначе на Android
+        edge-to-edge остаётся видимая полоса AdminDashboard сверху/снизу.
+      */}
+      <Modal
+        visible={scannerVisible}
+        animationType="slide"
+        statusBarTranslucent
+        navigationBarTranslucent
+        onRequestClose={() => setScannerVisible(false)}
+      >
         <View style={styles.scanScreen}>
+          <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
           {!scannedUser ? (
             <>
               <CameraView
@@ -396,12 +417,15 @@ export default function AdminDashboard({ navigation }) {
                 <Text style={styles.scanHint}>Наведите камеру на QR-код клиента</Text>
               </View>
 
-              <TouchableOpacity style={styles.scanCloseBtn} onPress={() => setScannerVisible(false)}>
+              <TouchableOpacity
+                style={[styles.scanCloseBtn, { top: insets.top + 12 }]}
+                onPress={() => setScannerVisible(false)}
+              >
                 <MaterialIcons name="close" size={22} color="#fff" />
               </TouchableOpacity>
             </>
           ) : (
-            <View style={styles.scanResult}>
+            <View style={[styles.scanResult, { paddingBottom: insets.bottom }]}>
               <View style={[styles.scanResultHeader, { backgroundColor: LEVEL_GRADIENT_TOP[scannedUser.level] || LEVEL_GRADIENT_TOP.Bronze }]}>
                 <View style={styles.scanResultDecor1} />
                 <View style={styles.scanResultDecor2} />
@@ -461,42 +485,6 @@ function pluralRu(n, one, few, many) {
   if (m10 === 1 && m100 !== 11) return one;
   if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return few;
   return many;
-}
-
-function ActionTile({ icon, label, sub, color, onPress, theme }) {
-  return (
-    <TouchableOpacity
-      activeOpacity={0.85}
-      onPress={onPress}
-      style={[styles.actionTile, {
-        backgroundColor: theme.colors.cardBg,
-        borderColor: theme.colors.border,
-      }]}
-    >
-      <View style={[styles.actionIcon, { backgroundColor: color }]}>
-        <MaterialIcons name={icon} size={22} color="#fff" />
-      </View>
-      <Text style={[styles.actionLabel, { color: theme.colors.text }]} numberOfLines={1}>{label}</Text>
-      <Text style={[styles.actionSub, { color: theme.colors.textSecondary }]} numberOfLines={1}>{sub}</Text>
-    </TouchableOpacity>
-  );
-}
-
-function KpiPill({ label, value, color, theme, compact }) {
-  return (
-    <View style={[styles.kpiPill, {
-      backgroundColor: theme.colors.cardBg,
-      borderColor: theme.colors.border,
-    }]}>
-      <View style={[styles.kpiBar, { backgroundColor: color }]} />
-      <Text style={[styles.kpiPillValue, { color: theme.colors.text, fontSize: compact ? 14 : 16 }]} numberOfLines={1}>
-        {value}
-      </Text>
-      <Text style={[styles.kpiPillLabel, { color: theme.colors.textSecondary }]} numberOfLines={2}>
-        {label}
-      </Text>
-    </View>
-  );
 }
 
 /**
@@ -685,30 +673,51 @@ const styles = StyleSheet.create({
   heroBadgeText: { color: '#fff', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
   heroSubtitle: { color: 'rgba(255,255,255,0.75)', fontSize: 13, lineHeight: 18 },
 
-  // Quick actions
-  actionsRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md },
-  actionTile: {
-    flex: 1, alignItems: 'center', paddingVertical: spacing.md, paddingHorizontal: 4,
+  // Scan CTA — единая primary-кнопка вместо сетки quick actions.
+  // Уголки видоискателя + TEAL-фон + стрелка дают понятный визуальный язык
+  // «нажми чтобы сканировать».
+  scanCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    backgroundColor: TEAL,
     borderRadius: borderRadius.lg,
-    borderWidth: 1,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.md,
+    overflow: 'hidden',
+    position: 'relative',
+    shadowColor: TEAL,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.32,
+    shadowRadius: 12,
+    elevation: 6,
   },
-  actionIcon: {
-    width: 44, height: 44, borderRadius: 22,
-    alignItems: 'center', justifyContent: 'center', marginBottom: 6,
+  ctaCorner: {
+    position: 'absolute',
+    width: 14, height: 14,
+    borderColor: 'rgba(255,255,255,0.55)',
   },
-  actionLabel: { fontSize: 12, fontWeight: '800', textAlign: 'center' },
-  actionSub: { fontSize: 10, fontWeight: '600', textAlign: 'center', marginTop: 1 },
+  ctaCornerTL: { top: 8,    left: 8,    borderTopWidth: 2, borderLeftWidth: 2,  borderTopLeftRadius: 4 },
+  ctaCornerTR: { top: 8,    right: 8,   borderTopWidth: 2, borderRightWidth: 2, borderTopRightRadius: 4 },
+  ctaCornerBL: { bottom: 8, left: 8,    borderBottomWidth: 2, borderLeftWidth: 2,  borderBottomLeftRadius: 4 },
+  ctaCornerBR: { bottom: 8, right: 8,   borderBottomWidth: 2, borderRightWidth: 2, borderBottomRightRadius: 4 },
+  scanIconBox: {
+    width: 54, height: 54, borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.4)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  scanCtaText: { flex: 1, gap: 3 },
+  scanCtaTitle: { fontSize: 17, fontWeight: '900', color: '#fff', letterSpacing: 0.2 },
+  scanCtaSub:   { fontSize: 12, fontWeight: '600', color: 'rgba(255,255,255,0.85)' },
+  scanCtaArrow: {
+    width: 34, height: 34, borderRadius: 17,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center', justifyContent: 'center',
+  },
 
   // KPI strip
-  kpiStrip: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md },
-  kpiPill: {
-    flex: 1, borderWidth: 1, borderRadius: borderRadius.lg,
-    paddingVertical: spacing.md, paddingHorizontal: spacing.sm,
-    overflow: 'hidden', position: 'relative',
-  },
-  kpiBar: { position: 'absolute', top: 0, left: 0, right: 0, height: 3 },
-  kpiPillValue: { fontWeight: '900', marginTop: 4 },
-  kpiPillLabel: { fontSize: 10, fontWeight: '600', marginTop: 4, lineHeight: 13 },
 
   // Alerts
   alertCard: {
@@ -791,7 +800,7 @@ const styles = StyleSheet.create({
   scanCornerBR: { bottom: 0, right: 0, borderLeftWidth: 0, borderTopWidth: 0, borderBottomRightRadius: 8 },
   scanHint: { color: 'rgba(255,255,255,0.8)', fontSize: 13, fontWeight: '600', textAlign: 'center', paddingHorizontal: 32 },
   scanCloseBtn: {
-    position: 'absolute', top: 52, right: 20,
+    position: 'absolute', right: 20,
     width: 40, height: 40, borderRadius: 20,
     backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center',
   },
