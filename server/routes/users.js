@@ -30,6 +30,19 @@ const { isUserOnline } = require('../utils/onlineUsers');
 
 const isDev = () => (process.env.NODE_ENV || 'development') === 'development';
 
+// Длинная русская дата вида «1 июня 2026». Node ICU умеет ru-RU длинный
+// month, fallback на короткий формат если что — но обычно ICU собран.
+const formatJoinDate = (d) => {
+  if (!d) return null;
+  const date = d instanceof Date ? d : new Date(d);
+  if (Number.isNaN(date.getTime())) return null;
+  try {
+    return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+  } catch {
+    return date.toLocaleDateString('ru-RU');
+  }
+};
+
 const PUBLIC_USER_ATTRS = [
   'id',
   'userId',
@@ -73,7 +86,7 @@ module.exports = function createUsersRouter({ isDbConnected }) {
         role: u.role,
         level: u.membershipLevel?.toLowerCase() || 'bronze',
         loyaltyPoints: u.loyaltyPoints || 0,
-        joinDate: u.createdAt ? u.createdAt.toLocaleDateString('ru-RU') : 'сегодня',
+        joinDate: formatJoinDate(u.createdAt),
         status: isUserOnline(u.userId) ? 'online' : 'offline',
       }));
 
@@ -158,7 +171,7 @@ module.exports = function createUsersRouter({ isDbConnected }) {
           balance,
           totalBookings: bookingsCount,
           cashback,
-          joinDate: user.createdAt ? user.createdAt.toLocaleDateString('ru-RU') : 'сегодня',
+          joinDate: formatJoinDate(user.createdAt),
           status: isOnline ? 'online' : 'offline',
         },
       });

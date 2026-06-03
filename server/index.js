@@ -396,6 +396,17 @@ const connectDB = async () => {
         ADD COLUMN IF NOT EXISTS rules_signed_at TIMESTAMPTZ;
     `);
 
+    // ВКР: реальная дата регистрации в программе лояльности. timestamps:false
+    // на модели User не управляет created_at — колонку держим вручную.
+    // DEFAULT NOW() покрывает новые регистрации (auth.js create() ничего не
+    // передаёт), бэкфилл NULL→NOW() закрывает старые строки.
+    await sequelize.query(`
+      ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
+    `);
+    await sequelize.query(`UPDATE users SET created_at = NOW() WHERE created_at IS NULL;`);
+    await sequelize.query(`ALTER TABLE users ALTER COLUMN created_at SET NOT NULL;`);
+
     // Stage 2 ВКР: аукционы. Источник истины — migrations/013_auction_system.sql.
     // sync() не добавляет колонки в существующие таблицы и не умеет partial-индексы,
     // поэтому ALTER + CREATE INDEX делаем inline. Всё идемпотентно.

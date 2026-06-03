@@ -171,7 +171,9 @@ module.exports = function createAuthRouter({
           rating: 4.5,
           purchases: 0,
           cashback: 0,
-          joinDate: 'сегодня',
+          joinDate: newUser.createdAt
+            ? newUser.createdAt.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
+            : null,
         },
         emailSent: mailConfigured,
         // В dev возвращаем токен, чтобы админ мог скопировать, если почта не настроена.

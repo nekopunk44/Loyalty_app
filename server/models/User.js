@@ -95,6 +95,16 @@ const User = sequelize.define('User', {
     allowNull: true,
     comment: 'Момент подписания правил дома.',
   },
+  // Дата регистрации пользователя. timestamps:false отключает автоуправление
+  // Sequelize, но колонку держим явно — нужна для отображения «Участник с …»
+  // в админ-панели и в профиле. На уровне БД дефолт NOW() гарантирует, что
+  // новые строки получат корректную метку времени даже без явной передачи.
+  createdAt: {
+    type: DataTypes.DATE,
+    field: 'created_at',
+    allowNull: false,
+    defaultValue: DataTypes.NOW,
+  },
 }, {
   timestamps: false,
   tableName: 'users',
