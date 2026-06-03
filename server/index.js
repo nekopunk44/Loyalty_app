@@ -490,6 +490,15 @@ const connectDB = async () => {
         ON transactions ("userId", "createdAt" DESC);
     `);
 
+    // ВКР: Google Play purchaseToken — opaque base64 600–1000 символов,
+    // не помещается в VARCHAR(255). Источник — migrations/017_widen_topup_id_columns.sql.
+    await sequelize.query(`
+      ALTER TABLE card_topups
+        ALTER COLUMN transaction_id       TYPE TEXT,
+        ALTER COLUMN provider_session_id  TYPE TEXT,
+        ALTER COLUMN provider_payment_id  TYPE TEXT;
+    `);
+
     logger.info('Миграции схемы применены');
 
     // Идемпотентный sync номеров под клиентский src/constants/properties.js.
