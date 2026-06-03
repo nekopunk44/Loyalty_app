@@ -553,6 +553,7 @@ app.use('/api/properties',    require('./routes/properties')({ isDbConnected: ()
 app.use('/api/loyalty-card',  require('./routes/loyalty')({ isDbConnected: () => dbConnected }));
 app.use('/api/card',          require('./routes/card')({ isDbConnected: () => dbConnected }));
 app.use('/api/payments/stripe', require('./routes/stripe')({ isDbConnected: () => dbConnected }));
+app.use('/api/payments/google-play', require('./routes/googlePlay')({ isDbConnected: () => dbConnected }));
 app.use('/api/admin',         require('./routes/admin')({ isDbConnected: () => dbConnected }));
 
 /**

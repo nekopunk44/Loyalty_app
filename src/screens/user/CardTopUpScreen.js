@@ -19,6 +19,7 @@ import { useAuth } from '../../context/AuthContext';
 import { usePayment } from '../../context/PaymentContext';
 import { useNotification } from '../../context/NotificationContext';
 import { useTheme } from '../../context/ThemeContext';
+import { isGooglePlayAvailable, prbToSku } from '../../services/googlePlayIAP';
 
 const useNative = Platform.OS !== 'web';
 
@@ -26,6 +27,8 @@ const ACCENT  = '#FF6B35';
 const ACCENT2 = '#FF8C5A';
 
 const PRESET_AMOUNTS = [500, 1000, 3000, 5000, 10000, 25000];
+
+const GOOGLE_PLAY_PRESETS = [500, 1000, 3000, 5000, 10000, 25000];
 
 const PAYMENT_METHODS = [
   {
@@ -38,45 +41,15 @@ const PAYMENT_METHODS = [
     tagColor: '#635BFF',
   },
   {
-    id:    'paypal',
-    label: 'PayPal',
-    sub:   'Быстрая оплата через PayPal',
-    icon:  'language',
-    color: '#009CDE',
-    tag:   'PayPal',
-    tagColor: '#003087',
-  },
-  {
-    id:    'agrprom',
-    label: 'Агропромбанк',
-    sub:   'Банковский перевод',
-    icon:  'account-balance',
-    color: '#10B981',
-    tag:   'Перевод',
-    tagColor: '#065F46',
-    bankDetails: {
-      bank:    'Агропромбанк',
-      iban:    'TJ02 0340 0000 0000 0000 0000',
-      bic:     'AGROTJDT',
-      account: '20206840300000000001',
-      name:    'ООО «Вилла Джаконда»',
-    },
-  },
-  {
-    id:    'eximbank',
-    label: 'Эксимбанк',
-    sub:   'Банковский перевод',
-    icon:  'account-balance',
-    color: '#8B5CF6',
-    tag:   'Перевод',
-    tagColor: '#4C1D95',
-    bankDetails: {
-      bank:    'Эксимбанк Таджикистана',
-      iban:    'TJ02 0500 0000 0000 0000 0000',
-      bic:     'EXIBTJDT',
-      account: '20206840500000000001',
-      name:    'ООО «Вилла Джаконда»',
-    },
+    id:    'google_play',
+    label: 'Google Play',
+    sub:   'Через привязанные к Google способы оплаты',
+    icon:  'shop',
+    color: '#34A853',
+    tag:   'Play',
+    tagColor: '#1A73E8',
+    androidOnly: true,
+    presetsOnly: true,
   },
 ];
 
@@ -91,9 +64,21 @@ const PRB_RATES = {
 export default function CardTopUpScreen({ navigation, onClose }) {
   const isSheet = !!onClose;
   const { user } = useAuth();
-  const { topUpCard, topUpCardStripe, getCardBalance, isProcessing, paymentError } = usePayment();
+  const {
+    topUpCardStripe,
+    topUpCardGooglePlay,
+    getCardBalance,
+    isProcessing,
+    paymentError,
+  } = usePayment();
   const { notifyTopup } = useNotification();
   const { isDark, theme } = useTheme();
+
+  const googlePlaySupported = Platform.OS === 'android' && isGooglePlayAvailable();
+  const availableMethods = useMemo(
+    () => PAYMENT_METHODS.filter(m => (m.androidOnly ? googlePlaySupported : true)),
+    [googlePlaySupported],
+  );
 
   const {
     background: bg,
@@ -109,7 +94,6 @@ export default function CardTopUpScreen({ navigation, onClose }) {
   );
 
   const confirmHeaderGrad = isDark ? ['#1A0A3C', '#0D1628'] : ['#FFF7F0', '#FFECD6'];
-  const bankHeaderGrad    = isDark ? ['#052e16', '#0D1628'] : ['#F0FDF4', '#ECFDF5'];
 
   const [balance, setBalance]         = useState(0);
   const [loading, setLoading]         = useState(true);
@@ -118,7 +102,6 @@ export default function CardTopUpScreen({ navigation, onClose }) {
   const [currency, setCurrency]       = useState('RUB');
   const [showMethodPicker, setShowMethodPicker] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [showBankDetails, setShowBankDetails]   = useState(false);
 
   const headerAnim  = useRef(new Animated.Value(0)).current;
   const balanceAnim = useRef(new Animated.Value(0)).current;
@@ -168,11 +151,12 @@ export default function CardTopUpScreen({ navigation, onClose }) {
     transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) }],
   });
 
-  const currentMethod  = PAYMENT_METHODS.find(m => m.id === selectedMethod) || PAYMENT_METHODS[0];
+  const currentMethod  = availableMethods.find(m => m.id === selectedMethod) || availableMethods[0];
   const parsedAmount   = parseFloat(topUpAmount) || 0;
-  const amountValid    = parsedAmount > 0 && parsedAmount <= 1000000;
-  const isBankTransfer = currentMethod.bankDetails != null;
-  const isOnlineGateway = selectedMethod === 'card' || selectedMethod === 'paypal';
+  const isGooglePlay   = currentMethod.id === 'google_play';
+  const presetMatch    = isGooglePlay ? GOOGLE_PLAY_PRESETS.includes(parsedAmount) : true;
+  const amountValid    = parsedAmount > 0 && parsedAmount <= 1000000 && presetMatch;
+  const isOnlineGateway = selectedMethod === 'card';
 
   // Конвертация PRB → внешняя валюта (для превью; авторитет — сервер)
   const providerAmount = parsedAmount > 0
@@ -182,13 +166,38 @@ export default function CardTopUpScreen({ navigation, onClose }) {
 
   const handleContinue = () => {
     if (!amountValid) return;
-    if (isBankTransfer) { setShowBankDetails(true); return; }
     setShowConfirmModal(true);
   };
 
   const handleTopUp = async () => {
     setShowConfirmModal(false);
     try {
+      if (selectedMethod === 'google_play') {
+        const sku = prbToSku(parsedAmount);
+        if (!sku) {
+          Alert.alert(
+            'Сумма не поддерживается',
+            'Через Google Play доступны только фиксированные суммы: ' +
+            GOOGLE_PLAY_PRESETS.map(a => `${a} PRB`).join(', '),
+          );
+          return;
+        }
+        const result = await topUpCardGooglePlay(user.id, sku);
+        if (result?.success) {
+          notifyTopup?.(parsedAmount, 'Google Play');
+          Alert.alert(
+            'Готово',
+            `Баланс пополнен на ${parsedAmount.toLocaleString('ru-RU')} PRB`,
+            [{ text: 'OK', onPress: () => { setTopUpAmount(''); loadBalance(); } }],
+          );
+        } else if (result?.status === 'cancelled') {
+          // Пользователь отменил покупку в Google Play — молча
+        } else {
+          Alert.alert('Ошибка', 'Не удалось завершить покупку через Google Play');
+        }
+        return;
+      }
+
       if (selectedMethod === 'card') {
         const result = await topUpCardStripe(user.id, parsedAmount, currency);
         if (result?.success) {
@@ -209,15 +218,7 @@ export default function CardTopUpScreen({ navigation, onClose }) {
             [{ text: 'OK', onPress: () => loadBalance() }],
           );
         }
-        return;
       }
-
-      // PayPal и банковские переводы — старый flow (демо/manual)
-      await topUpCard(user.id, parsedAmount, selectedMethod);
-      notifyTopup?.(parsedAmount, selectedMethod === 'paypal' ? 'PayPal' : 'банковский перевод');
-      Alert.alert('Готово', `Баланс пополнен на ${parsedAmount.toLocaleString('ru-RU')} PRB`, [
-        { text: 'OK', onPress: () => { setTopUpAmount(''); loadBalance(); } },
-      ]);
     } catch (e) {
       Alert.alert('Ошибка', e.message || 'Не удалось пополнить счёт');
     }
@@ -376,22 +377,22 @@ export default function CardTopUpScreen({ navigation, onClose }) {
             <MaterialIcons name="chevron-right" size={22} color={textSec} style={{ marginLeft: 4 }} />
           </TouchableOpacity>
 
-          {isBankTransfer && (
-            <View style={styles.noticeRow}>
-              <MaterialIcons name="info-outline" size={14} color="#F59E0B" />
-              <Text style={styles.noticeText}>Зачисление в течение 1–2 рабочих дней</Text>
-            </View>
-          )}
-
           <View style={styles.secureRow}>
             <MaterialIcons name="lock" size={12} color={textSec} />
             <Text style={styles.secureText}>
-              {selectedMethod === 'card'    && 'Платёж через Stripe — данные карты не хранятся'}
-              {selectedMethod === 'paypal'  && 'Официальный шлюз PayPal'}
-              {selectedMethod === 'agrprom' && 'Реквизиты Агропромбанка откроются после нажатия кнопки'}
-              {selectedMethod === 'eximbank'&& 'Реквизиты Эксимбанка откроются после нажатия кнопки'}
+              {selectedMethod === 'card'        && 'Платёж через Stripe — данные карты не хранятся'}
+              {selectedMethod === 'google_play' && 'Оплата через Google Play — без ввода данных карты'}
             </Text>
           </View>
+
+          {isGooglePlay && !presetMatch && parsedAmount > 0 && (
+            <View style={styles.noticeRow}>
+              <MaterialIcons name="info-outline" size={14} color="#F59E0B" />
+              <Text style={styles.noticeText}>
+                Через Google Play доступны только: {GOOGLE_PLAY_PRESETS.join(', ')} PRB
+              </Text>
+            </View>
+          )}
 
           {!!paymentError && (
             <View style={styles.errorRow}>
@@ -420,17 +421,12 @@ export default function CardTopUpScreen({ navigation, onClose }) {
             <ActivityIndicator size="small" color="#fff" />
           ) : (
             <>
-              <MaterialIcons
-                name={isBankTransfer ? 'receipt-long' : 'add'}
-                size={20}
-                color="#fff"
-                style={{ marginRight: 8 }}
-              />
+              <MaterialIcons name="add" size={20} color="#fff" style={{ marginRight: 8 }} />
               <Text style={styles.payBtnText}>
                 {!amountValid
                   ? 'Введите сумму'
-                  : isBankTransfer
-                    ? `Получить реквизиты — ${parsedAmount.toLocaleString('ru-RU')} PRB`
+                  : isGooglePlay
+                    ? `Оплатить ${parsedAmount.toLocaleString('ru-RU')} PRB через Google Play`
                     : `Оплатить ${providerAmount.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ${currencySymbol}`
                 }
               </Text>
@@ -448,7 +444,7 @@ export default function CardTopUpScreen({ navigation, onClose }) {
           }]}>
             <View style={styles.sheetHandle} />
             <Text style={styles.sheetTitle}>Способ оплаты</Text>
-            {PAYMENT_METHODS.map(m => (
+            {availableMethods.map(m => (
               <TouchableOpacity
                 key={m.id}
                 style={[styles.sheetMethod, selectedMethod === m.id && styles.sheetMethodActive]}
@@ -474,56 +470,13 @@ export default function CardTopUpScreen({ navigation, onClose }) {
         </Animated.View>
       </Modal>
 
-      {/* ── BANK DETAILS MODAL ── */}
-      <Modal visible={showBankDetails} transparent animationType="fade" onRequestClose={() => setShowBankDetails(false)}>
-        <View style={styles.confirmOverlay}>
-          <View style={styles.confirmCard}>
-            <GradientView colors={bankHeaderGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.confirmHeader}>
-              <View style={[styles.confirmIconWrap, { backgroundColor: `${currentMethod.color}20`, borderColor: `${currentMethod.color}40` }]}>
-                <MaterialIcons name="account-balance" size={28} color={currentMethod.color} />
-              </View>
-              <Text style={styles.confirmTitle}>Реквизиты для перевода</Text>
-              <Text style={styles.confirmSubtitle}>{parsedAmount.toLocaleString('ru-RU')} PRB</Text>
-            </GradientView>
-            <View style={styles.confirmBody}>
-              {currentMethod.bankDetails && Object.entries({
-                'Банк':       currentMethod.bankDetails.bank,
-                'Название':   currentMethod.bankDetails.name,
-                'IBAN':       currentMethod.bankDetails.iban,
-                'БИК':        currentMethod.bankDetails.bic,
-                'Счёт':       currentMethod.bankDetails.account,
-                'Назначение': `Пополнение карты лояльности ID ${user?.id}`,
-              }).map(([label, value], i, arr) => (
-                <View key={label} style={[styles.confirmRow, i === arr.length - 1 && { borderBottomWidth: 0 }]}>
-                  <Text style={styles.confirmLabel}>{label}</Text>
-                  <Text style={[styles.confirmValue, { flex: 1, textAlign: 'right', fontSize: 13 }]}>{value}</Text>
-                </View>
-              ))}
-              <View style={styles.bankNotice}>
-                <MaterialIcons name="info-outline" size={14} color="#F59E0B" />
-                <Text style={styles.bankNoticeText}>После перевода отправьте скриншот чека администратору</Text>
-              </View>
-            </View>
-            <View style={styles.confirmBtns}>
-              <TouchableOpacity style={styles.confirmPay} onPress={() => { setShowBankDetails(false); setTopUpAmount(''); }} activeOpacity={0.85}>
-                <GradientView colors={[currentMethod.color, currentMethod.color + 'CC']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
-                <Text style={styles.confirmPayText}>Понятно</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.confirmCancel} onPress={() => setShowBankDetails(false)}>
-                <Text style={styles.confirmCancelText}>Назад</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
       {/* ── CONFIRM MODAL ── */}
       <Modal visible={showConfirmModal} transparent animationType="fade" onRequestClose={() => setShowConfirmModal(false)}>
         <View style={styles.confirmOverlay}>
           <View style={styles.confirmCard}>
             <GradientView colors={confirmHeaderGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.confirmHeader}>
               <View style={styles.confirmIconWrap}>
-                <MaterialIcons name={selectedMethod === 'paypal' ? 'language' : 'credit-card'} size={28} color={currentMethod.color} />
+                <MaterialIcons name={currentMethod.icon || 'credit-card'} size={28} color={currentMethod.color} />
               </View>
               <Text style={styles.confirmTitle}>Подтверждение</Text>
               <Text style={styles.confirmSubtitle}>{parsedAmount.toLocaleString('ru-RU')} PRB</Text>
@@ -751,8 +704,5 @@ function makeStyles({ bg, cardBg, line, textPri, textSec, isDark }) {
     confirmPayText:  { fontSize: 16, fontWeight: '700', color: '#fff' },
     confirmCancel:   { height: 44, justifyContent: 'center', alignItems: 'center' },
     confirmCancelText: { fontSize: 15, color: textSec },
-
-    bankNotice:     { flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginTop: spacing.md, padding: spacing.md, backgroundColor: 'rgba(245,158,11,0.08)', borderRadius: 10 },
-    bankNoticeText: { fontSize: 12, color: '#F59E0B', flex: 1, lineHeight: 17 },
   });
 }

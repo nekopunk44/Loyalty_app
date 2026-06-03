@@ -3,6 +3,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as WebBrowser from 'expo-web-browser';
 import { apiCall } from '../utils/api';
 import { getApiUrl } from '../utils/apiUrl';
+import {
+  isGooglePlayAvailable,
+  initIAP,
+  attachPurchaseListeners,
+  requestPurchase,
+  finishPurchase,
+} from '../services/googlePlayIAP';
 
 const PaymentContext = createContext();
 
@@ -167,6 +174,113 @@ export const PaymentProvider = ({ children }) => {
     }
   };
 
+  /**
+   * Пополнение через Google Play Billing (Android-only).
+   *
+   * Поток:
+   *   1. initIAP() — поднимаем подключение к Play Billing.
+   *   2. Подписываемся на purchaseUpdated/Error.
+   *   3. requestPurchase(productId) — открывается нативный диалог Google Play.
+   *   4. На событии purchase шлём purchaseToken на /payments/google-play/verify.
+   *   5. Сервер валидирует через Google, зачисляет PRB, делает acknowledge.
+   *   6. finishTransaction({ isConsumable: true }) — товар можно купить снова.
+   *
+   * @param {string|number} userId
+   * @param {string} productId  SKU вида 'prb_topup_1000'
+   * @returns {Promise<{ success: boolean, status: 'paid'|'cancelled'|'failed', newBalance?: number }>}
+   */
+  const topUpCardGooglePlay = async (userId, productId) => {
+    if (!isGooglePlayAvailable()) {
+      const err = new Error('Google Play Billing недоступен на этом устройстве');
+      setPaymentError(err.message);
+      throw err;
+    }
+
+    setIsProcessing(true);
+    setPaymentError('');
+
+    let unsubscribe = () => {};
+
+    try {
+      await initIAP();
+
+      // Promise, который резолвится по событию purchaseUpdated или purchaseError
+      const purchaseResult = new Promise((resolve, reject) => {
+        unsubscribe = attachPurchaseListeners(
+          (purchase) => {
+            if (purchase?.productId === productId) resolve(purchase);
+          },
+          (error) => {
+            // E_USER_CANCELLED — пользователь закрыл диалог Google Play
+            if (error?.code === 'E_USER_CANCELLED') {
+              reject(Object.assign(new Error('cancelled'), { code: 'E_USER_CANCELLED' }));
+            } else {
+              reject(error);
+            }
+          },
+        );
+      });
+
+      await requestPurchase(productId);
+      const purchase = await purchaseResult;
+
+      // Серверная валидация и зачисление PRB
+      const verify = await apiCall(`${getApiUrl()}/payments/google-play/verify`, {
+        method: 'POST',
+        body: JSON.stringify({
+          productId,
+          purchaseToken: purchase.purchaseToken,
+          orderId: purchase.transactionId || purchase.orderId,
+        }),
+      });
+
+      if (verify.error || !verify.success) {
+        throw new Error(verify.error || 'Не удалось подтвердить покупку');
+      }
+
+      // Consume — иначе SKU нельзя купить повторно
+      await finishPurchase(purchase);
+
+      if (typeof verify.newBalance === 'number') {
+        setCardBalance(verify.newBalance);
+      }
+
+      if (!verify.duplicate) {
+        const topupRecord = {
+          id: `gp_${verify.topupId}`,
+          userId,
+          amount: verify.amountPRB,
+          paymentMethod: 'google_play',
+          provider: 'google_play',
+          status: 'completed',
+          timestamp: new Date().toISOString(),
+          providerSessionId: purchase.purchaseToken,
+        };
+        const updated = [topupRecord, ...payments];
+        setPayments(updated);
+        await AsyncStorage.setItem('@payments', JSON.stringify(updated));
+      }
+
+      return {
+        success: true,
+        status: 'paid',
+        newBalance: verify.newBalance,
+        amountPRB: verify.amountPRB,
+        duplicate: verify.duplicate,
+      };
+    } catch (error) {
+      if (error?.code === 'E_USER_CANCELLED') {
+        return { success: false, status: 'cancelled' };
+      }
+      setPaymentError(error.message || 'Ошибка при оплате через Google Play');
+      console.error('Google Play topup error:', error);
+      throw error;
+    } finally {
+      unsubscribe();
+      setIsProcessing(false);
+    }
+  };
+
   const getCardBalance = async (userId) => {
     try {
       const data = await apiCall(`${getApiUrl()}/card/balance/${userId}`);
@@ -293,10 +407,6 @@ export const PaymentProvider = ({ children }) => {
     }
   };
 
-  const processPayPalPayment = async (amount, bookingId, description) => {
-    return processPayment({ amount, method: 'paypal', bookingId, description });
-  };
-
   const processVisaPayment = async (cardToken, amount, bookingId, description) => {
     return processPayment({ amount, method: 'visa', bookingId, description, cardToken });
   };
@@ -320,6 +430,7 @@ export const PaymentProvider = ({ children }) => {
       setCardBalance,
       topUpCard,
       topUpCardStripe,
+      topUpCardGooglePlay,
       getCardBalance,
       getTransactionHistory,
       getTopUpHistory,
@@ -327,7 +438,6 @@ export const PaymentProvider = ({ children }) => {
       payRemaining,
       getBookingPaymentStatus,
       processPayment,
-      processPayPalPayment,
       processVisaPayment,
       processCryptoPayment,
       getPaymentStatus,
