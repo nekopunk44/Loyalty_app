@@ -16,13 +16,20 @@ const PHOTO_HEIGHT = 214;
 const getPhotoSource = (photo) => (typeof photo === 'string' ? { uri: photo } : photo);
 const getVisibleAmenities = (amenities = []) => amenities.slice(0, 4);
 
-export default function PropertyCard({ item, onSelect }) {
+export default function PropertyCard({
+  item,
+  onSelect,
+  actionLabel = 'Выбрать даты',
+  actionIcon = 'date-range',
+  statusBadge = null,
+}) {
   const { theme } = useTheme();
   const colors = theme.colors;
   const styles = makeStyles(colors);
 
-  const visibleAmenities = getVisibleAmenities(item.amenities);
-  const hiddenCount = Math.max(0, item.amenities.length - visibleAmenities.length);
+  const amenities = Array.isArray(item.amenities) ? item.amenities : [];
+  const visibleAmenities = getVisibleAmenities(amenities);
+  const hiddenCount = Math.max(0, amenities.length - visibleAmenities.length);
 
   return (
     <View>
@@ -50,6 +57,12 @@ export default function PropertyCard({ item, onSelect }) {
                 />
               ))}
             </HorizontalScrollView>
+            {statusBadge && (
+              <View style={[styles.statusBadge, { backgroundColor: `${statusBadge.color}EE` }]}>
+                <View style={[styles.statusDot, { backgroundColor: '#fff' }]} />
+                <Text style={styles.statusBadgeText}>{statusBadge.label}</Text>
+              </View>
+            )}
           </View>
         )}
 
@@ -94,8 +107,8 @@ export default function PropertyCard({ item, onSelect }) {
           </ScrollView>
 
           <TouchableOpacity style={styles.button} onPress={() => onSelect(item)}>
-            <MaterialIcons name="date-range" size={18} color="#fff" />
-            <Text style={styles.buttonText}>Выбрать даты</Text>
+            <MaterialIcons name={actionIcon} size={18} color="#fff" />
+            <Text style={styles.buttonText}>{actionLabel}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -125,4 +138,8 @@ const makeStyles = (colors) => StyleSheet.create({
   badgeMoreText:   { color: TEAL },
   button:          { backgroundColor: NAVY, paddingVertical: 14, borderRadius: 14, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: spacing.sm, shadowColor: NAVY, shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.22, shadowRadius: 9, elevation: 5 },
   buttonText:      { color: '#fff', fontSize: 14, fontWeight: '800' },
+
+  statusBadge:     { position: 'absolute', top: 12, left: 12, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
+  statusDot:       { width: 6, height: 6, borderRadius: 3 },
+  statusBadgeText: { color: '#fff', fontSize: 11, fontWeight: '800', letterSpacing: 0.3 },
 });
