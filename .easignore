@@ -58,3 +58,26 @@ _doklad.txt
 _otchet_draft.txt
 _vkr_metodichka.txt
 *.draft.md
+
+# Отдельные деплои (мобилке для билда не нужны)
+server/
+web/
+
+# Python venv'ы (ML-сервис)
+.venv/
+.venv-*/
+
+# Git и CI
+.git/
+.github/
+
+# Тесты и анализ
+__tests__/
+*.test.js
+*.spec.js
+coverage/
+detailed_formatting_analysis.py
+
+# Прочее
+docker-compose.yml
+railway.json
