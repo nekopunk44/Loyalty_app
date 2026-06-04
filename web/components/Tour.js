@@ -18,7 +18,7 @@ export default function Tour() {
         ))}
       </div>
 
-      <div style={{ position: 'relative', zIndex: 2, maxWidth: 1440, margin: '0 auto', padding: '160px clamp(20px,4vw,60px)', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+      <div style={{ position: 'relative', zIndex: 2, maxWidth: 1440, margin: '0 auto', padding: 'clamp(96px,16vh,160px) clamp(20px,4vw,60px) clamp(120px,18vh,180px)', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', width: '100%' }}>
         <p style={{ fontSize: 10, letterSpacing: '0.32em', textTransform: 'uppercase', color: 'var(--r-gold)', fontWeight: 500, marginBottom: 24 }}>
           — Виртуальный тур
         </p>
@@ -52,10 +52,10 @@ export default function Tour() {
           </div>
         )}
 
-        <div style={{ position: 'absolute', bottom: 60, left: '50%', transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: 20, color: 'rgba(247,242,232,0.3)' }}>
-          <span style={{ width: 60, height: 1, background: 'currentColor' }} />
+        <div style={{ position: 'absolute', bottom: 'clamp(28px,5vh,60px)', left: '50%', transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: 'clamp(10px,3vw,20px)', color: 'rgba(247,242,232,0.3)', maxWidth: 'calc(100% - 40px)', justifyContent: 'center' }}>
+          <span style={{ flex: '0 1 60px', height: 1, background: 'currentColor', minWidth: 24 }} />
           <span style={{ fontSize: 10, letterSpacing: '0.3em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>360° · 8 rooms · 2 floors</span>
-          <span style={{ width: 60, height: 1, background: 'currentColor' }} />
+          <span style={{ flex: '0 1 60px', height: 1, background: 'currentColor', minWidth: 24 }} />
         </div>
       </div>
     </section>
