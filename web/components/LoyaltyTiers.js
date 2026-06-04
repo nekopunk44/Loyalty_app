@@ -57,6 +57,7 @@ export default function LoyaltyApp() {
             transform: none !important;
             gap: 28px !important;
           }
+          .loyalty-downloads { display: none !important; }
         }
       `}</style>
 
@@ -293,8 +294,9 @@ export default function LoyaltyApp() {
                 </div>
               </div>
 
-              {/* Download buttons — справа от телефона */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {/* Download buttons — справа от телефона. На мобильном скрыты,
+                  ссылки на скачивание перенесены в бургер-меню навбара. */}
+              <div className="loyalty-downloads" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
 
                 <a href="#" style={{
                   display: 'flex', alignItems: 'center', gap: 12, padding: '11px 16px',
