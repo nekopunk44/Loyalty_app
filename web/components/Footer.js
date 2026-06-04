@@ -1,4 +1,5 @@
 'use client';
+import Link from 'next/link';
 import Icon from './ui/Icon';
 import VJMonogram from './VJMonogram';
 
@@ -84,8 +85,23 @@ export default function Footer() {
         </div>
 
         {/* Bottom bar */}
-        <div style={{ borderTop: '1px solid rgba(247,242,232,0.07)', paddingTop: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+        <div style={{ borderTop: '1px solid rgba(247,242,232,0.07)', paddingTop: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
           <p style={{ margin: 0, fontSize: 11, color: 'rgba(247,242,232,0.2)', letterSpacing: '0.05em' }}>© {year} Villa Jaconda · Все права защищены</p>
+
+          <nav style={{ display: 'flex', alignItems: 'center', gap: 14, fontSize: 11, letterSpacing: '0.05em' }}>
+            <Link href="/terms" style={{ color: 'rgba(247,242,232,0.35)', textDecoration: 'none', transition: 'color 0.25s ease' }}
+              onMouseEnter={e => e.currentTarget.style.color = 'var(--r-gold)'}
+              onMouseLeave={e => e.currentTarget.style.color = 'rgba(247,242,232,0.35)'}>
+              Условия использования
+            </Link>
+            <span style={{ color: 'rgba(247,242,232,0.15)' }}>·</span>
+            <Link href="/privacy" style={{ color: 'rgba(247,242,232,0.35)', textDecoration: 'none', transition: 'color 0.25s ease' }}
+              onMouseEnter={e => e.currentTarget.style.color = 'var(--r-gold)'}
+              onMouseLeave={e => e.currentTarget.style.color = 'rgba(247,242,232,0.35)'}>
+              Конфиденциальность
+            </Link>
+          </nav>
+
           <p style={{ margin: 0, fontSize: 11, color: 'rgba(247,242,232,0.2)', letterSpacing: '0.05em' }}>Слободзея, Приднестровье</p>
         </div>
 
