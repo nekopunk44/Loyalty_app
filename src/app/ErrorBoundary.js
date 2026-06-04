@@ -26,7 +26,6 @@ export default class ErrorBoundary extends React.Component {
     if (!this.state.hasError) return this.props.children;
 
     const { error } = this.state;
-    const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
 
     return (
       <View style={styles.container}>
@@ -36,9 +35,14 @@ export default class ErrorBoundary extends React.Component {
           Произошла непредвиденная ошибка. Попробуйте перезапустить экран.
         </Text>
 
-        {isDev && error && (
+        {error && (
           <ScrollView style={styles.devBox} contentContainerStyle={styles.devBoxContent}>
             <Text style={styles.devText}>{error.toString()}</Text>
+            {error.stack && (
+              <Text style={[styles.devText, { marginTop: 8, fontSize: 10 }]}>
+                {String(error.stack).split('\n').slice(0, 8).join('\n')}
+              </Text>
+            )}
           </ScrollView>
         )}
 
@@ -75,7 +79,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   devBox: {
-    maxHeight: 160,
+    maxHeight: 280,
     width: '100%',
     backgroundColor: '#FFF5F5',
     borderRadius: 8,
