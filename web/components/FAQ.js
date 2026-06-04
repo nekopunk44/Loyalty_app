@@ -38,6 +38,9 @@ export default function FAQ() {
           .faq-grid { grid-template-columns: 1fr !important; }
           .faq-sticky { position: relative !important; top: 0 !important; }
         }
+        @media (max-width: 720px) {
+          .faq-cats, .faq-cta { display: none !important; }
+        }
       `}</style>
 
       {/* Декоративные элементы */}
@@ -91,7 +94,7 @@ export default function FAQ() {
             </p>
 
             {/* Фильтры по категориям */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 0, marginBottom: 20, borderTop: '1px solid rgba(212,164,94,0.15)' }}>
+            <div className="faq-cats" style={{ display: 'flex', flexDirection: 'column', gap: 0, marginBottom: 20, borderTop: '1px solid rgba(212,164,94,0.15)' }}>
               {CATS.map(c => {
                 const isAct = cat === c.id;
                 return (
@@ -124,6 +127,7 @@ export default function FAQ() {
             </div>
 
             <a href={INSTAGRAM_URL} target="_blank" rel="noopener noreferrer"
+              className="faq-cta"
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 10,
                 padding: '14px 26px',
