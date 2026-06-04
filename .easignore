@@ -13,9 +13,7 @@ coverage/
 *.cache
 .parcel-cache/
 
-# Dependencies lock files (optional, but helpful)
-yarn.lock
-package-lock.json
+# Lock-файлы НЕ исключаем — EAS требует package-lock.json для воспроизводимой установки
 
 # IDEs
 .vscode/
