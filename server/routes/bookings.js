@@ -378,10 +378,24 @@ module.exports = function createBookingsRouter({ isDbConnected }) {
       if (!isDbConnected()) {
         return res.status(503).json({ success: false, error: 'PostgreSQL не подключена' });
       }
-      const bookings = await Booking.findAll({
+      const rawBookings = await Booking.findAll({
         where: { userId },
         attributes: BOOKING_ATTRIBUTES,
       });
+
+      // Подтягиваем актуальные имена номеров — каталог /api/properties отдаёт
+      // только status='available', а в истории встречаются и снятые с продажи.
+      const propIds = [...new Set(rawBookings.map(b => b.propertyId).filter(Boolean))];
+      const properties = propIds.length
+        ? await Property.findAll({ where: { id: { [Op.in]: propIds } }, attributes: ['id', 'name'] })
+        : [];
+      const propMap = Object.fromEntries(properties.map(p => [String(p.id), p.name]));
+
+      const bookings = rawBookings.map(b => ({
+        ...b.toJSON(),
+        propertyName: propMap[String(b.propertyId)] || null,
+      }));
+
       return res.status(200).json({ success: true, userId, bookings, count: bookings.length });
     } catch (error) {
       logger.error('user bookings error', { error: error.message });
