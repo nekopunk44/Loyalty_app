@@ -4,7 +4,7 @@
  *   POST /verify  — валидация покупки в Google Play и зачисление PRB.
  *
  * Поток (Android-only):
- *   1. Клиент через react-native-iap покупает SKU вида 'prb_topup_1000'.
+ *   1. Клиент через expo-iap покупает SKU вида 'prb_topup_1000'.
  *   2. Google возвращает клиенту { productId, purchaseToken, transactionId }.
  *   3. Клиент → POST /verify { productId, purchaseToken, orderId }.
  *   4. Сервер:

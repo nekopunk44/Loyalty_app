@@ -2,7 +2,7 @@
  * Клиент Google Play Developer API для верификации In-App Purchase'ов.
  *
  * Поток:
- *   1. Мобильный клиент через react-native-iap покупает SKU (consumable).
+ *   1. Мобильный клиент через expo-iap покупает SKU (consumable).
  *   2. Google возвращает { productId, purchaseToken, transactionId } клиенту.
  *   3. Клиент шлёт это на наш endpoint POST /api/payments/google-play/verify.
  *   4. Сервер вызывает Google Play API `purchases.products.get` для проверки,
