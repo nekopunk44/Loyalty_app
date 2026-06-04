@@ -530,6 +530,34 @@ const connectDB = async () => {
         ALTER COLUMN price TYPE TEXT;
     `);
 
+    // Пересчёт loyalty_cards."totalEarned" из журнала transactions.
+    // Раньше топ-апы инфлировали поле — теперь увеличивает только cashback за
+    // бронирование (routes/bookings.js). Источник — migrations/019_recompute_total_earned.sql.
+    // Идемпотентно: сходится с журналом на каждом старте.
+    await sequelize.query(`
+      UPDATE loyalty_cards lc
+      SET "totalEarned" = stats.earned
+      FROM (
+        SELECT
+          lc2."userId" AS user_id,
+          COALESCE(SUM(
+            CASE
+              WHEN t.type = 'credit' AND t.category = 'cashback' THEN t.amount
+              WHEN t.type = 'debit'  AND t.category = 'refund'
+                   AND t.metadata->>'source' = 'cashback_revert' THEN -t.amount
+              ELSE 0
+            END
+          ), 0) AS earned
+        FROM loyalty_cards lc2
+        LEFT JOIN transactions t
+          ON t."userId" = lc2."userId"
+         AND (t.category = 'cashback'
+              OR (t.category = 'refund' AND t.metadata->>'source' = 'cashback_revert'))
+        GROUP BY lc2."userId"
+      ) stats
+      WHERE lc."userId" = stats.user_id;
+    `);
+
     logger.info('Миграции схемы применены');
 
     // Идемпотентный sync 4 базовых номеров. Фото копируются разово в
