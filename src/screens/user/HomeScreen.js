@@ -14,13 +14,7 @@ import { SkeletonBlock } from '../../components/ui/Skeleton';
 import { apiCall } from '../../utils/api';
 import { getApiUrl } from '../../utils/apiUrl';
 import { getSkyMood, pad, STAR_POSITIONS } from '../../utils/skyMood';
-import { properties as PROPERTY_CATALOG } from '../../constants/properties';
-
-const propertyNameById = (id) => {
-  if (id == null) return null;
-  const found = PROPERTY_CATALOG.find(p => String(p.id) === String(id));
-  return found?.name || null;
-};
+import { PropertyService } from '../../services/PropertyService';
 
 const ORANGE = '#FF6B35';
 const TEAL   = '#14B8A6';
@@ -71,8 +65,15 @@ export default function HomeScreen({ navigation }) {
   const [recentBookings, setRecentBookings]   = useState([]);
   const [refreshing, setRefreshing]           = useState(false);
   const [upcomingEvents, setUpcomingEvents]   = useState([]);
+  const [properties, setProperties]           = useState([]);
   const [isDataLoading, setIsDataLoading]     = useState(true);
   const [now, setNow]                         = useState(() => new Date());
+
+  const propertyNameById = useCallback((id) => {
+    if (id == null) return null;
+    const found = properties.find(p => String(p.id) === String(id));
+    return found?.name || null;
+  }, [properties]);
 
   useEffect(() => { loadData(); }, [user?.id]);
   useFocusEffect(React.useCallback(() => { loadData(); }, [user?.id]));
@@ -110,9 +111,21 @@ export default function HomeScreen({ navigation }) {
     } catch { /* silent */ }
   };
 
+  const loadProperties = async () => {
+    try {
+      const list = await PropertyService.getAllProperties();
+      // PropertyCarousel ожидает source-совместимый image. API отдаёт URL-строку,
+      // оборачиваем в { uri }.
+      setProperties(list.map(p => ({
+        ...p,
+        image: p.image ? { uri: p.image } : null,
+      })));
+    } catch { /* silent */ }
+  };
+
   const loadData = async () => {
     setIsDataLoading(true);
-    await Promise.all([loadBookingCount(), loadEvents()]);
+    await Promise.all([loadBookingCount(), loadEvents(), loadProperties()]);
     setIsDataLoading(false);
   };
 
@@ -135,13 +148,6 @@ export default function HomeScreen({ navigation }) {
   const textPri  = colors.text;
   const textSec  = colors.textSecondary;
   const border   = colors.border;
-
-  const properties = [
-    { id: '1', name: 'Стандарт',         price: '150 PRB/ночь', image: require('../../assets/property1.png') },
-    { id: '2', name: 'Люкс апартаменты', price: '250 PRB/ночь', image: require('../../assets/property2.png') },
-    { id: '3', name: 'Задний двор',      price: '200 PRB/ночь', image: require('../../assets/property3.png') },
-    { id: '4', name: 'Сауна',            price: '250 PRB/час',  image: require('../../assets/property4.png') },
-  ];
 
   const sky = getSkyMood(now);
   const sunSize = 64;

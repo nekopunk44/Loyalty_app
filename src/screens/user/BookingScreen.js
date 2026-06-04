@@ -34,7 +34,7 @@ import HouseRulesGate from '../../components/booking/HouseRulesGate';
 import { RULES_SIGN_KEY } from '../../constants/houseRules';
 import { apiPost, apiGet, apiCall, API_ENDPOINTS } from '../../utils/api';
 import { getApiUrl } from '../../utils/apiUrl';
-import { properties as mockProperties } from '../../constants/properties';
+import { PropertyService } from '../../services/PropertyService';
 
 const NAVY  = '#063B5C';
 const TEAL  = '#14B8A6';
@@ -49,33 +49,28 @@ const GALLERY_PHOTO_HEIGHT = 214;
 const BOOKING_SHEET_HEIGHT = Math.round(SCREEN_HEIGHT * 0.75);
 
 
-// Вспомогательная функция для получения названия свойства по ID
-const getPhotoSource = (photo) => (typeof photo === 'string' ? { uri: photo } : photo);
-
 let bookingPhotosPreloadPromise = null;
 
 export const preloadBookingImages = () => {
   if (bookingPhotosPreloadPromise) return bookingPhotosPreloadPromise;
 
-  const uniqueUris = new Set();
-
-  mockProperties.forEach((property) => {
-    (property.photos || []).forEach((photo) => {
-      const resolved = Image.resolveAssetSource(getPhotoSource(photo));
-      if (resolved?.uri) uniqueUris.add(resolved.uri);
-    });
-  });
-
-  bookingPhotosPreloadPromise = Promise.all(
-    Array.from(uniqueUris).map((uri) => Image.prefetch(uri).catch(() => false))
-  );
+  // После переноса каталога в БД фото — это абсолютные URL из API.
+  // Берём актуальный список и префетчим уникальные URI без блокировки UI.
+  bookingPhotosPreloadPromise = PropertyService.getAllProperties()
+    .then((list) => {
+      const uniqueUris = new Set();
+      list.forEach((property) => {
+        (property.photos || []).forEach((photo) => {
+          if (typeof photo === 'string') uniqueUris.add(photo);
+        });
+      });
+      return Promise.all(
+        Array.from(uniqueUris).map((uri) => Image.prefetch(uri).catch(() => false))
+      );
+    })
+    .catch(() => []);
 
   return bookingPhotosPreloadPromise;
-};
-
-const getPropertyName = (propertyId) => {
-  const property = mockProperties.find(p => p.id === propertyId?.toString());
-  return property?.name || `Номер ${propertyId}`;
 };
 
 // Связанные свойства - синхронизированные календари
@@ -252,7 +247,19 @@ export default function BookingScreen({ navigation }) {
 
   const [bookings, setBookings] = useState([]);
   const [isBookingsLoading, setIsBookingsLoading] = useState(true);
+  const [properties, setProperties] = useState([]);
   const [selectedProperty, setSelectedProperty] = useState(null);
+
+  // Имя номера по ID — нужно для форматирования контекстных бронирований.
+  const getPropertyName = React.useCallback((propertyId) => {
+    const found = properties.find(p => String(p.id) === String(propertyId));
+    return found?.name || `Номер ${propertyId}`;
+  }, [properties]);
+
+  // Грузим каталог один раз при монтировании.
+  React.useEffect(() => {
+    PropertyService.getAllProperties().then(setProperties).catch(() => {});
+  }, []);
   const [bookingModalVisible, setBookingModalVisible] = useState(false);
   const [calendarVisible, setCalendarVisible] = useState(false);
   const [calendarSelectionMode, setCalendarSelectionMode] = useState('checkIn');
@@ -820,7 +827,7 @@ export default function BookingScreen({ navigation }) {
         {activeFilter === 'available' && (
           <Animated.View style={{ opacity: contentAnim }}>
             <FlatList
-              data={mockProperties}
+              data={properties}
               renderItem={renderProperty}
               keyExtractor={(item) => item.id}
               scrollEnabled={false}

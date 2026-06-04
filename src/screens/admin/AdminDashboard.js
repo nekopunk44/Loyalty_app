@@ -19,7 +19,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { apiCall } from '../../utils/api';
 import { getApiUrl } from '../../utils/apiUrl';
-import { properties as PROPERTY_CATALOG } from '../../constants/properties';
+import { PropertyService } from '../../services/PropertyService';
 
 const LEVEL_GRADIENT_TOP = {
   Platinum: '#7B2FF7', Gold: '#CC8800', Silver: '#606060', Bronze: '#7A5030',
@@ -46,12 +46,6 @@ const HERO = {
   inkFaint: '#64748B',
 };
 const HERO_INK_DIM = HERO.inkDim;
-
-const propertyNameById = (id) => {
-  if (id == null) return null;
-  const found = PROPERTY_CATALOG.find(p => String(p.id) === String(id));
-  return found?.name || null;
-};
 
 const getGreeting = () => {
   const h = new Date().getHours();
@@ -100,6 +94,7 @@ export default function AdminDashboard({ navigation }) {
   const [stats,      setStats]      = useState(null);
   const [bookings,   setBookings]   = useState([]);
   const [events,     setEvents]     = useState([]);
+  const [propertyMap, setPropertyMap] = useState({});
   const [churnMeta,  setChurnMeta]  = useState(null); // { counts: {high, medium, low}, scanned, predicted, partial }
   const [loading,    setLoading]    = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -145,17 +140,23 @@ export default function AdminDashboard({ navigation }) {
 
   const load = useCallback(async () => {
     try {
-      const [statsRes, bookingsRes, eventsRes, churnRes] = await Promise.all([
+      const [statsRes, bookingsRes, eventsRes, churnRes, propsRes] = await Promise.all([
         apiCall(`${getApiUrl()}/admin/stats`),
         apiCall(`${getApiUrl()}/bookings`),
         apiCall(`${getApiUrl()}/events`),
         // Только мета — счётчики high/medium/low. Сами имена клиентов нужны лишь на AdminChurnRisk.
         apiCall(`${getApiUrl()}/admin/churn-risk?limit=200&windowDays=90`).catch(() => null),
+        PropertyService.getAllForAdmin().catch(() => []),
       ]);
 
       if (statsRes.success)    setStats(statsRes);
       if (bookingsRes.success) setBookings(bookingsRes.bookings || []);
       if (eventsRes.success)   setEvents(eventsRes.events || []);
+      if (Array.isArray(propsRes)) {
+        const map = {};
+        propsRes.forEach(p => { map[String(p.id)] = p.name; });
+        setPropertyMap(map);
+      }
       // Принимаем и success-ответ, и partial-ответ от 503 (ML offline, но meta всё равно может прийти).
       if (churnRes && (churnRes.success || churnRes.partial)) {
         setChurnMeta({
@@ -317,6 +318,31 @@ export default function AdminDashboard({ navigation }) {
           </View>
         </TouchableOpacity>
 
+        {/* ── Управление номерами ── */}
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={() => navigation.navigate('AdminProperties')}
+          style={[styles.propsCard, {
+            backgroundColor: theme.colors.cardBg,
+            borderColor: theme.colors.border,
+          }]}
+        >
+          <View style={[styles.alertIcon, { backgroundColor: `${NAVY2}18` }]}>
+            <MaterialIcons name="hotel" size={20} color={NAVY2} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.alertTitle, { color: theme.colors.text }]} numberOfLines={1}>
+              Управление номерами
+            </Text>
+            <Text style={[styles.alertSub, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+              {Object.keys(propertyMap).length > 0
+                ? `${Object.keys(propertyMap).length} ${pluralRu(Object.keys(propertyMap).length, 'объект', 'объекта', 'объектов')} в каталоге`
+                : 'Добавить, отредактировать, скрыть'}
+            </Text>
+          </View>
+          <MaterialIcons name="chevron-right" size={20} color={theme.colors.textSecondary} />
+        </TouchableOpacity>
+
         {/* ── Alerts ── */}
         {alerts.length > 0 && (
           <View style={{ marginBottom: spacing.md, gap: spacing.sm }}>
@@ -373,6 +399,7 @@ export default function AdminDashboard({ navigation }) {
                 key={b.id || i}
                 booking={b}
                 theme={theme}
+                propertyMap={propertyMap}
                 last={i === dashboard.recentBookings.length - 1}
               />
             ))
@@ -609,9 +636,12 @@ function ChurnBucket({ count, color, letter, theme }) {
   );
 }
 
-function BookingItem({ booking, theme, last }) {
+function BookingItem({ booking, theme, last, propertyMap }) {
   const meta = STATUS_META[booking.status] || { color: NAVY2, label: booking.status || 'Бронь' };
-  const propertyName = booking.property || propertyNameById(booking.propertyId) || (booking.propertyId ? `Объект #${booking.propertyId}` : 'Объект');
+  const propertyName =
+    booking.property ||
+    (booking.propertyId != null && propertyMap?.[String(booking.propertyId)]) ||
+    (booking.propertyId ? `Объект #${booking.propertyId}` : 'Объект');
   const clientName   = booking.userName || booking.user?.name || booking.guestName || booking.name || 'Гость';
   const amount       = asNumber(booking.totalPrice);
 
@@ -729,6 +759,15 @@ const styles = StyleSheet.create({
   alertIcon: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
   alertTitle: { fontSize: 13, fontWeight: '800' },
   alertSub: { fontSize: 11, marginTop: 2 },
+
+  // Properties quick-action
+  propsCard: {
+    flexDirection: 'row', alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md, gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
 
   // Churn ML card (off-state)
   churnCard: {

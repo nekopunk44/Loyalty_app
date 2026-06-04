@@ -82,7 +82,13 @@ export const getAPIEndpoints = () => ({
   // Properties
   PROPERTIES: {
     LIST: `${getApiUrl()}/properties`,
+    ADMIN_LIST: `${getApiUrl()}/properties/admin/all`,
     GET: (propertyId) => `${getApiUrl()}/properties/${propertyId}`,
+    CREATE: `${getApiUrl()}/properties`,
+    UPDATE: (propertyId) => `${getApiUrl()}/properties/${propertyId}`,
+    DELETE: (propertyId) => `${getApiUrl()}/properties/${propertyId}`,
+    PHOTOS_UPLOAD: (propertyId) => `${getApiUrl()}/properties/${propertyId}/photos`,
+    PHOTOS_DELETE: (propertyId) => `${getApiUrl()}/properties/${propertyId}/photos`,
   },
 
   // Users

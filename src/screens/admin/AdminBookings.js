@@ -9,17 +9,13 @@ import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import Svg, { Path as SvgPath } from 'react-native-svg';
 import { useFocusEffect } from '@react-navigation/native';
 import { spacing, borderRadius } from '../../constants/theme';
-import { properties as PROPERTIES_LIST } from '../../constants/properties';
 import { useTheme } from '../../context/ThemeContext';
 import { apiCall } from '../../utils/api';
 import { getApiUrl } from '../../utils/apiUrl';
+import { PropertyService } from '../../services/PropertyService';
 
 const SCREEN_H = Dimensions.get('window').height;
 const SHEET_H  = SCREEN_H * 0.92;
-
-const PROPERTY_NAME = Object.fromEntries(
-  PROPERTIES_LIST.map(p => [String(p.id), p.name])
-);
 
 const API = getApiUrl();
 
@@ -90,6 +86,7 @@ const fmtDateTime = iso => {
 export default function AdminBookings() {
   const { theme } = useTheme();
   const [bookings,   setBookings]   = useState([]);
+  const [propertyMap, setPropertyMap] = useState({});
   const [loading,    setLoading]    = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search,     setSearch]     = useState('');
@@ -129,8 +126,16 @@ export default function AdminBookings() {
 
   const loadBookings = useCallback(async () => {
     try {
-      const data = await apiCall(`${API}/bookings`);
+      const [data, props] = await Promise.all([
+        apiCall(`${API}/bookings`),
+        PropertyService.getAllForAdmin().catch(() => []),
+      ]);
       if (data.success) setBookings(data.bookings || []);
+      if (Array.isArray(props)) {
+        const map = {};
+        props.forEach(p => { map[String(p.id)] = p.name; });
+        setPropertyMap(map);
+      }
     } catch (e) {
       console.error('AdminBookings load:', e.message);
     } finally {
@@ -227,7 +232,7 @@ export default function AdminBookings() {
   const renderBooking = ({ item }) => {
     const meta     = STATUS_META[item.status] || STATUS_META.pending;
     const name     = item.userName || item.user?.displayName || item.user?.name || 'Гость';
-    const property = PROPERTY_NAME[String(item.propertyId)] || item.propertyName || item.property?.name || `Объект #${item.propertyId}`;
+    const property = propertyMap[String(item.propertyId)] || item.propertyName || item.property?.name || `Объект #${item.propertyId}`;
     const avatar   = item.userAvatar || null;
     const isActing = actionLoading === item.id;
 
@@ -376,7 +381,7 @@ export default function AdminBookings() {
             <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Отменить бронирование?</Text>
             {cancelTarget && (
               <Text style={[styles.modalGuest, { color: theme.colors.textSecondary }]}>
-                {cancelTarget.userName || 'Гость'} · {PROPERTY_NAME[String(cancelTarget.propertyId)] || cancelTarget.propertyName || `Объект #${cancelTarget.propertyId}`}
+                {cancelTarget.userName || 'Гость'} · {propertyMap[String(cancelTarget.propertyId)] || cancelTarget.propertyName || `Объект #${cancelTarget.propertyId}`}
               </Text>
             )}
             <Text style={[styles.modalDesc, { color: theme.colors.textSecondary }]}>
@@ -526,7 +531,7 @@ function DetailContent({ booking, theme, onBookingChange, onClose }) {
   const name     = booking.userName || 'Гость';
   const email    = booking.userEmail || null;
   const avatar   = booking.userAvatar || null;
-  const property = PROPERTY_NAME[String(booking.propertyId)] || booking.propertyName || `Объект #${booking.propertyId}`;
+  const property = booking.propertyName || `Объект #${booking.propertyId}`;
   const initials = name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
   const fmtMoney = v => v != null ? `${Number(v).toLocaleString('ru-RU')} PRB` : '—';
 
