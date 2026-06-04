@@ -21,13 +21,13 @@ import {
   Image,
   ActivityIndicator,
   RefreshControl,
-  Platform,
   Dimensions,
   Animated,
   Easing,
   PanResponder,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { spacing } from '../../constants/theme';
 import { useTheme } from '../../context/ThemeContext';
@@ -36,6 +36,7 @@ import PropertyCard from '../../components/booking/PropertyCard';
 
 const SCREEN_H = Dimensions.get('window').height;
 const SHEET_H  = SCREEN_H * 0.92;
+const BACKDROP_COLOR = 'rgba(6, 18, 30, 0.46)';
 
 const STATUS_META = {
   available:   { label: 'Доступен',    color: '#10B981' },
@@ -78,10 +79,11 @@ const formToPayload = (f) => ({
   status: f.status,
 });
 
-export default function AdminProperties() {
+export default function AdminProperties({ navigation }) {
   const { theme } = useTheme();
   const colors = theme.colors;
-  const styles = makeStyles(colors);
+  const insets = useSafeAreaInsets();
+  const styles = makeStyles();
 
   const [list, setList]           = useState([]);
   const [loading, setLoading]     = useState(true);
@@ -114,11 +116,17 @@ export default function AdminProperties() {
     }).start(({ finished }) => { if (finished) setSheetMounted(false); });
   };
   const panResp = useRef(PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
     onMoveShouldSetPanResponder: (_, g) => g.dy > 4 && Math.abs(g.dy) > Math.abs(g.dx),
     onPanResponderMove: (_, g) => { if (g.dy > 0) sheetTY.setValue(g.dy); },
     onPanResponderRelease: (_, g) => {
-      if (g.dy > 110 || g.vy > 0.8) closeSheet();
-      else Animated.spring(sheetTY, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
+      if (g.dy > 110 || g.vy > 0.8) {
+        closeSheet();
+      } else {
+        Animated.spring(sheetTY, {
+          toValue: 0, useNativeDriver: true, tension: 80, friction: 12,
+        }).start();
+      }
     },
   })).current;
 
@@ -286,15 +294,33 @@ export default function AdminProperties() {
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <View style={styles.header}>
-        <View>
-          <Text style={[styles.title, { color: colors.text }]}>Номера</Text>
-          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-            {list.length} {list.length === 1 ? 'номер' : 'номеров'} в каталоге
+        <TouchableOpacity
+          style={[styles.headerIconBtn, { backgroundColor: colors.cardBg, borderColor: colors.border }]}
+          onPress={() => navigation?.goBack?.()}
+          activeOpacity={0.8}
+          hitSlop={8}
+        >
+          <MaterialIcons name="arrow-back" size={20} color={colors.text} />
+        </TouchableOpacity>
+        <View style={styles.headerTextWrap}>
+          <Text
+            style={[styles.title, { color: colors.text }]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.75}
+          >
+            Управление номерами
+          </Text>
+          <Text style={[styles.subtitle, { color: colors.textSecondary }]} numberOfLines={1}>
+            Всего: {list.length}
           </Text>
         </View>
-        <TouchableOpacity style={styles.addBtn} onPress={handleOpenCreate}>
+        <TouchableOpacity
+          style={[styles.addButton, { backgroundColor: colors.primary }]}
+          onPress={handleOpenCreate}
+          activeOpacity={0.85}
+        >
           <MaterialIcons name="add" size={22} color="#fff" />
-          <Text style={styles.addBtnText}>Добавить</Text>
         </TouchableOpacity>
       </View>
 
@@ -327,204 +353,307 @@ export default function AdminProperties() {
       </ScrollView>
 
       {sheetMounted && (
-        <Modal transparent animationType="none" visible onRequestClose={closeSheet}>
+        <Modal
+          visible
+          transparent
+          statusBarTranslucent
+          animationType="none"
+          onRequestClose={closeSheet}
+        >
           <View style={styles.sheetBackdrop}>
-            <TouchableOpacity style={StyleSheet.absoluteFill} onPress={closeSheet} activeOpacity={1} />
+            <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={closeSheet} />
             <Animated.View
               style={[
                 styles.sheet,
                 {
-                  backgroundColor: colors.background,
+                  backgroundColor: colors.cardBg,
                   transform: [{ translateY: sheetTY }],
                   height: SHEET_H,
                 },
               ]}
             >
-              <View {...panResp.panHandlers} style={styles.dragHandleArea}>
+              {/* Drag handle */}
+              <View {...panResp.panHandlers} style={styles.dragHandleWrap}>
                 <View style={[styles.dragHandle, { backgroundColor: colors.border }]} />
+              </View>
+
+              {/* Header: title слева, icon-buttons справа — как в NotificationCenter */}
+              <View style={styles.modalHeader}>
+                <View style={styles.modalHeaderTextWrap}>
+                  <Text style={[styles.modalTitle, { color: colors.text }]} numberOfLines={1}>
+                    {editing ? 'Редактирование' : 'Новый номер'}
+                  </Text>
+                  <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
+                    {editing ? editing.name : 'Заполните параметры номера'}
+                  </Text>
+                </View>
+
+                {editing && (
+                  <TouchableOpacity
+                    style={[styles.iconBtn, { backgroundColor: '#EF444415', borderColor: '#EF444440' }]}
+                    onPress={handleDeleteProperty}
+                    activeOpacity={0.8}
+                    hitSlop={6}
+                  >
+                    <MaterialIcons name="delete-outline" size={18} color="#EF4444" />
+                  </TouchableOpacity>
+                )}
+
+                <TouchableOpacity
+                  style={[styles.iconBtn, { backgroundColor: colors.cardBg, borderColor: colors.border }]}
+                  onPress={closeSheet}
+                  activeOpacity={0.8}
+                  hitSlop={6}
+                >
+                  <MaterialIcons name="close" size={18} color={colors.text} />
+                </TouchableOpacity>
               </View>
 
               <ScrollView
                 style={{ flex: 1 }}
                 contentContainerStyle={styles.sheetContent}
                 keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
               >
-                <Text style={[styles.sheetTitle, { color: colors.text }]}>
-                  {editing ? 'Редактировать номер' : 'Новый номер'}
-                </Text>
-
-                <Field label="Название" colors={colors}>
-                  <TextInput
-                    value={form.name}
-                    onChangeText={(v) => setForm((f) => ({ ...f, name: v }))}
-                    placeholder="Люкс апартамент"
-                    placeholderTextColor={colors.textSecondary}
-                    style={[styles.input, { color: colors.text, borderColor: colors.border }]}
-                  />
-                </Field>
-
-                <Field label="Описание" colors={colors}>
-                  <TextInput
-                    value={form.description}
-                    onChangeText={(v) => setForm((f) => ({ ...f, description: v }))}
-                    placeholder="Полный комфорт, с видом на природу"
-                    placeholderTextColor={colors.textSecondary}
-                    multiline
-                    style={[styles.input, styles.textarea, { color: colors.text, borderColor: colors.border }]}
-                  />
-                </Field>
-
-                <View style={styles.row2}>
-                  <Field label="Цена (текст)" colors={colors} flex>
+                {/* ── ОСНОВНОЕ ── */}
+                <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>ОСНОВНОЕ</Text>
+                <View style={[styles.infoCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                  <FieldInline label="Название" colors={colors}>
                     <TextInput
-                      value={form.price}
-                      onChangeText={(v) => setForm((f) => ({ ...f, price: v }))}
-                      placeholder="200PRB/ночь"
+                      value={form.name}
+                      onChangeText={(v) => setForm((f) => ({ ...f, name: v }))}
+                      placeholder="Люкс апартамент"
                       placeholderTextColor={colors.textSecondary}
-                      style={[styles.input, { color: colors.text, borderColor: colors.border }]}
+                      style={[styles.input, { color: colors.text }]}
                     />
-                  </Field>
-                  <Field label="Цена в PRB" colors={colors} flex>
+                  </FieldInline>
+                  <View style={[styles.divider, { backgroundColor: colors.border }]} />
+                  <FieldInline label="Описание" colors={colors}>
                     <TextInput
-                      value={form.priceNumber}
-                      onChangeText={(v) => setForm((f) => ({ ...f, priceNumber: v.replace(/[^0-9]/g, '') }))}
-                      placeholder="200"
+                      value={form.description}
+                      onChangeText={(v) => setForm((f) => ({ ...f, description: v }))}
+                      placeholder="Полный комфорт, с видом на природу"
                       placeholderTextColor={colors.textSecondary}
-                      keyboardType="number-pad"
-                      style={[styles.input, { color: colors.text, borderColor: colors.border }]}
+                      multiline
+                      style={[styles.input, styles.textarea, { color: colors.text }]}
                     />
-                  </Field>
+                  </FieldInline>
                 </View>
 
-                <View style={styles.row2}>
-                  <Field label="Комнат" colors={colors} flex>
-                    <TextInput
-                      value={form.rooms}
-                      onChangeText={(v) => setForm((f) => ({ ...f, rooms: v.replace(/[^0-9]/g, '') }))}
-                      placeholder="10"
-                      placeholderTextColor={colors.textSecondary}
-                      keyboardType="number-pad"
-                      style={[styles.input, { color: colors.text, borderColor: colors.border }]}
-                    />
-                  </Field>
-                  <Field label="Гостей" colors={colors} flex>
-                    <TextInput
-                      value={form.guests}
-                      onChangeText={(v) => setForm((f) => ({ ...f, guests: v.replace(/[^0-9]/g, '') }))}
-                      placeholder="20"
-                      placeholderTextColor={colors.textSecondary}
-                      keyboardType="number-pad"
-                      style={[styles.input, { color: colors.text, borderColor: colors.border }]}
-                    />
-                  </Field>
-                  <Field label="Депозит" colors={colors} flex>
-                    <TextInput
-                      value={form.depositAmount}
-                      onChangeText={(v) => setForm((f) => ({ ...f, depositAmount: v.replace(/[^0-9.]/g, '') }))}
-                      placeholder="1000"
-                      placeholderTextColor={colors.textSecondary}
-                      keyboardType="numeric"
-                      style={[styles.input, { color: colors.text, borderColor: colors.border }]}
-                    />
-                  </Field>
+                {/* ── ПАРАМЕТРЫ ── */}
+                <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>ПАРАМЕТРЫ</Text>
+                <View style={[styles.infoCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                  <View style={styles.row2}>
+                    <FieldInline label="Цена (текст)" colors={colors} flex>
+                      <TextInput
+                        value={form.price}
+                        onChangeText={(v) => setForm((f) => ({ ...f, price: v }))}
+                        placeholder="200PRB/ночь"
+                        placeholderTextColor={colors.textSecondary}
+                        style={[styles.input, { color: colors.text }]}
+                      />
+                    </FieldInline>
+                    <View style={[styles.dividerV, { backgroundColor: colors.border }]} />
+                    <FieldInline label="Цена в PRB" colors={colors} flex>
+                      <TextInput
+                        value={form.priceNumber}
+                        onChangeText={(v) => setForm((f) => ({ ...f, priceNumber: v.replace(/[^0-9]/g, '') }))}
+                        placeholder="200"
+                        placeholderTextColor={colors.textSecondary}
+                        keyboardType="number-pad"
+                        style={[styles.input, { color: colors.text }]}
+                      />
+                    </FieldInline>
+                  </View>
+                  <View style={[styles.divider, { backgroundColor: colors.border }]} />
+                  <View style={styles.row2}>
+                    <FieldInline label="Комнат" colors={colors} flex>
+                      <TextInput
+                        value={form.rooms}
+                        onChangeText={(v) => setForm((f) => ({ ...f, rooms: v.replace(/[^0-9]/g, '') }))}
+                        placeholder="10"
+                        placeholderTextColor={colors.textSecondary}
+                        keyboardType="number-pad"
+                        style={[styles.input, { color: colors.text }]}
+                      />
+                    </FieldInline>
+                    <View style={[styles.dividerV, { backgroundColor: colors.border }]} />
+                    <FieldInline label="Гостей" colors={colors} flex>
+                      <TextInput
+                        value={form.guests}
+                        onChangeText={(v) => setForm((f) => ({ ...f, guests: v.replace(/[^0-9]/g, '') }))}
+                        placeholder="20"
+                        placeholderTextColor={colors.textSecondary}
+                        keyboardType="number-pad"
+                        style={[styles.input, { color: colors.text }]}
+                      />
+                    </FieldInline>
+                    <View style={[styles.dividerV, { backgroundColor: colors.border }]} />
+                    <FieldInline label="Депозит" colors={colors} flex>
+                      <TextInput
+                        value={form.depositAmount}
+                        onChangeText={(v) => setForm((f) => ({ ...f, depositAmount: v.replace(/[^0-9.]/g, '') }))}
+                        placeholder="1000"
+                        placeholderTextColor={colors.textSecondary}
+                        keyboardType="numeric"
+                        style={[styles.input, { color: colors.text }]}
+                      />
+                    </FieldInline>
+                  </View>
                 </View>
 
-                <Field label="Удобства (через запятую)" colors={colors}>
-                  <TextInput
-                    value={form.amenities}
-                    onChangeText={(v) => setForm((f) => ({ ...f, amenities: v }))}
-                    placeholder="WiFi, Кондиционер, TV, Бассейн"
-                    placeholderTextColor={colors.textSecondary}
-                    multiline
-                    style={[styles.input, styles.textarea, { color: colors.text, borderColor: colors.border }]}
-                  />
-                </Field>
+                {/* ── УДОБСТВА ── */}
+                <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>УДОБСТВА</Text>
+                <View style={[styles.infoCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                  <FieldInline label="Через запятую" colors={colors}>
+                    <TextInput
+                      value={form.amenities}
+                      onChangeText={(v) => setForm((f) => ({ ...f, amenities: v }))}
+                      placeholder="WiFi, Кондиционер, TV, Бассейн"
+                      placeholderTextColor={colors.textSecondary}
+                      multiline
+                      style={[styles.input, styles.textarea, { color: colors.text }]}
+                    />
+                  </FieldInline>
+                </View>
 
-                <Field label="Статус" colors={colors}>
-                  <View style={styles.statusToggle}>
-                    {Object.entries(STATUS_META).map(([key, meta]) => (
+                {/* ── СТАТУС ── */}
+                <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>СТАТУС</Text>
+                <View style={styles.statusToggle}>
+                  {Object.entries(STATUS_META).map(([key, meta]) => {
+                    const active = form.status === key;
+                    return (
                       <TouchableOpacity
                         key={key}
                         onPress={() => setForm((f) => ({ ...f, status: key }))}
+                        activeOpacity={0.85}
                         style={[
                           styles.statusOpt,
                           {
-                            borderColor: form.status === key ? meta.color : colors.border,
-                            backgroundColor: form.status === key ? `${meta.color}14` : 'transparent',
+                            borderColor: active ? meta.color : colors.border,
+                            backgroundColor: active ? `${meta.color}18` : colors.background,
                           },
                         ]}
                       >
-                        <Text style={[styles.statusOptText, { color: form.status === key ? meta.color : colors.textSecondary }]}>
+                        <View style={[styles.statusDot, { backgroundColor: meta.color }]} />
+                        <Text style={[styles.statusOptText, { color: active ? meta.color : colors.textSecondary }]}>
                           {meta.label}
                         </Text>
                       </TouchableOpacity>
-                    ))}
-                  </View>
-                </Field>
+                    );
+                  })}
+                </View>
 
-                <TouchableOpacity
-                  style={[styles.saveBtn, { backgroundColor: colors.primary }, saving && { opacity: 0.7 }]}
-                  onPress={handleSave}
-                  disabled={saving}
-                >
-                  {saving ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <>
-                      <MaterialIcons name="save" size={18} color="#fff" />
-                      <Text style={styles.saveBtnText}>
-                        {editing ? 'Сохранить' : 'Создать'}
-                      </Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-
-                {/* ─── фото ─── */}
-                <Text style={[styles.sectionLabel, { color: colors.text }]}>
-                  Фотогалерея {editing ? `(${photos.length})` : ''}
-                </Text>
-                {!editing && (
-                  <Text style={[styles.hint, { color: colors.textSecondary }]}>
-                    Сначала сохраните номер — фото можно будет загрузить.
+                {/* ── ГАЛЕРЕЯ ── */}
+                <View style={styles.galleryHeader}>
+                  <Text style={[styles.sectionLabel, { color: colors.textSecondary, marginTop: 0 }]}>
+                    ГАЛЕРЕЯ
                   </Text>
-                )}
-                <View style={styles.photosGrid}>
-                  {photos.map((url, i) => (
-                    <View key={`${url}-${i}`} style={styles.photoTile}>
-                      <Image source={{ uri: url }} style={styles.photoImage} />
+                  <View style={styles.galleryRightWrap}>
+                    {editing && (
+                      <Text style={[styles.galleryCount, { color: colors.textSecondary }]}>
+                        {photos.length} фото
+                      </Text>
+                    )}
+                    {editing && (
                       <TouchableOpacity
-                        style={styles.photoDelete}
-                        onPress={() => handleDeletePhoto(photoRaws[i] || url)}
+                        style={[styles.galleryAddBtn, { backgroundColor: `${colors.primary}18`, borderColor: `${colors.primary}55` }]}
+                        onPress={handlePickPhotos}
+                        disabled={uploading}
+                        activeOpacity={0.85}
                       >
-                        <MaterialIcons name="close" size={16} color="#fff" />
+                        {uploading ? (
+                          <ActivityIndicator color={colors.primary} size="small" />
+                        ) : (
+                          <>
+                            <MaterialIcons name="add-photo-alternate" size={14} color={colors.primary} />
+                            <Text style={[styles.galleryAddBtnText, { color: colors.primary }]}>Добавить</Text>
+                          </>
+                        )}
                       </TouchableOpacity>
-                    </View>
-                  ))}
+                    )}
+                  </View>
+                </View>
+
+                {!editing ? (
+                  <View style={[styles.galleryHint, { backgroundColor: `${colors.primary}10`, borderColor: `${colors.primary}30` }]}>
+                    <MaterialIcons name="info-outline" size={16} color={colors.primary} />
+                    <Text style={[styles.galleryHintText, { color: colors.text }]}>
+                      Сначала сохраните номер — фото можно будет загрузить.
+                    </Text>
+                  </View>
+                ) : photos.length === 0 ? (
                   <TouchableOpacity
-                    style={[styles.photoTile, styles.photoAdd, { borderColor: colors.border }, !editing && { opacity: 0.4 }]}
+                    style={[styles.galleryEmpty, { borderColor: `${colors.primary}55`, backgroundColor: `${colors.primary}08` }]}
                     onPress={handlePickPhotos}
-                    disabled={!editing || uploading}
+                    disabled={uploading}
+                    activeOpacity={0.85}
                   >
                     {uploading ? (
                       <ActivityIndicator color={colors.primary} />
                     ) : (
                       <>
-                        <MaterialIcons name="add-photo-alternate" size={28} color={colors.primary} />
-                        <Text style={[styles.photoAddText, { color: colors.primary }]}>Добавить</Text>
+                        <MaterialIcons name="add-photo-alternate" size={32} color={colors.primary} />
+                        <Text style={[styles.galleryEmptyTitle, { color: colors.text }]}>Нет фото</Text>
+                        <Text style={[styles.galleryEmptySub, { color: colors.textSecondary }]}>
+                          Нажмите, чтобы загрузить из галереи
+                        </Text>
                       </>
                     )}
                   </TouchableOpacity>
-                </View>
-
-                {editing && (
-                  <TouchableOpacity style={styles.dangerBtn} onPress={handleDeleteProperty}>
-                    <MaterialIcons name="delete-outline" size={18} color="#EF4444" />
-                    <Text style={styles.dangerBtnText}>Удалить номер</Text>
-                  </TouchableOpacity>
+                ) : (
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.galleryScroll}
+                  >
+                    {photos.map((url, i) => (
+                      <View key={`${url}-${i}`} style={styles.photoTile}>
+                        <Image source={{ uri: url }} style={styles.photoImage} />
+                        <TouchableOpacity
+                          style={styles.photoDelete}
+                          onPress={() => handleDeletePhoto(photoRaws[i] || url)}
+                          hitSlop={6}
+                        >
+                          <MaterialIcons name="close" size={14} color="#fff" />
+                        </TouchableOpacity>
+                        <View style={styles.photoIndex}>
+                          <Text style={styles.photoIndexText}>{i + 1}</Text>
+                        </View>
+                      </View>
+                    ))}
+                  </ScrollView>
                 )}
 
-                <View style={{ height: Platform.OS === 'ios' ? 40 : 20 }} />
+                <View style={{ height: 100 }} />
               </ScrollView>
+
+              {/* Кнопка сохранения закреплена внизу — с учётом safe area */}
+              <View
+                style={[
+                  styles.saveBar,
+                  {
+                    backgroundColor: colors.cardBg,
+                    borderTopColor: colors.border,
+                    paddingBottom: Math.max(insets.bottom, 12) + 4,
+                  },
+                ]}
+              >
+                <TouchableOpacity
+                  style={[styles.saveBtn, { backgroundColor: colors.primary }, saving && { opacity: 0.75 }]}
+                  onPress={handleSave}
+                  disabled={saving}
+                  activeOpacity={0.88}
+                >
+                  {saving ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.saveBtnText}>
+                      {editing ? 'Сохранить' : 'Создать номер'}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
             </Animated.View>
           </View>
         </Modal>
@@ -533,51 +662,118 @@ export default function AdminProperties() {
   );
 }
 
-const Field = ({ label, children, colors, flex }) => (
-  <View style={[{ marginBottom: 14 }, flex && { flex: 1 }]}>
-    <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textSecondary, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-      {label}
-    </Text>
+const FieldInline = ({ label, children, colors, flex }) => (
+  <View style={[styles_field.wrap, flex && { flex: 1 }]}>
+    <Text style={[styles_field.label, { color: colors.textSecondary }]}>{label}</Text>
     {children}
   </View>
 );
 
-const makeStyles = (colors) => StyleSheet.create({
+const styles_field = StyleSheet.create({
+  wrap:  { paddingHorizontal: 12, paddingVertical: 10 },
+  label: { fontSize: 10, fontWeight: '800', letterSpacing: 0.7, marginBottom: 4, textTransform: 'uppercase' },
+});
+
+const makeStyles = () => StyleSheet.create({
   root:        { flex: 1 },
   centered:    { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', paddingHorizontal: 16, paddingTop: 60, paddingBottom: 14 },
-  title:       { fontSize: 26, fontWeight: '900', letterSpacing: -0.4 },
-  subtitle:    { fontSize: 12, marginTop: 4, fontWeight: '600' },
-  addBtn:      { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.primary, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12 },
-  addBtnText:  { color: '#fff', fontWeight: '800', fontSize: 13 },
+
+  // Header (centered title + circular add button — pattern from AdminUsers)
+  header:      {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingTop: 56,
+    paddingBottom: spacing.md,
+  },
+  headerIconBtn:  {
+    width: 40, height: 40, borderRadius: 20,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1,
+  },
+  headerTextWrap: { flex: 1, minWidth: 0, alignItems: 'center' },
+  title:       { fontSize: 20, fontWeight: '800', textAlign: 'center' },
+  subtitle:    { fontSize: 12, marginTop: 2, fontWeight: '600', textAlign: 'center' },
+  addButton:   {
+    width: 44, height: 44, borderRadius: 22,
+    alignItems: 'center', justifyContent: 'center',
+    elevation: 3,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4,
+  },
+
   listContent: { paddingBottom: 24 },
   empty:       { alignItems: 'center', paddingVertical: 60, gap: 12 },
   emptyText:   { fontSize: 14, fontWeight: '600' },
 
-  sheetBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
-  sheet:       { borderTopLeftRadius: 22, borderTopRightRadius: 22, overflow: 'hidden' },
-  dragHandleArea: { paddingTop: 10, paddingBottom: 6, alignItems: 'center' },
-  dragHandle:  { width: 48, height: 5, borderRadius: 4 },
-  sheetContent:{ padding: 18 },
-  sheetTitle:  { fontSize: 20, fontWeight: '900', marginBottom: 18 },
-  row2:        { flexDirection: 'row', gap: 10 },
-  input:       { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: Platform.OS === 'ios' ? 12 : 8, fontSize: 14 },
-  textarea:    { minHeight: 70, textAlignVertical: 'top' },
-  statusToggle:{ flexDirection: 'row', gap: 8 },
-  statusOpt:   { flex: 1, paddingVertical: 10, borderRadius: 10, borderWidth: 1.5, alignItems: 'center' },
+  // ===== Modal (bottom-sheet) =====
+  sheetBackdrop: { flex: 1, backgroundColor: BACKDROP_COLOR, justifyContent: 'flex-end' },
+  sheet:       {
+    width: '100%',
+    borderTopLeftRadius: 30, borderTopRightRadius: 30,
+    overflow: 'hidden',
+    shadowColor: '#000', shadowOffset: { width: 0, height: -10 }, shadowOpacity: 0.18, shadowRadius: 24,
+    elevation: 18,
+  },
+  dragHandleWrap: { alignItems: 'center', paddingTop: 10, paddingBottom: 6 },
+  dragHandle:  { width: 40, height: 4, borderRadius: 2, opacity: 0.6 },
+
+  modalHeader:         { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 20, paddingTop: 8, paddingBottom: 14 },
+  modalHeaderTextWrap: { flex: 1, minWidth: 0 },
+  modalTitle:          { fontSize: 20, fontWeight: '900' },
+  modalSubtitle:       { fontSize: 11, marginTop: 2, fontWeight: '600' },
+  iconBtn:             { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+
+  sheetContent: { paddingHorizontal: spacing.md, paddingTop: 4 },
+
+  sectionLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 0.7, marginTop: 14, marginBottom: 6, paddingHorizontal: 2 },
+
+  // Grouped input cards
+  infoCard:    { borderRadius: 14, borderWidth: 1, overflow: 'hidden' },
+  divider:     { height: StyleSheet.hairlineWidth, marginHorizontal: 12 },
+  dividerV:    { width: StyleSheet.hairlineWidth, alignSelf: 'stretch' },
+  row2:        { flexDirection: 'row' },
+  input:       { fontSize: 14, paddingVertical: 0, margin: 0 },
+  textarea:    { minHeight: 60, textAlignVertical: 'top', paddingTop: 4 },
+
+  // Status toggle
+  statusToggle: { flexDirection: 'row', gap: 8 },
+  statusOpt:    { flex: 1, paddingVertical: 12, borderRadius: 14, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 },
+  statusDot:    { width: 8, height: 8, borderRadius: 4 },
   statusOptText:{ fontSize: 13, fontWeight: '800' },
-  saveBtn:     { marginTop: 8, paddingVertical: 14, borderRadius: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: spacing.sm },
-  saveBtnText: { color: '#fff', fontWeight: '900', fontSize: 14 },
 
-  sectionLabel:{ fontSize: 14, fontWeight: '800', marginTop: 28, marginBottom: 10 },
-  hint:        { fontSize: 12, marginBottom: 10 },
-  photosGrid:  { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  photoTile:   { width: 96, height: 96, borderRadius: 12, overflow: 'hidden', position: 'relative' },
-  photoImage:  { width: '100%', height: '100%' },
-  photoDelete: { position: 'absolute', top: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.65)', width: 22, height: 22, borderRadius: 11, justifyContent: 'center', alignItems: 'center' },
-  photoAdd:    { borderWidth: 1.5, borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center', gap: 4 },
-  photoAddText:{ fontSize: 11, fontWeight: '700' },
+  // Gallery
+  galleryHeader:     { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 14, marginBottom: 8, paddingHorizontal: 2 },
+  galleryRightWrap:  { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  galleryCount:      { fontSize: 11, fontWeight: '700' },
+  galleryAddBtn:     { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, borderWidth: 1 },
+  galleryAddBtnText: { fontSize: 11, fontWeight: '800' },
+  galleryHint:       { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: 12, borderWidth: 1 },
+  galleryHintText:   { flex: 1, fontSize: 12, fontWeight: '600', lineHeight: 17 },
+  galleryEmpty:      { paddingVertical: 26, alignItems: 'center', justifyContent: 'center', gap: 4, borderRadius: 16, borderWidth: 1.5, borderStyle: 'dashed' },
+  galleryEmptyTitle: { fontSize: 14, fontWeight: '800', marginTop: 6 },
+  galleryEmptySub:   { fontSize: 11, fontWeight: '500' },
+  galleryScroll:     { gap: 10, paddingRight: 8 },
+  photoTile:         { width: 220, height: 160, borderRadius: 16, overflow: 'hidden', position: 'relative' },
+  photoImage:        { width: '100%', height: '100%' },
+  photoDelete:       { position: 'absolute', top: 8, right: 8, backgroundColor: 'rgba(0,0,0,0.7)', width: 26, height: 26, borderRadius: 13, justifyContent: 'center', alignItems: 'center' },
+  photoIndex:        { position: 'absolute', bottom: 8, left: 8, backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999 },
+  photoIndexText:    { color: '#fff', fontSize: 11, fontWeight: '800' },
 
-  dangerBtn:   { marginTop: 20, paddingVertical: 12, borderRadius: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: spacing.sm, borderWidth: 1, borderColor: '#EF444433' },
-  dangerBtnText:{ color: '#EF4444', fontWeight: '800', fontSize: 13 },
+  // Sticky save bar
+  saveBar:    {
+    position: 'absolute', left: 0, right: 0, bottom: 0,
+    paddingHorizontal: spacing.md,
+    paddingTop: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  saveBtn:    {
+    paddingVertical: 14,
+    borderRadius: 999,
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 8,
+    elevation: 2,
+  },
+  saveBtnText:{ color: '#fff', fontWeight: '800', fontSize: 15, letterSpacing: 0.2 },
 });
