@@ -16,7 +16,7 @@ const CATS = [
 ];
 
 export default function FAQ() {
-  const [open, setOpen] = useState(0);
+  const [open, setOpen] = useState(null);
   const [cat, setCat]   = useState('all');
 
   const filtered = FAQS.map((f, i) => ({ ...f, _i: i })).filter(f => cat === 'all' || f.cat === cat);
