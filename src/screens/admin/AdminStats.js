@@ -10,6 +10,7 @@ import {
   RefreshControl,
   Animated,
   Easing,
+  Alert,
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { spacing, borderRadius } from '../../constants/theme';
@@ -131,6 +132,7 @@ export default function AdminStats() {
   const [aiAnalysis,      setAiAnalysis]       = useState('');
   const [aiLoading,       setAiLoading]        = useState(false);
   const [ltvTop,          setLtvTop]           = useState(null); // {items, total} | null
+  const [rfmRecomputing,  setRfmRecomputing]   = useState(false);
   const { theme } = useTheme();
 
   const contentOpacity = useRef(new Animated.Value(1)).current;
@@ -222,6 +224,42 @@ export default function AdminStats() {
       setAiLoading(false);
     }
   };
+
+  const handleRfmRecompute = useCallback(() => {
+    if (rfmRecomputing) return;
+    Alert.alert(
+      'Пересчитать уровни?',
+      'RFM-сегментация будет запущена по всем активным пользователям. Уровни лояльности могут измениться.',
+      [
+        { text: 'Отмена', style: 'cancel' },
+        {
+          text: 'Пересчитать',
+          style: 'default',
+          onPress: async () => {
+            setRfmRecomputing(true);
+            try {
+              const res = await apiCall(`${getApiUrl()}/admin/ml/rfm-recompute`, { method: 'POST' });
+              if (res.success) {
+                const dist = res.distribution || {};
+                const msg =
+                  `Обновлено: ${res.updated ?? 0}\n` +
+                  `Повышено: ${res.upgrades ?? 0}, понижено: ${res.downgrades ?? 0}\n` +
+                  `Bronze ${dist.Bronze ?? 0} · Silver ${dist.Silver ?? 0} · Gold ${dist.Gold ?? 0} · Platinum ${dist.Platinum ?? 0}`;
+                Alert.alert('Готово', msg);
+                load();
+              } else {
+                Alert.alert('Не удалось', res.detail || res.error || 'Неизвестная ошибка');
+              }
+            } catch (e) {
+              Alert.alert('Ошибка', e.message || 'Сбой запроса');
+            } finally {
+              setRfmRecomputing(false);
+            }
+          },
+        },
+      ],
+    );
+  }, [rfmRecomputing, load]);
 
   // ── Метрики за выбранный период из реальных бронирований ──────────────────
   const metrics = useMemo(() => {
@@ -589,6 +627,31 @@ export default function AdminStats() {
 
   const renderUsers = () => (
     <>
+      <TouchableOpacity
+        onPress={handleRfmRecompute}
+        disabled={rfmRecomputing}
+        activeOpacity={0.85}
+        style={[
+          styles.rfmButton,
+          { backgroundColor: theme.colors.cardBg, borderColor: theme.colors.border, opacity: rfmRecomputing ? 0.7 : 1 },
+        ]}
+      >
+        <View style={[styles.rfmIconWrap, { backgroundColor: '#8B5CF615' }]}>
+          {rfmRecomputing
+            ? <ActivityIndicator size="small" color="#8B5CF6" />
+            : <MaterialIcons name="auto-graph" size={20} color="#8B5CF6" />}
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.rfmTitle, { color: theme.colors.text }]}>
+            {rfmRecomputing ? 'Пересчёт уровней…' : 'Пересчитать уровни (RFM)'}
+          </Text>
+          <Text style={[styles.rfmHint, { color: theme.colors.textSecondary }]} numberOfLines={2}>
+            Запустить ML-сегментацию по Recency · Frequency · Monetary
+          </Text>
+        </View>
+        <MaterialIcons name="chevron-right" size={22} color={theme.colors.textSecondary} />
+      </TouchableOpacity>
+
       <View style={[styles.panel, { backgroundColor: theme.colors.cardBg, borderColor: theme.colors.border, marginBottom: spacing.md }]}>
         <View style={styles.ltvHeader}>
           <View style={{ flex: 1 }}>
@@ -1142,4 +1205,24 @@ const styles = StyleSheet.create({
 
   emptyState: { alignItems: 'center', paddingVertical: spacing.xl },
   emptyText:  { marginTop: spacing.sm, fontSize: 14, textAlign: 'center' },
+
+  rfmButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    marginBottom: spacing.md,
+  },
+  rfmIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rfmTitle: { fontSize: 14, fontWeight: '700' },
+  rfmHint:  { fontSize: 11, marginTop: 2 },
 });
