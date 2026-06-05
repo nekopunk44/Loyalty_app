@@ -23,7 +23,7 @@ jest.mock('../models', () => ({
   },
   LoyaltyCard:      { findOne: jest.fn(), update: jest.fn() },
   Transaction:      { create: jest.fn() },
-  Property:         { findByPk: jest.fn() },
+  Property:         { findByPk: jest.fn(), findAll: jest.fn().mockResolvedValue([]) },
   User:             { findOne: jest.fn(), findAll: jest.fn(), update: jest.fn() },
   Payment:          { create: jest.fn(), findOne: jest.fn(), update: jest.fn() },
   AdminWallet:      { findOne: jest.fn(), create: jest.fn() },
@@ -516,6 +516,7 @@ describe('GET /api/bookings/user/:userId', () => {
     Booking.findAll.mockResolvedValue([
       { id: 'b-1', propertyId: '1', status: 'confirmed' },
     ]);
+    Property.findAll.mockResolvedValue([]);
   });
 
   test('401 без токена', async () => {

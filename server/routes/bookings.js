@@ -198,7 +198,7 @@ module.exports = function createBookingsRouter({ isDbConnected }) {
           transaction: bookingTxn,
         });
 
-        let hasConflict = false;
+        const conflictingBookings = [];
         for (const b of conflicts) {
           if (!b.checkInDate || !b.checkOutDate) continue;
           const [edi, emi, eyi] = b.checkInDate.split('.');
@@ -209,12 +209,32 @@ module.exports = function createBookingsRouter({ isDbConnected }) {
             (checkIn >= existIn && checkIn <= existOut) ||
             (checkOut >= existIn && checkOut <= existOut) ||
             (checkIn <= existIn && checkOut >= existOut)
-          ) { hasConflict = true; break; }
+          ) {
+            conflictingBookings.push({
+              id:           b.id,
+              status:       b.status,
+              checkInDate:  b.checkInDate,
+              checkOutDate: b.checkOutDate,
+              paymentDeadline: b.paymentDeadline,
+            });
+          }
         }
 
-        if (hasConflict) {
+        if (conflictingBookings.length > 0) {
           await bookingTxn.rollback();
-          return res.status(409).json({ success: false, error: 'Выбранные даты уже заняты' });
+          // Сбрасываем кэш — возможно, юзер видел стаpые «свободные» даты,
+          // а в БД уже был conflict (TTL 60s).
+          await invalidateBookedDatesCache(propertyIdStr);
+          logger.warn('booking create conflict', {
+            propertyId: propertyIdStr,
+            requested:  { checkInDate, checkOutDate },
+            conflicts:  conflictingBookings,
+          });
+          return res.status(409).json({
+            success: false,
+            error:   'Выбранные даты уже заняты',
+            conflicts: conflictingBookings,
+          });
         }
 
         let loyaltyCard = await LoyaltyCard.findOne({ where: { userId }, transaction: bookingTxn });
@@ -407,7 +427,7 @@ module.exports = function createBookingsRouter({ isDbConnected }) {
       const propMap = Object.fromEntries(properties.map(p => [String(p.id), p.name]));
 
       const bookings = rawBookings.map(b => ({
-        ...b.toJSON(),
+        ...(typeof b.toJSON === 'function' ? b.toJSON() : b),
         propertyName: propMap[String(b.propertyId)] || null,
       }));
 
@@ -655,11 +675,18 @@ module.exports = function createBookingsRouter({ isDbConnected }) {
       });
     } catch (error) {
       try { await txn.rollback(); } catch (_) {}
-      logger.error('booking pay-deposit error', { error: error.message });
+      logger.error('booking pay-deposit error', {
+        error:       error.message,
+        sqlOriginal: error.original?.message,
+        sqlDetail:   error.original?.detail,
+        sqlHint:     error.original?.hint,
+        sqlCode:     error.original?.code,
+        stack:       error.stack,
+      });
       return res.status(500).json({
         success: false,
         error:   'Ошибка при оплате депозита',
-        details: isDev() ? error.message : undefined,
+        details: error.message,
       });
     }
   });
@@ -922,11 +949,18 @@ module.exports = function createBookingsRouter({ isDbConnected }) {
       });
     } catch (error) {
       try { await txn.rollback(); } catch (_) {}
-      logger.error('booking pay-remaining error', { error: error.message });
+      logger.error('booking pay-remaining error', {
+        error:       error.message,
+        sqlOriginal: error.original?.message,
+        sqlDetail:   error.original?.detail,
+        sqlHint:     error.original?.hint,
+        sqlCode:     error.original?.code,
+        stack:       error.stack,
+      });
       return res.status(500).json({
         success: false,
         error:   'Ошибка при оплате остатка',
-        details: isDev() ? error.message : undefined,
+        details: error.message,
       });
     }
   });
