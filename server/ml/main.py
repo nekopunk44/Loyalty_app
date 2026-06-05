@@ -208,11 +208,24 @@ async def health():
 @app.post("/rfm/recompute", response_model=RFMResponse, dependencies=[Depends(require_token)])
 async def rfm_recompute(window_days: int = 365):
     """Пересчитывает RFM-сегменты по всем активным пользователям."""
-    activity = load_user_activity(window_days=window_days)
+    try:
+        activity = load_user_activity(window_days=window_days)
+    except Exception as exc:
+        logger.exception("RFM: ошибка выгрузки активности")
+        raise HTTPException(status_code=503, detail=f"Ошибка источника данных: {exc}")
+
     if activity.empty:
         raise HTTPException(status_code=400, detail="Нет данных для пересчёта")
 
-    result = recompute_segments(activity)
+    try:
+        result = recompute_segments(activity)
+    except ValueError as exc:
+        # типично: пользователей меньше, чем кластеров (4) — недостаточно данных
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        logger.exception("RFM: ошибка кластеризации")
+        raise HTTPException(status_code=500, detail=f"Ошибка кластеризации: {exc}")
+
     return RFMResponse(
         n_users=result.n_users,
         silhouette=result.silhouette,

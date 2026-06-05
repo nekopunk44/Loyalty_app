@@ -45,8 +45,15 @@ async function runRfmRecompute() {
     logger.info('RFM-recompute: вызываю ML-сервис');
     const res = await mlClient.rfmRecompute({ windowDays: 365 });
     if (!res.ok) {
-      logger.error('RFM-recompute: ML недоступен', { error: res.error });
-      return { ok: false, error: res.error };
+      // 4xx — ML-сервис жив, просто нет/мало данных для пересчёта. Это норма
+      // для свежей БД, логируем как warn, чтобы не шуметь error-ами.
+      const isClientError = res.status && res.status >= 400 && res.status < 500;
+      if (isClientError) {
+        logger.warn('RFM-recompute: пропущено', { status: res.status, error: res.error });
+      } else {
+        logger.error('RFM-recompute: ML недоступен', { status: res.status, error: res.error });
+      }
+      return { ok: false, error: res.error, status: res.status };
     }
 
     const { user_levels: userLevels = {}, distribution, silhouette } = res.data;
