@@ -163,34 +163,48 @@ export default function BookingCard({
               </View>
 
               <View style={styles.methodRow}>
-                <TouchableOpacity
-                  style={[styles.methodBtn, isPayingRemaining && styles.btnDisabled]}
-                  onPress={() => onPayRemaining?.(item, 'card')}
-                  disabled={isPayingRemaining}
-                  activeOpacity={0.8}
-                >
-                  {isPayingRemaining ? (
-                    <ActivityIndicator color={colors.primary} size="small" />
-                  ) : (
-                    <>
-                      <MaterialIcons name="credit-card" size={16} color={colors.primary} />
-                      <Text style={[styles.methodBtnText, { color: colors.primary }]}>Картой</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.methodBtn, isPayingRemaining && styles.btnDisabled]}
-                  onPress={() => onPayRemaining?.(item, 'cash')}
-                  disabled={isPayingRemaining}
-                  activeOpacity={0.8}
-                >
-                  <MaterialIcons name="payments" size={16} color={colors.primary} />
-                  <Text style={[styles.methodBtnText, { color: colors.primary }]}>Наличными</Text>
-                </TouchableOpacity>
+                {[
+                  { key: 'card', label: 'Картой',     icon: 'credit-card' },
+                  { key: 'cash', label: 'Наличными',  icon: 'payments'    },
+                ].map((opt) => {
+                  const isSelected = item.remainingPaymentMethod === opt.key;
+                  return (
+                    <TouchableOpacity
+                      key={opt.key}
+                      style={[
+                        styles.methodBtn,
+                        isSelected && { backgroundColor: colors.primary, borderColor: colors.primary },
+                        isPayingRemaining && styles.btnDisabled,
+                      ]}
+                      onPress={() => onPayRemaining?.(item, opt.key)}
+                      disabled={isPayingRemaining}
+                      activeOpacity={0.8}
+                    >
+                      {isPayingRemaining ? (
+                        <ActivityIndicator color={isSelected ? '#fff' : colors.primary} size="small" />
+                      ) : (
+                        <>
+                          <MaterialIcons name={opt.icon} size={16} color={isSelected ? '#fff' : colors.primary} />
+                          <Text style={[styles.methodBtnText, { color: isSelected ? '#fff' : colors.primary }]}>
+                            {opt.label}{isSelected ? ' ✓' : ''}
+                          </Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
-              <Text style={styles.methodHint}>
-                «Картой» — спишется с карты лояльности сейчас. «Наличными» — отметит остаток как принятый при заезде.
-              </Text>
+              {item.remainingPaymentMethod ? (
+                <Text style={[styles.methodHint, { color: '#065F46', fontWeight: '600' }]}>
+                  {item.remainingPaymentMethod === 'card'
+                    ? `Выбрано: списание с карты в день выезда (${item.checkOut}). Можно переключить на наличные.`
+                    : `Выбрано: оплата наличными при заезде. Можно переключить на карту.`}
+                </Text>
+              ) : (
+                <Text style={styles.methodHint}>
+                  «Картой» — спишется с карты лояльности автоматически в день выезда. «Наличными» — передадите при заезде. Бронь закроется в день выезда.
+                </Text>
+              )}
             </View>
           )}
 

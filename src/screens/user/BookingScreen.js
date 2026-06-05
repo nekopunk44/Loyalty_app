@@ -750,36 +750,34 @@ export default function BookingScreen({ navigation }) {
     }
   };
 
-  // Sprint A: оплата остатка — card → списать с карты сейчас; cash → отметить «принято при заезде».
+  // Sprint A.2: фиксируем способ оплаты остатка. Реальное списание (для card)
+  // и переход в completed происходит cron-задачей в день выезда —
+  // см. server/services/bookingJobs.js → settleRemainingPayments.
   const handlePayRemainingFromList = async (item, method) => {
     const remaining = Math.max(0, Number(item.total) - Number(item.depositAmount));
-    const title = method === 'card' ? 'Списать остаток картой?' : 'Принять оплату наличными?';
+    const title = method === 'card' ? 'Оплатить остаток картой?' : 'Оплатить остаток наличными?';
     const message = method === 'card'
-      ? `С карты лояльности будет списано ${remaining.toLocaleString('ru-RU')} PRB. Кэшбэк начислится со всей суммы брони.`
-      : `Остаток ${remaining.toLocaleString('ru-RU')} PRB будет принят при заезде. С карты ничего не спишется. Кэшбэк начислен только с депозита.`;
+      ? `В день выезда (${item.checkOut}) с карты лояльности будет автоматически списано ${remaining.toLocaleString('ru-RU')} PRB. Кэшбэк начислится со всей суммы брони.`
+      : `В день выезда (${item.checkOut}) бронирование закроется, а ${remaining.toLocaleString('ru-RU')} PRB передадите наличными при заезде. Кэшбэк начислится только с депозита.`;
 
     Alert.alert(title, message, [
       { text: 'Отмена', style: 'cancel' },
       {
-        text: method === 'card' ? 'Списать' : 'Подтвердить',
+        text: 'Подтвердить',
         onPress: async () => {
           try {
             setPayingRemainingId(item.id);
-            const result = await payRemaining(item.id, method);
-            const cashbackTotal = result?.cashback?.total ?? 0;
-            if (method === 'card') {
-              await notifyPaymentSuccess(remaining, 'карта лояльности (остаток)');
-            }
+            await payRemaining(item.id, method);
             await refreshBookings();
             Alert.alert(
-              'Бронирование завершено',
+              'Способ оплаты сохранён',
               method === 'card'
-                ? `Остаток списан. Кэшбэк начислен: ${cashbackTotal.toLocaleString('ru-RU')} PRB.`
-                : `Оплата наличными зафиксирована. Кэшбэк начислен: ${cashbackTotal.toLocaleString('ru-RU')} PRB.`,
+                ? `Готово. В день выезда (${item.checkOut}) остаток автоматически спишется с карты.`
+                : `Готово. В день выезда (${item.checkOut}) администратор примет наличные.`,
             );
           } catch (error) {
-            console.error('❌ Ошибка оплаты остатка:', error);
-            Alert.alert('Ошибка', error.message || 'Не удалось завершить оплату');
+            console.error('❌ Ошибка выбора способа оплаты остатка:', error);
+            Alert.alert('Ошибка', error.message || 'Не удалось сохранить способ оплаты');
           } finally {
             setPayingRemainingId(null);
           }

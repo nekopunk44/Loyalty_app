@@ -133,9 +133,9 @@ export const BookingService = {
   },
 
   /**
-   * Оплатить остаток (confirmed → completed). method: 'card' | 'cash'.
-   *   card — списать остаток с LoyaltyCard, кэшбэк со всей суммы.
-   *   cash — без списания (приём на месте); кэшбэк только с депозита.
+   * Зафиксировать способ оплаты остатка (Sprint A.2: только сохраняет выбор).
+   * method: 'card' | 'cash'. Реальное списание (для card), кэшбэк и переход
+   * в 'completed' — cron-задача в день выезда (bookingJobs.settleRemainingPayments).
    */
   payRemaining: async (bookingId, method) => {
     try {

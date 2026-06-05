@@ -344,7 +344,7 @@ describe('POST /api/bookings/:bookingId/pay-remaining', () => {
     expect(res.status).toBe(400);
   });
 
-  test('200 card-оплата: списание остатка + кэшбэк со всей суммы', async () => {
+  test('200 card-выбор: только сохраняет метод, статус остаётся confirmed, ничего не списывает', async () => {
     const res = await request(createApp())
       .post('/api/bookings/b-1/pay-remaining')
       .set('Authorization', `Bearer ${userToken}`)
@@ -353,16 +353,36 @@ describe('POST /api/bookings/:bookingId/pay-remaining', () => {
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(res.body.payment.method).toBe('card');
-    // Bronze = 3% от (1000+500) = 45
-    expect(res.body.cashback.amount).toBeCloseTo(45, 2);
-    expect(res.body.cashback.base).toBe(1500);
+    expect(res.body.payment.type).toBe('remaining_method_choice');
+    // Никакого начисления / списания на этапе выбора
+    expect(res.body.cashback).toBeUndefined();
+    expect(cardInstance.update).not.toHaveBeenCalled();
+    expect(Transaction.create).not.toHaveBeenCalled();
+    expect(AdminTransaction.create).not.toHaveBeenCalled();
+    // booking.update вызван только для сохранения метода — без status и без cashback
     expect(bookingInstance.update).toHaveBeenCalledWith(
-      expect.objectContaining({ status: 'completed', remainingPaymentMethod: 'card' }),
+      expect.objectContaining({ remainingPaymentMethod: 'card' }),
       expect.any(Object),
     );
+    const patch = bookingInstance.update.mock.calls[0][0];
+    expect(patch).not.toHaveProperty('status');
+    expect(patch).not.toHaveProperty('cashbackAmount');
   });
 
-  test('200 cash-оплата: без списания + кэшбэк только с депозита', async () => {
+  test('402 card-выбор при недостатке баланса: метод не сохраняется', async () => {
+    cardInstance.balance = '100'; // меньше remainingAmount (500)
+    const res = await request(createApp())
+      .post('/api/bookings/b-1/pay-remaining')
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({ method: 'card' });
+
+    expect(res.status).toBe(402);
+    expect(res.body.success).toBe(false);
+    expect(res.body.deficit).toBeCloseTo(400, 2);
+    expect(bookingInstance.update).not.toHaveBeenCalled();
+  });
+
+  test('200 cash-выбор: только сохраняет метод, статус остаётся confirmed, ничего не списывает', async () => {
     const res = await request(createApp())
       .post('/api/bookings/b-1/pay-remaining')
       .set('Authorization', `Bearer ${userToken}`)
@@ -371,9 +391,17 @@ describe('POST /api/bookings/:bookingId/pay-remaining', () => {
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(res.body.payment.method).toBe('cash');
-    // Bronze = 3% × 1000 = 30
-    expect(res.body.cashback.amount).toBeCloseTo(30, 2);
-    expect(res.body.cashback.base).toBe(1000);
+    expect(res.body.payment.type).toBe('remaining_method_choice');
+    expect(res.body.cashback).toBeUndefined();
+    expect(cardInstance.update).not.toHaveBeenCalled();
+    expect(Transaction.create).not.toHaveBeenCalled();
+    expect(AdminTransaction.create).not.toHaveBeenCalled();
+    expect(bookingInstance.update).toHaveBeenCalledWith(
+      expect.objectContaining({ remainingPaymentMethod: 'cash' }),
+      expect.any(Object),
+    );
+    const patch = bookingInstance.update.mock.calls[0][0];
+    expect(patch).not.toHaveProperty('status');
   });
 });
 
