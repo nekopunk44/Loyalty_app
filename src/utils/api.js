@@ -169,8 +169,12 @@ export const apiCall = async (url, options = {}, _isRetry = false) => {
     }
 
     if (!response.ok) {
+      // details на 5xx — техническая причина, не показываем юзеру, но логируем
+      // и кладём в свойство ошибки, чтобы видеть в Sentry / console.error.
+      const detailStr = typeof data.details === 'string' ? data.details : '';
       const err = new Error(data.error || `HTTP Error: ${response.status}`);
       err.status = response.status;
+      if (detailStr) err.details = detailStr;
       throw err;
     }
 
@@ -184,8 +188,8 @@ export const apiCall = async (url, options = {}, _isRetry = false) => {
       console.warn('API rate-limited (429):', url);
       return { success: false, error: error.message, rateLimited: true };
     }
-    console.error('API Error:', error);
-    return { success: false, error: error.message };
+    console.error('API Error:', error, error.details ? `[details: ${error.details}]` : '');
+    return { success: false, error: error.message, details: error.details };
   }
 };
 

@@ -198,7 +198,15 @@ export const NotificationProvider = ({ children }) => {
       try {
         const { status } = await Notifications.requestPermissionsAsync();
         if (status === 'granted') {
-          const token = await Notifications.getExpoPushTokenAsync();
+          // В standalone APK (EAS Build) projectId не автоопределяется по умолчанию
+          // в SDK 55 — без явной передачи getExpoPushTokenAsync кидает и токен
+          // не регистрируется, push'и до устройства не доходят.
+          const projectId =
+            Constants?.expoConfig?.extra?.eas?.projectId ||
+            Constants?.easConfig?.projectId;
+          const token = await Notifications.getExpoPushTokenAsync(
+            projectId ? { projectId } : undefined
+          );
           setExpoPushToken(token.data);
           await AsyncStorage.setItem('@expo_push_token', token.data);
           // Регистрируем токен на сервере
@@ -208,10 +216,12 @@ export const NotificationProvider = ({ children }) => {
               headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
               body: JSON.stringify({ pushToken: token.data }),
             });
-          } catch (_) { /* push token registration is optional */ }
+          } catch (regErr) {
+            console.warn('Push token register failed', regErr?.message);
+          }
         }
       } catch (permissionError) {
-        // Push permission is optional
+        console.warn('Push setup failed', permissionError?.message);
       }
 
       {
