@@ -20,6 +20,21 @@ import { usePayment } from '../../context/PaymentContext';
 import BookingService from '../../services/BookingService';
 import PropertyService from '../../services/PropertyService';
 
+const fmt = (n) => Number(n || 0).toLocaleString('ru-RU');
+
+// Строка чека: подпись слева, значение справа. На уровне модуля, чтобы не
+// пересоздавать тип компонента на каждый рендер экрана.
+function ReceiptLine({ styles, label, value, valueColor }) {
+  return (
+    <View style={styles.receiptLineRow}>
+      <Text style={styles.receiptLineLabel}>{label}</Text>
+      <Text style={[styles.receiptLineValue, valueColor && { color: valueColor }]} numberOfLines={2}>
+        {value}
+      </Text>
+    </View>
+  );
+}
+
 export default function CheckoutScreen({ route, navigation }) {
   const { theme } = useTheme();
   const { user } = useAuth();
@@ -32,11 +47,11 @@ export default function CheckoutScreen({ route, navigation }) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [insufficientFunds, setInsufficientFunds] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [paidAt, setPaidAt] = useState(null);
   const [bookingInfo, setBookingInfo] = useState(null);
   // Sprint A: депозит — это всё, что списывается сейчас. Остаток — после заезда.
   const [depositAmount, setDepositAmount] = useState(0);
 
-  // Get booking data from route params
   const bookingData = route.params || {
     serviceType: 'Бронирование номера',
     guestName: 'Гость',
@@ -50,55 +65,87 @@ export default function CheckoutScreen({ route, navigation }) {
     kitchenware: false,
   };
 
-  const remainingAmount = Math.max(0, (bookingData.amount || 0) - depositAmount);
+  const totalAmount    = bookingData.amount || 0;
+  const remainingAmount = Math.max(0, totalAmount - depositAmount);
 
-  // Загружаем баланс карты лояльности + депозит объекта.
   useEffect(() => {
     const loadCheckoutContext = async () => {
       if (!user?.id) {
         setLoadingBalance(false);
         return;
       }
-
       try {
         setLoadingBalance(true);
-
         const [cardData, property] = await Promise.all([
           getCardBalance(user.id),
           PropertyService.getPropertyById(bookingData.propertyId || '1').catch(() => null),
         ]);
-
         setBalance(cardData.balance);
         setCardBalance(cardData.balance);
 
-        // Депозит = snapshot из Property. Если поле отсутствует/нулевое (legacy)
-        // — депозит = весь totalPrice (юзер платит сразу).
         const rawDeposit = parseFloat(property?.depositAmount) || 0;
         const effectiveDeposit = rawDeposit > 0
-          ? Math.min(rawDeposit, bookingData.amount || 0)
-          : (bookingData.amount || 0);
+          ? Math.min(rawDeposit, totalAmount)
+          : totalAmount;
         setDepositAmount(effectiveDeposit);
-
         setInsufficientFunds(cardData.balance < effectiveDeposit);
       } catch (error) {
-        console.error('❌ Ошибка загрузки данных оплаты:', error);
-        // Если property не загрузился — fallback к полной оплате.
-        setDepositAmount(bookingData.amount || 0);
+        console.error('Ошибка загрузки данных оплаты:', error);
+        setDepositAmount(totalAmount);
         setInsufficientFunds(true);
       } finally {
         setLoadingBalance(false);
       }
     };
-
     loadCheckoutContext();
-  }, [user?.id, bookingData.amount, bookingData.propertyId]);
+  }, [user?.id, totalAmount, bookingData.propertyId]);
+
+  // Юзер уже создал бронь, но не оплатил депозит — допроходим оплату той же брони.
+  const payExistingPending = async (existingBookingId) => {
+    try {
+      setIsProcessing(true);
+      const depositResult = await payDeposit(existingBookingId);
+      const balanceAfter  = depositResult?.payment?.balanceAfter   ?? cardBalance;
+      const actualDeposit = depositResult?.payment?.amount         ?? depositAmount;
+      const remainingDue  = depositResult?.payment?.remainingAmount ?? remainingAmount;
+
+      setBalance(balanceAfter);
+      setCardBalance(balanceAfter);
+
+      await notifyPaymentSuccess(actualDeposit, 'карта лояльности (депозит)');
+      await refreshBookings();
+
+      setBookingInfo({
+        id:           existingBookingId,
+        propertyName: bookingData.serviceType,
+        checkIn:      bookingData.checkIn,
+        checkOut:     bookingData.checkOut,
+        guests:       bookingData.guests || 1,
+        totalAmount,
+        deposit:      actualDeposit,
+        remaining:    remainingDue,
+        newBalance:   balanceAfter,
+      });
+      setPaidAt(new Date());
+      setShowSuccessModal(true);
+    } catch (error) {
+      console.error('Ошибка оплаты существующей брони:', error);
+      Alert.alert('Ошибка', error.message || 'Не удалось оплатить депозит существующей брони.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   const handleConfirmBooking = async () => {
     if (insufficientFunds) {
-      Alert.alert('❌ Ошибка', `Недостаточно средств для оплаты депозита (${depositAmount} PRB)`, [
-        { text: 'Пополнить карту', onPress: () => navigation.navigate('CardTopUp') },
-        { text: 'Отмена' },
-      ]);
+      Alert.alert(
+        'Недостаточно средств',
+        `На карте лояльности ${fmt(cardBalance)} PRB. Для депозита нужно ${fmt(depositAmount)} PRB.`,
+        [
+          { text: 'Пополнить карту', onPress: () => navigation.navigate('CardTopUp') },
+          { text: 'Отмена', style: 'cancel' },
+        ],
+      );
       return;
     }
 
@@ -106,7 +153,6 @@ export default function CheckoutScreen({ route, navigation }) {
       setIsProcessing(true);
       const userId = user?.id || bookingData.userId;
 
-      // Шаг 1: Создаём бронирование (status='pending_payment', deadline +12ч).
       const booking = await BookingService.createBooking({
         propertyId: bookingData.propertyId || '1',
         userId,
@@ -114,36 +160,32 @@ export default function CheckoutScreen({ route, navigation }) {
         checkOutDate: bookingData.checkOut,
         guests:      bookingData.guests || 1,
         notes:       bookingData.notes || 'Бронирование через мобильное приложение',
-        totalPrice:  bookingData.amount || 0,
+        totalPrice:  totalAmount,
         saunaHours:  bookingData.saunaHours || 0,
         kitchenware: bookingData.kitchenware || false,
       });
 
-      // Шаг 2: Оплачиваем депозит → status='confirmed'.
       const depositResult = await payDeposit(booking.id);
-      const balanceAfter   = depositResult?.payment?.balanceAfter ?? cardBalance;
-      const actualDeposit  = depositResult?.payment?.amount        ?? depositAmount;
-      const remainingDue   = depositResult?.payment?.remainingAmount ?? remainingAmount;
+      const balanceAfter  = depositResult?.payment?.balanceAfter ?? cardBalance;
+      const actualDeposit = depositResult?.payment?.amount       ?? depositAmount;
+      const remainingDue  = depositResult?.payment?.remainingAmount ?? remainingAmount;
 
       setBalance(balanceAfter);
       setCardBalance(balanceAfter);
 
-      // Уведомления.
       await notifyNewBooking(bookingData.serviceType, user?.name || 'Пользователь', bookingData.checkIn, bookingData.checkOut);
       await notifyPaymentSuccess(actualDeposit, 'карта лояльности (депозит)');
-
       await notifyAdminEvent('new_booking', {
         guestName:    user?.name || 'Пользователь',
         propertyName: bookingData.serviceType,
         checkIn:      bookingData.checkIn,
         checkOut:     bookingData.checkOut,
         guests:       bookingData.guests || 1,
-        amount:       bookingData.amount,
+        amount:       totalAmount,
         bookingId:    booking.id,
         saunaHours:   bookingData.saunaHours || 0,
         kitchenware:  bookingData.kitchenware || false,
       });
-
       await refreshBookings();
 
       setBookingInfo({
@@ -152,17 +194,37 @@ export default function CheckoutScreen({ route, navigation }) {
         checkIn:      bookingData.checkIn,
         checkOut:     bookingData.checkOut,
         guests:       bookingData.guests || 1,
-        totalAmount:  bookingData.amount,
+        totalAmount,
         deposit:      actualDeposit,
         remaining:    remainingDue,
         newBalance:   balanceAfter,
       });
+      setPaidAt(new Date());
       setShowSuccessModal(true);
     } catch (error) {
-      console.error('❌ Ошибка при бронировании:', error);
+      console.error('Ошибка при бронировании:', error);
+
+      // 409 ownPending: у юзера уже есть pending_payment на эти даты —
+      // предлагаем доплатить тот же объект, а не создавать новый.
+      if (error.ownPendingBookingId) {
+        setIsProcessing(false);
+        Alert.alert(
+          'У вас уже есть незавершённая бронь',
+          `Бронь №${error.ownPendingBookingId} на эти даты ждёт оплаты депозита. Хотите оплатить её сейчас?`,
+          [
+            { text: 'Закрыть', style: 'cancel' },
+            {
+              text: 'Оплатить депозит',
+              onPress: () => payExistingPending(error.ownPendingBookingId),
+            },
+          ],
+        );
+        return;
+      }
+
       Alert.alert(
-        '❌ Ошибка',
-        error.message || 'Не удалось создать бронирование. Попробуйте позже.'
+        'Ошибка',
+        error.message || 'Не удалось создать бронирование. Попробуйте позже.',
       );
     } finally {
       setIsProcessing(false);
@@ -170,119 +232,211 @@ export default function CheckoutScreen({ route, navigation }) {
   };
 
   const styles = useMemo(() => StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: theme.colors.background,
-    },
-    header: {
+    container: { flex: 1, backgroundColor: theme.colors.background },
+
+    // Hero
+    hero: {
       backgroundColor: theme.colors.primary,
-      padding: spacing.lg,
+      paddingHorizontal: spacing.lg,
       paddingTop: spacing.xl,
+      paddingBottom: spacing.xxl || spacing.xl + spacing.md,
+      borderBottomLeftRadius: borderRadius.xl,
+      borderBottomRightRadius: borderRadius.xl,
     },
-    headerTitle: {
+    heroLabel: {
+      color: 'rgba(255,255,255,0.75)',
+      fontSize: 12,
+      fontWeight: '600',
+      letterSpacing: 0.8,
+      textTransform: 'uppercase',
+      marginBottom: spacing.xs,
+    },
+    heroProperty: {
       color: '#fff',
-      fontSize: 20,
-      fontWeight: '700',
-    },
-    content: {
-      padding: spacing.lg,
-      paddingBottom: spacing.xl,
-    },
-    section: {
-      backgroundColor: theme.colors.cardBg,
-      borderRadius: borderRadius.lg,
-      padding: spacing.lg,
-      marginBottom: spacing.lg,
-    },
-    sectionTitle: {
-      color: theme.colors.text,
-      fontSize: 16,
+      fontSize: 22,
       fontWeight: '700',
       marginBottom: spacing.md,
     },
+    heroAmountRow: {
+      flexDirection: 'row',
+      alignItems: 'baseline',
+    },
+    heroAmount: {
+      color: '#fff',
+      fontSize: 32,
+      fontWeight: '800',
+    },
+    heroCurrency: {
+      color: 'rgba(255,255,255,0.85)',
+      fontSize: 14,
+      fontWeight: '600',
+      marginLeft: spacing.sm,
+    },
+    heroHint: {
+      color: 'rgba(255,255,255,0.78)',
+      fontSize: 12,
+      marginTop: spacing.xs,
+    },
+
+    // Pulled-up card area
+    content: {
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.lg,
+      paddingBottom: 140,
+    },
+
+    card: {
+      backgroundColor: theme.colors.cardBg,
+      borderRadius: borderRadius.lg,
+      padding: spacing.lg,
+      marginBottom: spacing.md,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.06,
+      shadowRadius: 6,
+      elevation: 2,
+    },
+    cardTitleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: spacing.md,
+    },
+    cardTitle: {
+      color: theme.colors.text,
+      fontSize: 15,
+      fontWeight: '700',
+      marginLeft: spacing.sm,
+    },
+
     row: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      paddingVertical: spacing.md,
+      paddingVertical: spacing.sm,
+    },
+    rowDivider: {
       borderBottomWidth: 1,
       borderBottomColor: theme.colors.border,
     },
-    lastRow: {
-      borderBottomWidth: 0,
+    label: { color: theme.colors.textSecondary, fontSize: 13, flex: 1 },
+    value: { color: theme.colors.text, fontSize: 14, fontWeight: '600' },
+
+    // Payment split
+    splitBlock: {
+      marginTop: spacing.sm,
+      borderRadius: borderRadius.md,
+      backgroundColor: theme.colors.background,
+      padding: spacing.md,
     },
-    label: {
-      color: theme.colors.textSecondary,
-      fontSize: 14,
-    },
-    value: {
-      color: theme.colors.text,
-      fontSize: 14,
-      fontWeight: '600',
-    },
-    totalValue: {
-      color: theme.colors.primary,
-      fontSize: 18,
-      fontWeight: '700',
-    },
-    balanceSection: {
-      backgroundColor: insufficientFunds ? '#FFE5E5' : '#E8F5E9',
-      borderLeftWidth: 4,
-      borderLeftColor: insufficientFunds ? '#FF4444' : '#4CAF50',
-    },
-    balanceRow: {
+    splitRow: {
       flexDirection: 'row',
       justifyContent: 'space-between',
-      alignItems: 'center',
+      alignItems: 'flex-start',
+      marginBottom: spacing.sm,
     },
-    balanceInfo: {
-      flex: 1,
-    },
-    balanceLabel: {
+    splitLabel: {
       color: theme.colors.text,
       fontSize: 14,
-      fontWeight: '600',
-      marginBottom: spacing.xs,
-    },
-    balanceAmount: {
-      color: insufficientFunds ? '#FF4444' : '#4CAF50',
-      fontSize: 20,
       fontWeight: '700',
     },
-    balanceIcon: {
-      marginLeft: spacing.md,
+    splitSubLabel: {
+      color: theme.colors.textSecondary,
+      fontSize: 11,
+      marginTop: 2,
     },
-    warningText: {
-      color: '#FF4444',
+    splitAmountPrimary: {
+      color: theme.colors.primary,
+      fontSize: 18,
+      fontWeight: '800',
+    },
+    splitAmountMuted: {
+      color: theme.colors.text,
+      fontSize: 16,
+      fontWeight: '700',
+    },
+    splitDivider: {
+      height: 1,
+      backgroundColor: theme.colors.border,
+      marginVertical: spacing.sm,
+    },
+
+    // Balance ribbon
+    balanceRibbon: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.lg,
+      borderRadius: borderRadius.md,
+      marginBottom: spacing.md,
+    },
+    balanceTextWrap: { flex: 1, marginLeft: spacing.md },
+    balanceLabel: { fontSize: 12, fontWeight: '600' },
+    balanceAmount: { fontSize: 18, fontWeight: '800', marginTop: 2 },
+
+    // Info note
+    note: {
+      flexDirection: 'row',
+      backgroundColor: theme.colors.background,
+      borderRadius: borderRadius.md,
+      padding: spacing.md,
+      marginBottom: spacing.md,
+      borderLeftWidth: 3,
+      borderLeftColor: theme.colors.primary,
+    },
+    noteText: {
+      flex: 1,
+      color: theme.colors.textSecondary,
       fontSize: 12,
-      marginTop: spacing.md,
+      lineHeight: 17,
+      marginLeft: spacing.sm,
     },
-    button: {
+
+    // Sticky bottom CTA
+    ctaBar: {
+      position: 'absolute',
+      left: 0, right: 0, bottom: 0,
+      backgroundColor: theme.colors.cardBg,
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.md,
+      paddingBottom: spacing.lg,
+      borderTopWidth: 1,
+      borderTopColor: theme.colors.border,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: -2 },
+      shadowOpacity: 0.05,
+      shadowRadius: 4,
+      elevation: 8,
+    },
+    ctaSummaryRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'baseline',
+      marginBottom: spacing.sm,
+    },
+    ctaSummaryLabel: { color: theme.colors.textSecondary, fontSize: 12 },
+    ctaSummaryValue: { color: theme.colors.primary, fontSize: 18, fontWeight: '800' },
+    ctaButton: {
       borderRadius: borderRadius.lg,
-      padding: spacing.lg,
+      paddingVertical: spacing.md,
       alignItems: 'center',
       justifyContent: 'center',
       flexDirection: 'row',
-      marginHorizontal: spacing.lg,
-      marginBottom: spacing.lg,
     },
-    buttonEnabled: {
-      backgroundColor: theme.colors.primary,
-    },
-    buttonDisabled: {
-      backgroundColor: '#CCC',
-    },
-    buttonText: {
+    ctaButtonEnabled: { backgroundColor: theme.colors.primary },
+    ctaButtonDisabled: { backgroundColor: '#BFC5CC' },
+    ctaButtonText: {
       color: '#fff',
       fontSize: 16,
       fontWeight: '700',
-      marginLeft: spacing.md,
+      marginLeft: spacing.sm,
     },
+
     loadingContainer: {
-      flex: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
+      flex: 1, justifyContent: 'center', alignItems: 'center',
+      backgroundColor: theme.colors.background,
     },
+
+    // Success modal
     successModalOverlay: {
       flex: 1,
       backgroundColor: 'rgba(0, 0, 0, 0.6)',
@@ -291,71 +445,64 @@ export default function CheckoutScreen({ route, navigation }) {
       paddingVertical: spacing.xl,
     },
     successModalScroll: {
-      flexGrow: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
-      paddingVertical: spacing.lg,
-      width: '100%',
+      flexGrow: 1, justifyContent: 'center', alignItems: 'center',
+      paddingVertical: spacing.lg, width: '100%',
     },
-    successModal: {
+    // ── Чек об оплате ──
+    receiptCard: {
       backgroundColor: theme.colors.cardBg,
       borderRadius: borderRadius.xl,
-      padding: spacing.lg,
-      width: '85%',
+      width: '88%',
+      overflow: 'hidden',
+      borderWidth: 1,
+      borderColor: theme.colors.border,
     },
-    checkmarkContainer: {
+    receiptHeader: {
+      backgroundColor: '#10B981',
       alignItems: 'center',
-      marginBottom: spacing.md,
-    },
-    successTitle: {
-      color: theme.colors.text,
-      fontSize: 20,
-      fontWeight: '700',
-      textAlign: 'center',
-      marginBottom: spacing.md,
-    },
-    bookingDetailsCard: {
-      backgroundColor: theme.colors.background,
-      borderRadius: borderRadius.md,
+      paddingVertical: spacing.xl,
       paddingHorizontal: spacing.lg,
-      paddingVertical: spacing.sm,
-      marginBottom: spacing.lg,
     },
-    detailRow: {
-      flexDirection: 'row',
-      alignItems: 'flex-start',
-      paddingVertical: spacing.sm,
+    receiptCheckCircle: {
+      width: 60, height: 60, borderRadius: 30,
+      backgroundColor: '#fff',
+      alignItems: 'center', justifyContent: 'center',
+      marginBottom: spacing.sm,
     },
-    detailRowBorder: {
-      borderBottomWidth: 1,
+    receiptHeaderTitle: { color: '#fff', fontSize: 20, fontWeight: '800' },
+    receiptHeaderSub:   { color: 'rgba(255,255,255,0.88)', fontSize: 13, marginTop: 2 },
+    receiptBody:        { padding: spacing.lg },
+    receiptMerchant:    { color: theme.colors.text, fontSize: 14, fontWeight: '700', textAlign: 'center' },
+    receiptDate:        { color: theme.colors.textSecondary, fontSize: 12, textAlign: 'center', marginTop: 2 },
+    receiptDashed: {
+      borderBottomWidth: 1, borderStyle: 'dashed',
       borderBottomColor: theme.colors.border,
+      marginVertical: spacing.md,
     },
-    detailContent: {
-      marginLeft: spacing.md,
-      flex: 1,
+    receiptLineRow: {
+      flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start',
+      paddingVertical: 5, gap: spacing.md,
     },
-    detailLabel: {
-      color: theme.colors.textSecondary,
-      fontSize: 12,
-      marginBottom: spacing.xs,
+    receiptLineLabel: { color: theme.colors.textSecondary, fontSize: 13 },
+    receiptLineValue: { color: theme.colors.text, fontSize: 14, fontWeight: '600', flex: 1, textAlign: 'right' },
+    receiptTotalRow: {
+      flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+      backgroundColor: 'rgba(255,107,0,0.08)',
+      borderRadius: borderRadius.md,
+      paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
     },
-    detailValue: {
-      color: theme.colors.text,
-      fontSize: 16,
-      fontWeight: '600',
-    },
+    receiptTotalLabel: { color: theme.colors.text, fontSize: 14, fontWeight: '700' },
+    receiptTotalValue: { color: '#FF6B00', fontSize: 20, fontWeight: '800' },
+    receiptHint:       { color: theme.colors.textSecondary, fontSize: 11, textAlign: 'right', marginTop: 2 },
     successButton: {
       backgroundColor: theme.colors.primary,
       borderRadius: borderRadius.lg,
-      padding: spacing.lg,
+      paddingVertical: spacing.md,
       alignItems: 'center',
+      marginTop: spacing.lg,
     },
-    successButtonText: {
-      color: '#fff',
-      fontSize: 16,
-      fontWeight: '700',
-    },
-  }), [theme.colors]);
+    successButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  }), [theme.colors, insufficientFunds]);
 
   if (loadingBalance) {
     return (
@@ -365,144 +512,163 @@ export default function CheckoutScreen({ route, navigation }) {
     );
   }
 
+  const balanceOk     = !insufficientFunds;
+  const balanceColor  = balanceOk ? '#2E7D32' : '#C62828';
+  const balanceBg     = balanceOk ? '#E8F5E9' : '#FDECEC';
+
+  const receiptDate = (paidAt || new Date()).toLocaleString('ru-RU', {
+    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  });
+
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
-        {/* Booking Summary */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Сводка заказа</Text>
+      {/* Hero */}
+      <View style={styles.hero}>
+        <Text style={styles.heroLabel}>Оформление брони</Text>
+        <Text style={styles.heroProperty} numberOfLines={2}>
+          {bookingData.serviceType}
+        </Text>
+        <View style={styles.heroAmountRow}>
+          <Text style={styles.heroAmount}>{fmt(totalAmount)}</Text>
+          <Text style={styles.heroCurrency}>PRB · итого</Text>
+        </View>
+        <Text style={styles.heroHint}>
+          {bookingData.checkIn} → {bookingData.checkOut} · {bookingData.guests || 1} гость(-я)
+        </Text>
+      </View>
 
-          <View style={styles.row}>
-            <Text style={styles.label}>Услуга</Text>
-            <Text style={styles.value}>{bookingData.serviceType}</Text>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Balance ribbon */}
+        <View style={[styles.balanceRibbon, { backgroundColor: balanceBg }]}>
+          <MaterialCommunityIcons
+            name={balanceOk ? 'wallet-outline' : 'alert-circle-outline'}
+            size={28}
+            color={balanceColor}
+          />
+          <View style={styles.balanceTextWrap}>
+            <Text style={[styles.balanceLabel, { color: balanceColor }]}>
+              Баланс карты лояльности
+            </Text>
+            <Text style={[styles.balanceAmount, { color: balanceColor }]}>
+              {fmt(cardBalance)} PRB
+            </Text>
+            {!balanceOk && (
+              <Text style={{ color: balanceColor, fontSize: 11, marginTop: 2 }}>
+                Не хватает {fmt(depositAmount - cardBalance)} PRB для депозита
+              </Text>
+            )}
+          </View>
+        </View>
+
+        {/* Order summary */}
+        <View style={styles.card}>
+          <View style={styles.cardTitleRow}>
+            <MaterialIcons name="receipt-long" size={20} color={theme.colors.primary} />
+            <Text style={styles.cardTitle}>Состав заказа</Text>
           </View>
 
-          <View style={styles.row}>
-            <Text style={styles.label}>Дата заезда</Text>
+          <View style={[styles.row, styles.rowDivider]}>
+            <Text style={styles.label}>Заезд</Text>
             <Text style={styles.value}>{bookingData.checkIn}</Text>
           </View>
-
-          <View style={styles.row}>
-            <Text style={styles.label}>Дата выезда</Text>
+          <View style={[styles.row, styles.rowDivider]}>
+            <Text style={styles.label}>Выезд</Text>
             <Text style={styles.value}>{bookingData.checkOut}</Text>
           </View>
-
-          <View style={styles.row}>
+          <View style={[styles.row, (bookingData.saunaHours > 0 || bookingData.kitchenware) && styles.rowDivider]}>
             <Text style={styles.label}>Гостей</Text>
             <Text style={styles.value}>{bookingData.guests || 1}</Text>
           </View>
 
           {bookingData.saunaHours > 0 && (
-            <View style={styles.row}>
+            <View style={[styles.row, bookingData.kitchenware && styles.rowDivider]}>
               <Text style={styles.label}>Парилка</Text>
-              <Text style={styles.value}>{bookingData.saunaHours} ч. × 250PRB</Text>
+              <Text style={styles.value}>{bookingData.saunaHours} ч. × 250 PRB</Text>
             </View>
           )}
 
           {bookingData.kitchenware && (
             <View style={styles.row}>
               <Text style={styles.label}>Кухонный сервиз</Text>
-              <Text style={styles.value}>100PRB</Text>
+              <Text style={styles.value}>100 PRB</Text>
             </View>
           )}
+        </View>
 
-          <View style={[styles.row, styles.lastRow]}>
-            <Text style={styles.label}>Итого</Text>
-            <Text style={styles.totalValue}>PRB {bookingData.amount.toLocaleString('ru-RU')}</Text>
+        {/* Payment split */}
+        <View style={styles.card}>
+          <View style={styles.cardTitleRow}>
+            <MaterialIcons name="payments" size={20} color={theme.colors.primary} />
+            <Text style={styles.cardTitle}>Порядок оплаты</Text>
+          </View>
+
+          <View style={styles.splitBlock}>
+            <View style={styles.splitRow}>
+              <View style={{ flex: 1, paddingRight: spacing.md }}>
+                <Text style={styles.splitLabel}>Депозит сейчас</Text>
+                <Text style={styles.splitSubLabel}>списывается с карты лояльности</Text>
+              </View>
+              <Text style={styles.splitAmountPrimary}>{fmt(depositAmount)} PRB</Text>
+            </View>
+
+            {remainingAmount > 0 && (
+              <>
+                <View style={styles.splitDivider} />
+                <View style={styles.splitRow}>
+                  <View style={{ flex: 1, paddingRight: spacing.md }}>
+                    <Text style={styles.splitLabel}>Остаток в день выезда</Text>
+                    <Text style={styles.splitSubLabel}>
+                      картой автоматически или наличными при заезде
+                    </Text>
+                  </View>
+                  <Text style={styles.splitAmountMuted}>{fmt(remainingAmount)} PRB</Text>
+                </View>
+              </>
+            )}
           </View>
         </View>
 
-        {/* Payment Split: deposit (сейчас) + остаток (до заезда) */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Порядок оплаты</Text>
-
-          <View style={styles.row}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.value}>Депозит (сейчас)</Text>
-              <Text style={[styles.label, { marginTop: 2 }]}>списывается с карты лояльности</Text>
-            </View>
-            <Text style={styles.totalValue}>PRB {depositAmount.toLocaleString('ru-RU')}</Text>
-          </View>
-
-          <View style={[styles.row, styles.lastRow]}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.value}>Остаток (до заезда)</Text>
-              <Text style={[styles.label, { marginTop: 2 }]}>
-                {remainingAmount > 0 ? 'картой приложения или наличными при заезде' : 'нет — депозит покрывает всю сумму'}
-              </Text>
-            </View>
-            <Text style={styles.value}>PRB {remainingAmount.toLocaleString('ru-RU')}</Text>
-          </View>
-
-          <Text style={{ color: theme.colors.textSecondary, fontSize: 11, marginTop: spacing.sm, lineHeight: 16 }}>
-            Оплатите депозит в течение 12 часов после создания брони, иначе слот освобождается.
+        {/* Info note */}
+        <View style={styles.note}>
+          <MaterialIcons name="info-outline" size={18} color={theme.colors.primary} />
+          <Text style={styles.noteText}>
+            Депозит закрепит за вами даты. Оплатите его в течение 12 часов — иначе слот освободится.
+            {remainingAmount > 0 ? ' Остаток зафиксируется при выборе способа в личном кабинете.' : ''}
           </Text>
         </View>
+      </ScrollView>
 
-        {/* Loyalty Card Balance */}
-        <View style={[styles.section, { backgroundColor: insufficientFunds ? '#FEE4E4' : '#E8F5E9', borderLeftWidth: 4, borderLeftColor: insufficientFunds ? '#FF6B6B' : '#4CAF50' }]}>
-          <View style={styles.balanceRow}>
-            <View style={styles.balanceInfo}>
-              <Text style={styles.balanceLabel}>Баланс карты лояльности</Text>
-              {loadingBalance ? (
-                <ActivityIndicator size="small" color={theme.colors.primary} />
-              ) : (
-                <Text style={[styles.balanceAmount, { color: insufficientFunds ? '#FF6B6B' : '#4CAF50' }]}>
-                  {cardBalance.toLocaleString('ru-RU')}PRB
-                </Text>
-              )}
-            </View>
-            <MaterialIcons
-              name={insufficientFunds ? 'error-outline' : 'check-circle'}
-              size={32}
-              color={insufficientFunds ? '#FF6B6B' : '#4CAF50'}
-              style={styles.balanceIcon}
-            />
-          </View>
-
-          {insufficientFunds && (
-            <View style={{ marginTop: spacing.lg, paddingTop: spacing.lg, borderTopWidth: 1, borderTopColor: '#FFB3B3' }}>
-              <Text style={{ color: '#FF6B6B', fontSize: 13, lineHeight: 20, fontWeight: '600', marginBottom: spacing.sm }}>⚠️ Недостаточно средств для депозита</Text>
-              <Text style={{ color: '#D32F2F', fontSize: 12, lineHeight: 18 }}>
-                Требуется на депозит: {depositAmount.toLocaleString('ru-RU')}PRB{'\n'}Доступно: {cardBalance.toLocaleString('ru-RU')}PRB{'\n'}Не хватает: {(depositAmount - cardBalance).toLocaleString('ru-RU')}PRB
-              </Text>
-            </View>
-          )}
+      {/* Sticky CTA */}
+      <View style={styles.ctaBar}>
+        <View style={styles.ctaSummaryRow}>
+          <Text style={styles.ctaSummaryLabel}>К списанию сейчас</Text>
+          <Text style={styles.ctaSummaryValue}>{fmt(depositAmount)} PRB</Text>
         </View>
-
-        {/* Confirm Button */}
         <TouchableOpacity
           style={[
-            styles.button,
-            insufficientFunds ? styles.buttonDisabled : styles.buttonEnabled,
+            styles.ctaButton,
+            insufficientFunds ? styles.ctaButtonDisabled : styles.ctaButtonEnabled,
           ]}
           onPress={handleConfirmBooking}
           disabled={insufficientFunds || isProcessing}
+          activeOpacity={0.85}
         >
           {isProcessing ? (
             <ActivityIndicator color="#fff" />
           ) : (
             <>
               <MaterialIcons
-                name={insufficientFunds ? 'block' : 'check-circle'}
-                size={24}
+                name={insufficientFunds ? 'block' : 'lock'}
+                size={20}
                 color="#fff"
               />
-              <Text style={styles.buttonText}>
-                Подтвердить оплату
+              <Text style={styles.ctaButtonText}>
+                {insufficientFunds ? 'Недостаточно средств' : 'Подтвердить и оплатить депозит'}
               </Text>
             </>
           )}
         </TouchableOpacity>
-
-        {insufficientFunds && (
-          <View style={[styles.section, { backgroundColor: '#FFF3CD' }]}>
-            <Text style={{ color: '#856404', fontSize: 13, lineHeight: 20 }}>
-              {'ℹ️ Для завершения бронирования пополните баланс карты лояльности. Перейдите на вкладку «Мои карты» и пополните необходимую сумму.'}
-            </Text>
-          </View>
-        )}
-      </ScrollView>
+      </View>
 
       {/* Success Modal */}
       <Modal
@@ -516,94 +682,66 @@ export default function CheckoutScreen({ route, navigation }) {
       >
         <View style={styles.successModalOverlay}>
           <ScrollView contentContainerStyle={styles.successModalScroll} style={{ flex: 1 }}>
-            <View style={styles.successModal}>
-              {/* Checkmark Animation */}
-              <View style={styles.checkmarkContainer}>
-                <MaterialCommunityIcons name="check-circle" size={80} color="#4CAF50" />
+            <View style={styles.receiptCard}>
+
+              {/* ── Зелёная шапка чека ── */}
+              <View style={styles.receiptHeader}>
+                <View style={styles.receiptCheckCircle}>
+                  <MaterialCommunityIcons name="check-bold" size={32} color="#10B981" />
+                </View>
+                <Text style={styles.receiptHeaderTitle}>
+                  {bookingInfo?.remaining > 0 ? 'Депозит принят' : 'Оплачено'}
+                </Text>
+                <Text style={styles.receiptHeaderSub}>
+                  {bookingInfo?.remaining > 0 ? 'Бронь подтверждена' : 'Бронирование оплачено'}
+                </Text>
               </View>
 
-              <Text style={styles.successTitle}>
-                {bookingInfo?.remaining > 0 ? 'Депозит принят, бронь подтверждена!' : 'Бронирование оплачено!'}
-              </Text>
+              {/* ── Тело чека ── */}
+              <View style={styles.receiptBody}>
+                <Text style={styles.receiptMerchant}>Villa Jaconda · Программа лояльности</Text>
+                <Text style={styles.receiptDate}>Чек от {receiptDate}</Text>
 
-              {bookingInfo && (
-                <>
-                  <View style={styles.bookingDetailsCard}>
-                    <View style={styles.detailRow}>
-                      <MaterialIcons name="apartment" size={20} color={theme.colors.primary} />
-                      <View style={styles.detailContent}>
-                        <Text style={styles.detailLabel}>Объект</Text>
-                        <Text style={styles.detailValue}>{bookingInfo.propertyName}</Text>
-                      </View>
-                    </View>
+                {bookingInfo && (
+                  <>
+                    <View style={styles.receiptDashed} />
 
-                    <View style={[styles.detailRow, styles.detailRowBorder]}>
-                      <MaterialIcons name="calendar-today" size={20} color={theme.colors.primary} />
-                      <View style={styles.detailContent}>
-                        <Text style={styles.detailLabel}>Даты</Text>
-                        <Text style={styles.detailValue}>{bookingInfo.checkIn} - {bookingInfo.checkOut}</Text>
-                      </View>
-                    </View>
+                    <ReceiptLine styles={styles} label="Объект" value={bookingInfo.propertyName} />
+                    <ReceiptLine styles={styles} label="Даты" value={`${bookingInfo.checkIn} — ${bookingInfo.checkOut}`} />
+                    <ReceiptLine styles={styles} label="Гостей" value={String(bookingInfo.guests)} />
+                    <ReceiptLine styles={styles} label="Бронирование" value={`#${bookingInfo.id}`} />
 
-                    <View style={[styles.detailRow, styles.detailRowBorder]}>
-                      <MaterialIcons name="people" size={20} color={theme.colors.primary} />
-                      <View style={styles.detailContent}>
-                        <Text style={styles.detailLabel}>Гостей</Text>
-                        <Text style={styles.detailValue}>{bookingInfo.guests}</Text>
-                      </View>
-                    </View>
+                    <View style={styles.receiptDashed} />
 
-                    <View style={[styles.detailRow, styles.detailRowBorder]}>
-                      <MaterialIcons name="confirmation-number" size={20} color={theme.colors.primary} />
-                      <View style={styles.detailContent}>
-                        <Text style={styles.detailLabel}>Номер бронирования</Text>
-                        <Text style={styles.detailValue}>#{bookingInfo.id}</Text>
-                      </View>
-                    </View>
-
-                    <View style={[styles.detailRow, styles.detailRowBorder]}>
-                      <MaterialIcons name="payments" size={20} color="#FF9800" />
-                      <View style={styles.detailContent}>
-                        <Text style={styles.detailLabel}>Депозит оплачен</Text>
-                        <Text style={[styles.detailValue, { color: '#FF6B00' }]}>{bookingInfo.deposit.toLocaleString('ru-RU')} PRB</Text>
-                      </View>
+                    {/* Итог депозита — акцент */}
+                    <View style={styles.receiptTotalRow}>
+                      <Text style={styles.receiptTotalLabel}>Депозит оплачен</Text>
+                      <Text style={styles.receiptTotalValue}>{fmt(bookingInfo.deposit)} PRB</Text>
                     </View>
 
                     {bookingInfo.remaining > 0 && (
-                      <View style={[styles.detailRow, styles.detailRowBorder]}>
-                        <MaterialIcons name="schedule" size={20} color="#1976D2" />
-                        <View style={styles.detailContent}>
-                          <Text style={styles.detailLabel}>Остаток до заезда</Text>
-                          <Text style={[styles.detailValue, { color: '#1976D2' }]}>
-                            {bookingInfo.remaining.toLocaleString('ru-RU')} PRB
-                          </Text>
-                          <Text style={[styles.detailLabel, { marginTop: 2 }]}>
-                            картой приложения или наличными при заезде
-                          </Text>
-                        </View>
-                      </View>
+                      <>
+                        <ReceiptLine styles={styles} label="Остаток до заезда" value={`${fmt(bookingInfo.remaining)} PRB`} valueColor="#1976D2" />
+                        <Text style={styles.receiptHint}>картой приложения или наличными при заезде</Text>
+                      </>
                     )}
 
-                    <View style={styles.detailRow}>
-                      <MaterialIcons name="account-balance-wallet" size={20} color="#4CAF50" />
-                      <View style={styles.detailContent}>
-                        <Text style={styles.detailLabel}>Баланс карты</Text>
-                        <Text style={[styles.detailValue, { color: '#4CAF50' }]}>{bookingInfo.newBalance.toLocaleString('ru-RU')} PRB</Text>
-                      </View>
-                    </View>
-                  </View>
-                </>
-              )}
+                    <View style={styles.receiptDashed} />
 
-              <TouchableOpacity
-                style={styles.successButton}
-                onPress={() => {
-                  setShowSuccessModal(false);
-                  navigation.goBack();
-                }}
-              >
-                <Text style={styles.successButtonText}>Готово</Text>
-              </TouchableOpacity>
+                    <ReceiptLine styles={styles} label="Баланс карты" value={`${fmt(bookingInfo.newBalance)} PRB`} valueColor="#10B981" />
+                  </>
+                )}
+
+                <TouchableOpacity
+                  style={styles.successButton}
+                  onPress={() => {
+                    setShowSuccessModal(false);
+                    navigation.goBack();
+                  }}
+                >
+                  <Text style={styles.successButtonText}>Готово</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </ScrollView>
         </View>
