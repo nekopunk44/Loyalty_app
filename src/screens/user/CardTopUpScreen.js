@@ -17,7 +17,6 @@ import { spacing, borderRadius } from '../../constants/theme';
 import { GradientView } from '../../components/ui/GradientView';
 import { useAuth } from '../../context/AuthContext';
 import { usePayment } from '../../context/PaymentContext';
-import { useNotification } from '../../context/NotificationContext';
 import { useTheme } from '../../context/ThemeContext';
 import { isGooglePlayAvailable, prbToSku } from '../../services/googlePlayIAP';
 
@@ -61,7 +60,7 @@ const PRB_RATES = {
   USD: 16.10,
 };
 
-export default function CardTopUpScreen({ navigation, onClose }) {
+export default function CardTopUpScreen({ navigation, onClose, onSuccess }) {
   const isSheet = !!onClose;
   const { user } = useAuth();
   const {
@@ -71,7 +70,6 @@ export default function CardTopUpScreen({ navigation, onClose }) {
     isProcessing,
     paymentError,
   } = usePayment();
-  const { notifyTopup } = useNotification();
   const { isDark, theme } = useTheme();
 
   const googlePlaySupported = Platform.OS === 'android' && isGooglePlayAvailable();
@@ -169,6 +167,16 @@ export default function CardTopUpScreen({ navigation, onClose }) {
     setShowConfirmModal(true);
   };
 
+  // Автоматический переход после успешного пополнения: закрываем экран/шит и
+  // возвращаемся к карте (родитель обновит баланс). Уведомление о пополнении
+  // приходит с сервера (SSE/push), поэтому здесь его дублировать не нужно.
+  const finishSuccess = () => {
+    setTopUpAmount('');
+    if (onSuccess) onSuccess();
+    else if (onClose) onClose();
+    else navigation?.goBack?.();
+  };
+
   const handleTopUp = async () => {
     setShowConfirmModal(false);
     try {
@@ -184,12 +192,8 @@ export default function CardTopUpScreen({ navigation, onClose }) {
         }
         const result = await topUpCardGooglePlay(user.id, sku);
         if (result?.success) {
-          notifyTopup?.(parsedAmount, 'Google Play');
-          Alert.alert(
-            'Готово',
-            `Баланс пополнен на ${parsedAmount.toLocaleString('ru-RU')} PRB`,
-            [{ text: 'OK', onPress: () => { setTopUpAmount(''); loadBalance(); } }],
-          );
+          Alert.alert('Готово', `Баланс пополнен на ${parsedAmount.toLocaleString('ru-RU')} PRB`);
+          finishSuccess();
         } else if (result?.status === 'cancelled') {
           // Пользователь отменил покупку в Google Play — молча
         } else {
@@ -201,12 +205,8 @@ export default function CardTopUpScreen({ navigation, onClose }) {
       if (selectedMethod === 'card') {
         const result = await topUpCardStripe(user.id, parsedAmount, currency);
         if (result?.success) {
-          notifyTopup?.(parsedAmount, 'Stripe');
-          Alert.alert(
-            'Готово',
-            `Баланс пополнен на ${parsedAmount.toLocaleString('ru-RU')} PRB`,
-            [{ text: 'OK', onPress: () => { setTopUpAmount(''); loadBalance(); } }],
-          );
+          Alert.alert('Готово', `Баланс пополнен на ${parsedAmount.toLocaleString('ru-RU')} PRB`);
+          finishSuccess();
         } else if (result?.status === 'cancelled') {
           // Пользователь закрыл браузер — молча, ничего не показываем
         } else if (result?.status === 'failed') {
