@@ -13,6 +13,8 @@ import * as ImagePicker from 'expo-image-picker';
 import Svg, { Path } from 'react-native-svg';
 import SignaturePad from '../../components/ui/SignaturePad';
 import { HOUSE_RULES, RULES_SIGN_KEY as SHARED_RULES_SIGN_KEY } from '../../constants/houseRules';
+import { apiCall } from '../../utils/api';
+import { getApiUrl } from '../../utils/apiUrl';
 
 const NAVY  = '#063B5C';
 const TEAL  = '#14B8A6';
@@ -50,7 +52,7 @@ const DEFAULT_RULES = {
 };
 
 const DEFAULT_CONTACT = {
-  instagram: 'villajaconda',
+  instagram: 'villa_jaconda_relax',
   email:     'support@villajaconda.ru',
   phone:     null, // задаётся администратором через интерфейс настроек
 };
@@ -218,7 +220,21 @@ export default function SettingsScreen() {
   const [signedAt, setSignedAt]                           = useState(null);
   const [signedPaths, setSignedPaths]                     = useState([]);
 
-  const { logout, isAdmin, user } = useAuth();
+  const {
+    logout, isAdmin, user,
+    biometricAvailable, biometricEnabled, enableBiometric, disableBiometric,
+  } = useAuth();
+
+  const handleBiometricToggle = async (next) => {
+    if (next) {
+      const ok = await enableBiometric();
+      if (!ok) {
+        Alert.alert('Не удалось включить', 'Биометрия недоступна или вход не подтверждён.');
+      }
+    } else {
+      await disableBiometric();
+    }
+  };
   const { isDark, toggleTheme, theme } = useTheme();
   const colors = theme.colors;
   const useNative = Platform.OS !== 'web';
@@ -238,15 +254,22 @@ export default function SettingsScreen() {
     AsyncStorage.getItem(AVATAR_KEY)
       .then(uri => { if (uri) setAvatarUri(uri); })
       .catch(() => {});
+    // Сначала локальный кэш (быстро/офлайн), затем — общие правила с сервера
+    // (их редактирует админ, видят все пользователи).
+    const applyRules = (parsed) => setRulesData({
+      ...DEFAULT_RULES,
+      ...parsed,
+      houseRules: parsed?.houseRules || DEFAULT_RULES.houseRules,
+    });
     AsyncStorage.getItem(RULES_KEY)
-      .then(v => {
-        if (!v) return;
-        const parsed = JSON.parse(v);
-        setRulesData({
-          ...DEFAULT_RULES,
-          ...parsed,
-          houseRules: parsed?.houseRules || DEFAULT_RULES.houseRules,
-        });
+      .then(v => { if (v) applyRules(JSON.parse(v)); })
+      .catch(() => {});
+    apiCall(`${getApiUrl()}/settings/rules`)
+      .then(data => {
+        if (data?.success && data.rules) {
+          applyRules(data.rules);
+          AsyncStorage.setItem(RULES_KEY, JSON.stringify(data.rules)).catch(() => {});
+        }
       })
       .catch(() => {});
     AsyncStorage.getItem(CONTACT_KEY)
@@ -367,6 +390,20 @@ export default function SettingsScreen() {
     setRulesDraft(null);
     setIsEditingRules(false);
     await AsyncStorage.setItem(RULES_KEY, JSON.stringify(draft));
+    // Админ сохраняет общие правила на сервер — чтобы их видели все пользователи.
+    if (isAdmin) {
+      try {
+        const res = await apiCall(`${getApiUrl()}/settings/rules`, {
+          method: 'PUT',
+          body: JSON.stringify({ rules: draft }),
+        });
+        if (!res?.success) {
+          Alert.alert('Внимание', 'Правила сохранены локально, но не отправлены на сервер. Проверьте соединение.');
+        }
+      } catch {
+        Alert.alert('Внимание', 'Правила сохранены локально, но не отправлены на сервер.');
+      }
+    }
   };
 
   const saveContact = async (draft) => {
@@ -518,6 +555,31 @@ export default function SettingsScreen() {
             last
           />
         </SettingCard>
+
+        {/* ── Security ── */}
+        {biometricAvailable && (
+          <>
+            <SectionLabel label="БЕЗОПАСНОСТЬ" colors={colors} />
+            <SettingCard animVal={sec2Anim} cardBg={settingsPalette.cardBg} borderColor={settingsPalette.border}>
+              <SettingRow
+                icon="fingerprint"
+                iconBg="#0EA5E9"
+                title="Вход по биометрии"
+                desc="Face ID / отпечаток вместо пароля"
+                borderColor={colors.border}
+                colors={colors}
+                right={
+                  <ToggleSwitch
+                    value={biometricEnabled}
+                    onToggle={handleBiometricToggle}
+                    activeColor="#0EA5E9"
+                  />
+                }
+                last
+              />
+            </SettingCard>
+          </>
+        )}
 
         {/* ── Loyalty (user only) ── */}
         {!isAdmin && (
@@ -944,6 +1006,23 @@ function RulesContent({
     next.levels[i][field] = text;
     onDraftChange(next);
   };
+  // CRUD правил (платформы и дома): добавление/удаление + правка текста.
+  const updateHouseText = (i, text) => {
+    const next = JSON.parse(JSON.stringify(editData));
+    next.houseRules[i].text = text;
+    onDraftChange(next);
+  };
+  const addRule = (key) => {
+    const next = JSON.parse(JSON.stringify(editData));
+    if (!Array.isArray(next[key])) next[key] = [];
+    next[key].push({ text: '', icon: 'check-circle', color: '#64748B' });
+    onDraftChange(next);
+  };
+  const deleteRule = (key, i) => {
+    const next = JSON.parse(JSON.stringify(editData));
+    next[key].splice(i, 1);
+    onDraftChange(next);
+  };
 
   const formatSignedDate = (iso) => {
     try {
@@ -994,35 +1073,70 @@ function RulesContent({
       <Text style={[styles.rulesSectionTitle, { color: colors.text, borderBottomColor: TEAL, marginTop: 20 }]}>
         Основные правила
       </Text>
-      {display.rules.map((r, i) => (
+      {(isEditing ? editData.rules : display.rules).map((r, i) => (
         <View key={i} style={[styles.ruleRow, { backgroundColor: colors.background, borderColor: colors.border }]}>
           <View style={[styles.ruleIconBox, { backgroundColor: `${r.color}18` }]}>
             <MaterialIcons name={r.icon || 'check-circle'} size={18} color={r.color} />
           </View>
           {isEditing ? (
-            <TextInput
-              style={[styles.ruleInput, { color: colors.text, borderColor: colors.border }]}
-              value={editData.rules[i].text}
-              onChangeText={t => updateRuleText(i, t)}
-              multiline
-            />
+            <>
+              <TextInput
+                style={[styles.ruleInput, { color: colors.text, borderColor: colors.border }]}
+                value={editData.rules[i].text}
+                onChangeText={t => updateRuleText(i, t)}
+                placeholder="Текст правила"
+                placeholderTextColor={colors.textSecondary}
+                multiline
+              />
+              <TouchableOpacity onPress={() => deleteRule('rules', i)} style={styles.ruleDeleteBtn} activeOpacity={0.7}>
+                <MaterialIcons name="delete-outline" size={20} color="#EF4444" />
+              </TouchableOpacity>
+            </>
           ) : (
             <Text style={[styles.ruleText, { color: colors.text }]}>{r.text}</Text>
           )}
         </View>
       ))}
+      {isEditing && (
+        <TouchableOpacity onPress={() => addRule('rules')} style={[styles.ruleAddBtn, { borderColor: TEAL }]} activeOpacity={0.8}>
+          <MaterialIcons name="add" size={18} color={TEAL} />
+          <Text style={[styles.ruleAddText, { color: TEAL }]}>Добавить правило</Text>
+        </TouchableOpacity>
+      )}
 
       <Text style={[styles.rulesSectionTitle, { color: colors.text, borderBottomColor: TEAL, marginTop: 20 }]}>
         Правила проживания
       </Text>
-      {houseRules.map((r, i) => (
+      {(isEditing ? (editData.houseRules || []) : houseRules).map((r, i) => (
         <View key={`house-${i}`} style={[styles.ruleRow, { backgroundColor: colors.background, borderColor: colors.border }]}>
           <View style={[styles.ruleIconBox, { backgroundColor: `${r.color}18` }]}>
             <MaterialIcons name={r.icon || 'check-circle'} size={18} color={r.color} />
           </View>
-          <Text style={[styles.ruleText, { color: colors.text }]}>{r.text}</Text>
+          {isEditing ? (
+            <>
+              <TextInput
+                style={[styles.ruleInput, { color: colors.text, borderColor: colors.border }]}
+                value={editData.houseRules[i].text}
+                onChangeText={t => updateHouseText(i, t)}
+                placeholder="Текст правила проживания"
+                placeholderTextColor={colors.textSecondary}
+                multiline
+              />
+              <TouchableOpacity onPress={() => deleteRule('houseRules', i)} style={styles.ruleDeleteBtn} activeOpacity={0.7}>
+                <MaterialIcons name="delete-outline" size={20} color="#EF4444" />
+              </TouchableOpacity>
+            </>
+          ) : (
+            <Text style={[styles.ruleText, { color: colors.text }]}>{r.text}</Text>
+          )}
         </View>
       ))}
+      {isEditing && (
+        <TouchableOpacity onPress={() => addRule('houseRules')} style={[styles.ruleAddBtn, { borderColor: TEAL }]} activeOpacity={0.8}>
+          <MaterialIcons name="add" size={18} color={TEAL} />
+          <Text style={[styles.ruleAddText, { color: TEAL }]}>Добавить правило проживания</Text>
+        </TouchableOpacity>
+      )}
 
       {!isEditing && (
         <View style={[styles.signCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
@@ -1323,6 +1437,9 @@ const styles = StyleSheet.create({
   ruleIconBox:  { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   ruleText:     { flex: 1, fontSize: 13, lineHeight: 18 },
   ruleInput:    { flex: 1, fontSize: 13, lineHeight: 18, borderWidth: 1, borderRadius: 6, padding: 6 },
+  ruleDeleteBtn: { padding: 6, marginLeft: 2 },
+  ruleAddBtn:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1.5, borderStyle: 'dashed', borderRadius: 10, paddingVertical: 11, marginBottom: 8 },
+  ruleAddText:  { fontSize: 13, fontWeight: '700' },
 
   // Signature / acknowledgment
   signCard:       { marginTop: 22, padding: 16, borderRadius: 16, borderWidth: 1 },
