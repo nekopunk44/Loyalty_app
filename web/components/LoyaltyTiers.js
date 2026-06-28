@@ -1,7 +1,6 @@
 'use client';
 import { useState } from 'react';
 import Icon from './ui/Icon';
-import VJMonogram from './VJMonogram';
 
 const TIERS = [
   { key: 'bronze',   name: 'Bronze',   label: 'Начало пути',     color: '#c47432', cashback: '3%',  perks: ['Кэшбек 3% с каждого бронирования', 'История визитов в приложении', 'Персональные рекомендации событий', 'Бонус на день рождения'] },
@@ -230,61 +229,26 @@ export default function LoyaltyApp() {
                   }} />
 
                   <div style={{
-                    flex: 1, borderRadius: 34,
-                    background: 'linear-gradient(180deg, #0f0c08 0%, #0a0805 100%)',
-                    padding: '52px 20px 22px',
-                    display: 'flex', flexDirection: 'column', alignItems: 'center',
-                    position: 'relative', overflow: 'hidden',
+                    flex: 1, borderRadius: 34, overflow: 'hidden',
+                    background: '#0a0805', position: 'relative',
                   }}>
+                    {/* Видео-превью приложения внутри экрана телефона */}
+                    <video
+                      src="/video_2026-06-28_23-42-26.mp4"
+                      autoPlay
+                      loop
+                      muted
+                      playsInline
+                      preload="metadata"
+                      aria-label="Превью приложения Villa Jaconda"
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                    />
+                    {/* Акцентная линия сверху экрана под выбранный уровень */}
                     <div style={{
                       position: 'absolute', top: 0, left: '-50%', width: '200%', height: 1,
                       background: `linear-gradient(90deg, transparent, ${t.color}, transparent)`,
-                      opacity: 0.4,
+                      opacity: 0.4, pointerEvents: 'none', zIndex: 2,
                     }} />
-
-                    <VJMonogram size={62} mainColor="rgba(245,237,224,0.92)" accentColor={t.color} animate={false} />
-
-                    <div style={{ marginTop: 12, textAlign: 'center' }}>
-                      <div style={{ fontFamily: 'var(--r-serif)', fontSize: 14, color: '#f5ede0', letterSpacing: '0.06em' }}>Villa Jaconda</div>
-                      <div style={{ fontSize: 8, color: 'rgba(212,164,94,0.7)', letterSpacing: '0.28em', textTransform: 'uppercase', marginTop: 3 }}>Loyalty Card</div>
-                    </div>
-
-                    <div key={active} style={{
-                      width: '100%', marginTop: 22, padding: '16px 14px',
-                      background: `linear-gradient(135deg, ${t.color}26 0%, ${t.color}0a 100%)`,
-                      border: `1px solid ${t.color}50`, borderRadius: 14,
-                      animation: 'tierFadeUp 0.45s cubic-bezier(0.16,1,0.3,1) both',
-                    }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                        <span style={{ fontSize: 8, letterSpacing: '0.28em', textTransform: 'uppercase', color: 'rgba(245,237,224,0.55)' }}>Уровень</span>
-                        <span style={{ fontFamily: 'var(--r-serif)', fontStyle: 'italic', fontSize: 14, color: t.color, fontWeight: 500 }}>{t.name}</span>
-                      </div>
-                      <div style={{ fontFamily: 'var(--r-serif)', fontSize: 28, color: '#f5ede0', lineHeight: 1, marginBottom: 4 }}>
-                        1 240<span style={{ fontSize: 12, color: t.color, marginLeft: 4 }}>PRB</span>
-                      </div>
-                      <div style={{ fontSize: 8, letterSpacing: '0.24em', color: 'rgba(245,237,224,0.45)', textTransform: 'uppercase' }}>Кешбек {t.cashback}</div>
-                    </div>
-
-                    <div style={{
-                      marginTop: 18, width: 68, height: 68, borderRadius: 8,
-                      background: 'rgba(245,237,224,0.06)', border: '1px solid rgba(245,237,224,0.1)',
-                      display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 1.5, padding: 6,
-                    }}>
-                      {Array.from({ length: 36 }).map((_, i) => (
-                        <div key={i} style={{ background: ((i * 7 + 3) % 5) < 2 ? 'rgba(245,237,224,0.55)' : 'transparent', borderRadius: 1 }} />
-                      ))}
-                    </div>
-
-                    <div style={{ marginTop: 'auto', width: '100%', display: 'flex', justifyContent: 'space-around', paddingTop: 14, borderTop: '1px solid rgba(245,237,224,0.06)' }}>
-                      {['⌂', '◉', '⬡', '☰'].map((ic, i) => (
-                        <div key={i} style={{
-                          width: 28, height: 28, borderRadius: 7,
-                          background: i === 0 ? `${t.color}22` : 'transparent',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontSize: 13, color: i === 0 ? t.color : 'rgba(245,237,224,0.25)',
-                        }}>{ic}</div>
-                      ))}
-                    </div>
                   </div>
                 </div>
               </div>
