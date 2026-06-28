@@ -14,7 +14,7 @@ const express = require('express');
 const bcryptjs = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
-const { Op } = require('sequelize');
+const { Op, fn, col, where } = require('sequelize');
 
 const logger = require('../logger');
 const { User, LoyaltyCard, Notification } = require('../models');
@@ -26,6 +26,13 @@ const getJwtSecret = () =>
   process.env.JWT_SECRET || 'development-only-jwt-secret-change-me';
 
 const isDev = () => (process.env.NODE_ENV || 'development') === 'development';
+
+// Нормализация email: тримминг + нижний регистр. Email должен совпадать с тем,
+// что был указан при создании пользователя, независимо от регистра ввода.
+const normalizeEmail = (email) => String(email || '').trim().toLowerCase();
+// Регистронезависимый поиск по email (покрывает и уже созданных пользователей
+// с email в смешанном регистре).
+const emailWhere = (email) => where(fn('lower', col('email')), normalizeEmail(email));
 
 // ACCESS_TOKEN_TTL: короткий срок для access-токена
 const ACCESS_TOKEN_TTL  = '15m';
@@ -108,7 +115,8 @@ module.exports = function createAuthRouter({
         return res.status(503).json({ success: false, error: 'База данных не подключена' });
       }
 
-      const existingUser = await User.findOne({ where: { email } });
+      const normEmail = normalizeEmail(email);
+      const existingUser = await User.findOne({ where: emailWhere(normEmail) });
       if (existingUser) {
         return res.status(400).json({ success: false, error: 'Email уже зарегистрирован' });
       }
@@ -123,9 +131,9 @@ module.exports = function createAuthRouter({
 
       const newUser = await User.create({
         userId,
-        email,
+        email: normEmail,
         passwordHash,
-        displayName: displayName || email.split('@')[0],
+        displayName: displayName || normEmail.split('@')[0],
         phone: phone || null,
         role: role || 'user',
         membershipLevel: membershipLevel || 'Bronze',
@@ -153,8 +161,8 @@ module.exports = function createAuthRouter({
         process.env.RESEND_API_KEY ||
         (process.env.SMTP_USER && process.env.SMTP_PASS)
       );
-      sendWelcomeEmail(email, setupToken, newUser.displayName).catch((mailErr) => {
-        logger.error('welcome email failed', { email, error: mailErr.message });
+      sendWelcomeEmail(normEmail, setupToken, newUser.displayName).catch((mailErr) => {
+        logger.error('welcome email failed', { email: normEmail, error: mailErr.message });
       });
 
       return res.status(201).json({
@@ -267,7 +275,7 @@ module.exports = function createAuthRouter({
         return res.status(503).json({ success: false, error: 'База данных не подключена' });
       }
 
-      const user = await User.findOne({ where: { email } });
+      const user = await User.findOne({ where: emailWhere(email) });
       if (!user) {
         return res.status(401).json({ success: false, error: 'Неверный email или пароль' });
       }
@@ -397,7 +405,7 @@ module.exports = function createAuthRouter({
         return res.status(503).json({ success: false, error: 'База данных не подключена' });
       }
 
-      const user = await User.findOne({ where: { email } });
+      const user = await User.findOne({ where: emailWhere(email) });
       if (!user) {
         return res
           .status(200)
@@ -480,9 +488,12 @@ module.exports = function createAuthRouter({
         logger.error('Ошибка при отправке уведомлений админам', { error: notifErr.message });
       }
 
+      // Возвращаем email аккаунта, чтобы клиент сразу выполнил автоматический
+      // вход с тем же email, что был указан при создании пользователя.
       return res.status(200).json({
         success: true,
         message: isSetup ? 'Пароль установлен' : 'Пароль успешно изменён',
+        email: user.email,
       });
     } catch (error) {
       logger.error('set-new-password error', { error: error.message });
