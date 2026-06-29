@@ -35,8 +35,19 @@ class RFMResult:
 def compute_rfm(activity: pd.DataFrame, today: Optional[datetime] = None) -> pd.DataFrame:
     """Группирует активность по user_id и считает recency, frequency, monetary."""
     today = today or datetime.utcnow()
+    # today приводим к tz-naive, чтобы вычитание с датами совпадало по типу.
+    if getattr(today, "tzinfo", None) is not None:
+        today = today.replace(tzinfo=None)
     if activity.empty:
         return pd.DataFrame(columns=["user_id", "recency", "frequency", "monetary"])
+
+    # Даты транзакций нормализуем к tz-naive (UTC). Без этого вычитание
+    # tz-naive `today` и tz-aware дат падает с
+    # "Cannot subtract tz-naive and tz-aware datetime-like objects".
+    activity = activity.copy()
+    activity["last_tx_date"] = (
+        pd.to_datetime(activity["last_tx_date"], utc=True).dt.tz_localize(None)
+    )
 
     rfm = (
         activity.groupby("user_id")
@@ -140,33 +151,50 @@ class RFMSegmenter:
 def recompute_segments(
     activity: pd.DataFrame, today: Optional[datetime] = None
 ) -> RFMResult:
-    """Полный end-to-end пересчёт RFM-сегментов: данные → fit → результат."""
+    """Полный end-to-end пересчёт RFM-сегментов: данные → fit → результат.
+
+    При сбое кластеризации (мало данных, вырожденные признаки) не падаем, а
+    мягко считаем уровни резервным ранговым методом — чтобы пересчёт всегда
+    возвращал результат, а не 500.
+    """
     rfm = compute_rfm(activity, today)
     seg = RFMSegmenter()
-    return seg.fit(rfm)
+    try:
+        return seg.fit(rfm)
+    except Exception:
+        levels = fallback_levels_by_index(rfm)
+        distribution = {lvl: 0 for lvl in LEVEL_NAMES}
+        for lvl in levels.values():
+            distribution[lvl] = distribution.get(lvl, 0) + 1
+        return RFMResult(
+            user_levels=levels,
+            silhouette=0.0,
+            n_users=len(levels),
+            distribution={k: int(distribution[k]) for k in LEVEL_NAMES},
+        )
 
 
 def fallback_levels_by_index(rfm: pd.DataFrame) -> Dict[str, str]:
-    """Резервный алгоритм без обучения — по сумме RFM-индекса.
+    """Резервный алгоритм без обучения — по композитному ранговому индексу RFM.
 
-    Используется, когда выборка слишком мала или ML-сервис недоступен.
+    Используется, когда выборка слишком мала или кластеризация недоступна.
+    Работает при любом числе пользователей: вместо `qcut` (который падает на
+    малых/вырожденных выборках) берём доли рангов [0..1] по каждому измерению.
     """
     if rfm.empty:
         return {}
-    r_score = pd.qcut(rfm["recency"].rank(method="first", ascending=False),
-                      5, labels=[1, 2, 3, 4, 5]).astype(int)
-    f_score = pd.qcut(rfm["frequency"].rank(method="first"),
-                      5, labels=[1, 2, 3, 4, 5]).astype(int)
-    m_score = pd.qcut(rfm["monetary"].rank(method="first"),
-                      5, labels=[1, 2, 3, 4, 5]).astype(int)
-    s = r_score + f_score + m_score
+    # Для recency меньше = лучше → ascending=False.
+    r = rfm["recency"].rank(ascending=False, pct=True)
+    f = rfm["frequency"].rank(pct=True)
+    m = rfm["monetary"].rank(pct=True)
+    score = (r + f + m) / 3.0
     mapping: Dict[str, str] = {}
-    for uid, score in zip(rfm["user_id"], s):
-        if score >= 12:
+    for uid, sc in zip(rfm["user_id"], score):
+        if sc >= 0.75:
             mapping[uid] = "Platinum"
-        elif score >= 9:
+        elif sc >= 0.5:
             mapping[uid] = "Gold"
-        elif score >= 6:
+        elif sc >= 0.25:
             mapping[uid] = "Silver"
         else:
             mapping[uid] = "Bronze"

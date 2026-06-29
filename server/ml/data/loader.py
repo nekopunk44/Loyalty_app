@@ -77,7 +77,9 @@ def load_user_activity(window_days: int = 365) -> pd.DataFrame:
     )
     with get_engine().connect() as conn:
         df = pd.read_sql(query, conn, params={"wd": int(window_days)})
-    df["last_tx_date"] = pd.to_datetime(df["last_tx_date"])
+    # timestamptz из Postgres приходит tz-aware → приводим к tz-naive (UTC),
+    # иначе вычитание с tz-naive датами (RFM recency и т.п.) падает.
+    df["last_tx_date"] = pd.to_datetime(df["last_tx_date"], utc=True).dt.tz_localize(None)
     return df
 
 
