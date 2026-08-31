@@ -56,7 +56,7 @@
 
 ### Инфраструктура
 - **Деплой:** Railway (сервер + БД PostgreSQL)
-- **CI/CD:** GitHub Actions (ESLint, серверные тесты на Node 20/22, аудит безопасности)
+- **CI/CD:** GitHub Actions (ESLint и аудит безопасности клиента)
 - **Real-time:** SSE (Server-Sent Events) для уведомлений в реальном времени
 
 ---
@@ -133,13 +133,11 @@ cd server && npm start
 
 ## CI/CD
 
-GitHub Actions запускает 4 проверки на каждый пуш в `main`/`develop`:
+GitHub Actions запускает 2 проверки на каждый пуш в `main`/`develop`:
 
 | Проверка | Описание |
 |---|---|
-| Server tests (Node 20.x / 22.x) | 253 теста, Jest + supertest |
 | ESLint (client) | 0 ошибок, макс. 50 предупреждений |
-| Security audit (server) | `npm audit --audit-level=high` |
 | Security audit (client) | `npm audit --audit-level=high` |
 
 ---
